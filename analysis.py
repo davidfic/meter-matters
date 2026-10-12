@@ -1009,6 +1009,10 @@ def analyse(bills: list[Bill], settings: dict, periods: list | None = None) -> d
       savings baseline score against this, because measuring today's bill
       against 2019 prices makes the game unwinnable rather than motivating.
     """
+    # build_bills groups by account. Merged accounts (a renumbered one and its
+    # predecessor) must read as one history, so the series is in date order
+    # whichever account number happens to sort first.
+    bills = sorted(bills, key=lambda b: (b.due, b.account))
     matched = attach_usage(bills, periods or [])
     series = monthly_series(bills)
 

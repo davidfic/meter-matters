@@ -13,6 +13,11 @@ streaks and badges that only rewards bills that genuinely went down.
 The electric page answers to ⚡ *Watt's the Damage*, the gas page to
 🔥 *Therms & Conditions*, and the water page to 💧 *Tapped Out*.
 
+![The overview: electric and gas side by side, with the next statement, the weather / rate / you split and the streak](docs/screenshots/hero.png)
+
+*Every screenshot here is the app on the invented "Pat Sample" household in
+`fixtures/synthetic/`. No real bills.*
+
 ## What it does
 
 - **Any utility, any US state.** Green Button XML, any CSV (columns are matched
@@ -39,11 +44,55 @@ The electric page answers to ⚡ *Watt's the Damage*, the gas page to
   anonymous; opt out any time.
 - **Your energy year**, with a public share link and an image card.
 - **More than one home** per account, each fully separate.
-- **A fair game.** Streaks, levels and 15 badges. A streak counts only
+- **A fair game.** Streaks, levels and 18 badges. A streak counts only
   statements that beat the same weeks last year after the weather is taken out,
   and falls back to plain usage, then dollars, saying which it used.
 - **Solar / net metering.** Delivered and exported energy are kept apart, never
   netted. Credit bills are kept and marked.
+
+## A look around
+
+**A fuel page.** The current statement, what the next one will probably be,
+and the comparison with the same weeks last year once the weather is taken
+out.
+
+![The electric page: current statement, forecast, and the weather-adjusted comparison with last year](docs/screenshots/electric.png)
+
+**Was it you, or was it the weather?** Each bill against a year earlier, split
+into the two, and the last twelve in dollars with the rate as a third part.
+The parts add up to the change exactly.
+
+![Each bill split into you and the weather, and the twelve-bill dollar split](docs/screenshots/weather.png)
+
+**Compare any two statements**, or one calendar month across every year on
+file. The cost change is split into the usage part and the rate part.
+
+![Comparing October 2025 with October 2026](docs/screenshots/compare.png)
+
+**What's this costing me?** Presets for the usual suspects, priced at your own
+rate and on your own grid's carbon factor.
+
+![The running-cost calculator](docs/screenshots/calc.png)
+
+**Rates.** Your all-in price taken apart into supply and delivery, its history,
+and every supplier offer for your ZIP priced against your own last twelve
+months.
+
+![The rates page with supplier offers priced against the home's own usage](docs/screenshots/rates.png)
+
+**Your energy year**, with a share link that carries the numbers and nothing
+that names you.
+
+![The year page](docs/screenshots/year.png)
+
+**The game.** Eighteen badges, each showing its rule and live progress. Locked
+ones say what's left to do.
+
+![The achievements grid](docs/screenshots/badges.png)
+
+It follows the system light or dark setting, with a manual override.
+
+![The electric page in dark mode](docs/screenshots/electric-dark.png)
 
 ## Pages
 

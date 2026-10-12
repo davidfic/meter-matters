@@ -241,7 +241,7 @@ def achievements(report: dict) -> list[dict]:
                     (s["label"] for s in savings if s["cumulative"] >= amount), None
                 ),
                 "progress": _pct(banked, amount),
-                "detail": f"Banked ${banked:,.2f}",
+                "detail": f"Banked {'−' if banked < 0 else ''}${abs(banked):,.2f}",
             }
         )
 

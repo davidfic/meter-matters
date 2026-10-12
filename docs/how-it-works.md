@@ -189,7 +189,7 @@ a slow or absent weather service never holds up the page.
 | **Money banked** | Running total saved against the baseline |
 | **Cost by calendar month** | The seasonal shape you're actually fighting |
 | **Same month, last year** | The seasonally fair comparison — fills in past 12 months of history |
-| **Achievements** | 15 badges, each with its unlock rule and live progress |
+| **Achievements** | 18 badges, each with its unlock rule and live progress |
 
 Every chart has a **Table view** toggle with the same numbers, and the app
 follows your system light/dark setting with a manual **Theme** override.

@@ -187,6 +187,22 @@ class TestRealExport(unittest.TestCase):
 
 
 class TestEdges(unittest.TestCase):
+    def test_merged_accounts_read_as_one_history_in_date_order(self):
+        # A renumbered account: the newer number sorts FIRST, so grouping by
+        # account would put the old history after the new one and call
+        # the oldest statement "the latest".
+        text = ("Account# or Nickname,Account Type,Pay/Due Date,Type,Amount,Status,\n"
+                "1001&lt;br&gt;(n),Electric,2026/02/16,Current Bill,$120.00,-\n"
+                "1001&lt;br&gt;(n),Electric,2026/01/16,Current Bill,$110.00,-\n"
+                "2002&lt;br&gt;(n),Electric,2025/12/16,Current Bill,$100.00,-\n"
+                "2002&lt;br&gt;(n),Electric,2025/11/16,Current Bill,$90.00,-\n")
+        bills = analysis.build_bills(analysis.read_entries(text))
+        report = analysis.analyse(bills, {"baseline_months": 2, "target_pct": 5})
+        self.assertEqual([r["period"] for r in report["series"]],
+                         ["2025-11", "2025-12", "2026-01", "2026-02"])
+        self.assertEqual(report["series"][-1]["amount"], 120.0)
+        self.assertEqual(report["series"][1]["delta"], 10.0)
+
     def test_empty_csv_does_not_explode(self):
         report = analysis.analyse([], {"baseline_months": 6, "target_pct": 5})
         self.assertEqual(report["series"], [])
