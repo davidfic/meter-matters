@@ -33,7 +33,7 @@ if [ -z "$files" ]; then
 fi
 # Everything sent must be one of these. It repeats .gcloudignore on purpose:
 # a slip in that file then stops here instead of becoming an upload.
-allowed='^(Dockerfile|\.dockerignore|requirements\.txt|[^/]+\.py|test-report\.json|templates/.+|static/.+|fixtures/synthetic/.+|deploy/ci/.+)$'
+allowed='^(Dockerfile|\.dockerignore|requirements\.txt|wsgi\.py|gunicorn\.conf\.py|test-report\.json|metermatters/.+|tests/.+|deploy/ci/.+)$'
 strangers="$(printf '%s\n' "$files" | grep -Ev "$allowed" || true)"
 if [ -n "$strangers" ]; then
   echo "refusing to upload. These are not part of the app, its tests or the pipeline:" >&2

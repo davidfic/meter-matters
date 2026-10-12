@@ -10,4 +10,4 @@ if [ ! -x .venv/bin/python ]; then
   .venv/bin/python -m pip install --quiet -r requirements.txt
 fi
 
-exec .venv/bin/python app.py "$@"
+exec .venv/bin/python -m metermatters "$@"

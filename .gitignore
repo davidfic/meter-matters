@@ -11,8 +11,8 @@ data/
 AccountHistory.csv
 usage/*.csv
 usage/*.zip
-fixtures/*.csv
-fixtures/*.eml
+tests/fixtures/*.csv
+tests/fixtures/*.eml
 .env
 .secret.txt
 
@@ -37,14 +37,14 @@ supabase-pswd
 *.key
 
 # Whatever else lands in usage/ - the patterns above name only .csv and .zip.
-# Anchored with the leading slash, so fixtures/synthetic/usage/ is not caught.
+# Anchored with the leading slash, so tests/fixtures/synthetic/usage/ is not caught.
 /usage/
 
-# Everything placed directly in fixtures/ is treated as personal, whatever its
-# extension. The invented fixtures that the pipeline tests against live one
-# level down, in fixtures/synthetic/, and are the only ones git may see.
-fixtures/*
-!fixtures/synthetic/
+# Everything placed directly in tests/fixtures/ is treated as personal, whatever
+# its extension. The invented fixtures that the pipeline tests against live one
+# level down, in tests/fixtures/synthetic/, and are the only ones git may see.
+tests/fixtures/*
+!tests/fixtures/synthetic/
 
 # Any other exploration output, under whatever name it is written.
 explore/*.html

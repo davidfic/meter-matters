@@ -63,7 +63,7 @@ too - never against the real Supabase, which they would empty) and writes the re
 with the code it describes - so the page always reports on exactly what is
 running. A failing suite is still deployed; the page says so.
 
-Run it yourself any time with `python testreport.py` (writes `test-report.json`
+Run it yourself any time with `python -m metermatters.testreport` (writes `test-report.json`
 and prints a summary). The page shows the verdict, counts, every test by file
 with its time, and what failed with the traceback first.
 
@@ -123,7 +123,7 @@ you add afterwards, from **Add bills → Add another home**.
   first home can be renamed but not deleted.
 
 A home is a folder inside the user's own files (`homes/<id>/`, laid out like
-the first), so hosting needs nothing new. Everything is in `homes.py`.
+the first), so hosting needs nothing new. Everything is in `store/homes.py`.
 
 ## Compared with last year
 
@@ -276,13 +276,13 @@ Without any usage files the dashboard degrades cleanly to dollars-only.
 
 ### Reading a usage export
 
-`greenbutton.py` parses the Eversource MA usage download. That file is **not**
+`intake/greenbutton.py` parses the Eversource MA usage download. That file is **not**
 ESPI XML - it's their own CSV with a five-line preamble before the header, and
 it carries the columns that matter: `Usage` (kWh), `Number of Days`, `Charge`
 and `Average Temperature`.
 
 ```bash
-./greenbutton.py Green_Button.csv
+python -m metermatters.intake.greenbutton Green_Button.csv
 ```
 
 It reports kWh per day (fair across billing periods of different lengths), the
@@ -296,14 +296,14 @@ means the weather is writing your bill, low means the variation is behavioural
 
 ### Importing from a script
 
-`import_bill.py` is the seam every automated route plugs into. It merges and
+`intake/import_bill.py` is the seam every automated route plugs into. It merges and
 de-duplicates, so running it twice is always a no-op.
 
 ```bash
-./import_bill.py --file ~/Downloads/AccountHistory.csv   # a whole export
-./import_bill.py --amount 248.26 --due 2026-10-16        # one statement
-./import_bill.py --file export.csv --dry-run             # preview only
-cat export.csv | ./import_bill.py --file -               # stdin
+python -m metermatters.intake.import_bill --file ~/Downloads/AccountHistory.csv   # a whole export
+python -m metermatters.intake.import_bill --amount 248.26 --due 2026-10-16        # one statement
+python -m metermatters.intake.import_bill --file export.csv --dry-run             # preview only
+cat export.csv | python -m metermatters.intake.import_bill --file -               # stdin
 ```
 
 Exit codes: `0` imported something, `1` error, `2` nothing new.
@@ -318,12 +318,12 @@ Exit codes: `0` imported something, `1` error, `2` nothing new.
 
 Eversource's bill-ready email carries the amount, the bill date and the due
 date - everything the dashboard needs - and reading your own mailbox needs no
-utility credentials. `billmail.py` parses it:
+utility credentials. `intake/billmail.py` parses it:
 
 ```bash
-./billmail.py fixtures/bill_ready.eml     # parse one saved .eml
-./billmail.py --imap                      # poll the last 45 days
-./billmail.py --imap --all --import       # whole mailbox, and file it
+python -m metermatters.intake.billmail tests/fixtures/bill_ready.eml   # parse one saved .eml
+python -m metermatters.intake.billmail --imap                      # poll the last 45 days
+python -m metermatters.intake.billmail --imap --all --import       # whole mailbox, and file it
 ```
 
 `--days` defaults to 45, which is right for the monthly check and wrong for a
@@ -385,7 +385,7 @@ only arrive when you export - so recent months can have a cost and no usage.
 That is a freshness matter, not a loss one, and re-exporting fills it in.
 
 ```bash
-./greenbutton.py --staleness      # exit 1 only if a gap is genuinely at risk
+python -m metermatters.intake.greenbutton --staleness      # exit 1 only if a gap is genuinely at risk
 ```
 
 It runs as part of the monthly check. An account is only reported while it is
@@ -407,8 +407,8 @@ anything.
 The usage export carries **cost as well as kWh**, usually much further back:
 
 ```bash
-./backfill.py --dry-run
-./backfill.py
+python -m metermatters.intake.backfill --dry-run
+python -m metermatters.intake.backfill
 ```
 
 Synthesised rows are marked `BACKFILL` in the Status column, so they're never
@@ -418,7 +418,7 @@ period ending and its statement falling due.
 
 ### The recurring check
 
-`jobs.py` is what keeps everything current. Each run, for every user, it
+`tasks/jobs.py` is what keeps everything current. Each run, for every user, it
 imports new bills from Gmail if they chose to stay connected, warns if a usage
 export is about to age out of the portal's rolling window, and checks that no
 expected bill has gone missing. Forwarded bills need no polling; they arrive on
@@ -430,7 +430,7 @@ It doesn't care what schedules it. Pick whichever your host makes easy:
 |---|---|---|
 | The app runs it itself, daily | `ELEC_SCHEDULER=1` | one always-on instance |
 | A scheduler calls `POST /api/tasks/check` | `ELEC_TASK_TOKEN`, sent as `Authorization: Bearer ...` | instances that sleep when idle |
-| A scheduled job runs `python jobs.py` | - | platforms with cron jobs sharing the volume |
+| A scheduled job runs `python -m metermatters.tasks.jobs` | - | platforms with cron jobs sharing the volume |
 
 Run it as often as you like. Imports are idempotent, several workers waking
 at once run it once, and the watchdog rations its own notifications. The task
@@ -444,14 +444,14 @@ Exit codes: `0` imported something, `1` a step failed, `2` nothing new.
 see because the email template changed or the app password was revoked. From
 the inside they look the same, and the dashboard just goes quietly stale.
 
-`watchdog.py` tells them apart. Each account's next statement is expected one
+`tasks/watchdog.py` tells them apart. Each account's next statement is expected one
 billing interval after its last - the account's own median gap, not a fixed day
 - and about three weeks ahead of its due date, which is when the notice lands.
 Five days past that, it's overdue.
 
 ```bash
-./watchdog.py             # report; exit 1 if something is overdue
-./watchdog.py --notify    # ...and notify, at most once a week per missed bill
+python -m metermatters.tasks.watchdog             # report; exit 1 if something is overdue
+python -m metermatters.tasks.watchdog --notify    # ...and notify, at most once a week per missed bill
 ```
 
 Accounts quiet for over 120 days are closed, not late, and a renumbered
@@ -465,13 +465,13 @@ disconnected mailbox - by email to their account address, and only by email.
 Set `ELEC_SMTP_HOST`, `ELEC_SMTP_USER`, `ELEC_SMTP_PASS` and `ELEC_SMTP_FROM`.
 Without them nothing is sent and the alerts still show on the overview.
 
-Running it for yourself alone, with no accounts, `notify.py` also sends to
+Running it for yourself alone, with no accounts, `tasks/notify.py` also sends to
 [ntfy](https://ntfy.sh) (`ELEC_NTFY_URL`) and to the desktop. Those channels
 belong to whoever runs the server, so a hosted install never puts a user's
 bill on them.
 
 ```bash
-./notify.py --test        # send a test message and report each channel
+python -m metermatters.tasks.notify --test        # send a test message and report each channel
 ```
 
 ### Or just do it by hand
@@ -492,74 +492,17 @@ merge holds a lock from read to write, so two at once can't lose a row.
 
 ## Layout
 
-```
-analysis.py        CSV parsing and all the maths (pure stdlib, no Flask import)
-gamify.py          levels, badges and their unlock rules
-ingest.py          merge/de-dupe - shared by the web upload and the CLI
-greenbutton.py     Eversource MA usage-export parser (kWh + degree-day fit)
-storage.py         atomic writes and the merge lock
-watchdog.py        notices when an expected bill never arrived
-notify.py          desktop / ntfy / email notifications
-import_bill.py     CLI importer; the seam automated routes plug into
-billmail.py        reads Eversource's bill-ready email (IMAP or .eml)
-backfill.py        extends bill history backwards from the usage export
-app.py             dashboard routes, who-is-asking gate, /healthz, /api/tasks/check
-web.py             sign-in, the Add bills page, Google and inbound-email routes
-accounts.py        users, password hashing, per-user folders
-homes.py           more than one home: names, addresses, delete/restore, routing bills
-testreport.py      runs the tests here and publishes the results; the report's shape
-importers.py       any utility's usage or bill file (CSV, Green Button XML), or a bill by hand
-region.py          a home's state, and the grid's carbon from EPA eGRID
-db.py              the database: Postgres (Supabase) when hosted, SQLite otherwise
-workspace.py       a user's files as paths, whichever of those holds them
-deploy/            Cloud Run deployment script and settings
-inbound.py         bills arriving by forwarded email
-google_oauth.py    Google sign-in and the Gmail API
-gmail_sync.py      importing from a connected mailbox
-secrets_box.py     encryption for a kept Gmail token
-wsgi.py            production entry point (gunicorn wsgi:app)
-gunicorn.conf.py   workers, and the scheduler started after fork
-config.py          paths and settings, all from the environment
-jobs.py            the recurring check, run per user
-rates.py          supply offers from Energy Switch MA, priced against your usage
-insights.py        usage against last year with the weather taken out, steps, carbon, tips
-weather.py         daily temperatures for a place: fetched once, then kept
-Dockerfile         the hosted image - code only, data lives on a volume
-templates/         overview, per-fuel dashboard, raw view
-static/charts.js   small dependency-free SVG chart library
-static/insights.js the comparison with last year, carbon and tips - on both pages
-static/app.js      per-fuel dashboard controller
-static/overview.js combined overview controller
-static/raw.js      raw-data explorer (filter, sort, export)
-static/styles.css  design tokens, light and dark
-usage/             Eversource usage exports - .zip or .csv, one per account
-data/state.json    your goal and settings (created on first save)
-test_analysis.py   analytics tests, with the shipped CSV as a regression fixture
-test_ingest.py     importer tests (merge, de-dupe, CLI exit codes)
-test_greenbutton.py  usage-export parsing + the weather regression
-test_billmail.py   email parsing + backfill
-test_raw.py        raw-view payload and provenance
-test_upload.py     uploads through the web app, end to end
-test_watchdog.py   missing-bill detection and notification throttling
-test_notify.py     notification channels (nothing leaves the machine)
-test_storage.py    atomic writes, concurrent merges
-test_hosting.py    task endpoint, the per-user job, production start-up
-test_accounts.py   sign-up, sign-in, and keeping users' bills apart
-test_inbound.py    forwarded email: who may send, what gets filed
-test_google.py     Google sign-in and Gmail, against a fake Google
-test_postgres.py   the app on Postgres; needs ELEC_TEST_DATABASE_URL
-test_insights.py   the comparisons, on invented homes whose answers are known
-test_weather.py    fetching and keeping temperatures, with the network replaced
-test_insights_api.py  the insights endpoints, notes, and per-user separation
-explore/           the exploration this feature grew from; not part of the app
-fixtures/          your own sample files (never committed); fixtures/synthetic/ holds
-                   invented ones with the same shape, which is what a clean checkout tests against
-```
+The file layout is in the [README](../README.md#where-things-are). A few
+things the names there don't say: `analytics/analysis.py` is pure stdlib and
+never imports Flask; `intake/ingest.py` is the seam the web upload and the CLI
+both go through; `tests/fixtures/` holds your own sample files (never
+committed) and `tests/fixtures/synthetic/` the invented ones with the same
+shape, which is what a clean checkout tests against.
 
 Run the tests with:
 
 ```bash
-.venv/bin/python -m unittest discover -p 'test_*.py' -v
+.venv/bin/python -m unittest discover -s tests -t . -v
 ```
 
 ## What the dashboard shows beyond the bill
@@ -606,7 +549,7 @@ by any column, and download exactly what you're looking at as CSV (raw values,
 not display formatting, so it drops straight into a spreadsheet).
 
 Every row carries a **Source**: `portal` for the utility's own export, `email`
-for a bill notification, `usage-export` for a row synthesised by `backfill.py`.
+for a bill notification, `usage-export` for a row synthesised by `intake/backfill.py`.
 That column is written into `AccountHistory.csv` itself, so provenance survives
 outside the app.
 
@@ -665,7 +608,7 @@ cp deploy/cloudrun.env.example deploy/cloudrun.env
 # sign up in the deployed app first, then
 read -s ELEC_DATABASE_URL; export ELEC_DATABASE_URL     # paste the connection string
 ELEC_SECRET_KEY=unused-here-but-turns-accounts-on-0123456789 \
-  ./accounts.py adopt you@example.com
+  python -m metermatters.store.accounts adopt you@example.com
 ```
 
 What to know:
@@ -751,8 +694,8 @@ owner signs in through Google.
 **Moving a single-user install in.** Sign up in the app, then:
 
 ```bash
-./accounts.py adopt you@example.com    # copies; the originals are left alone
-./accounts.py list
+python -m metermatters.store.accounts adopt you@example.com    # copies; the originals are left alone
+python -m metermatters.store.accounts list
 ```
 
 ## Three ways for bills to get in
@@ -806,7 +749,7 @@ Create an OAuth client in Google Cloud, with the redirect URI
 `ELEC_GOOGLE_CLIENT_SECRET`. That enables *Continue with Google* and *Import
 once*.
 
-*Stay connected* also needs `ELEC_TOKEN_KEY` (`python secrets_box.py` prints
+*Stay connected* also needs `ELEC_TOKEN_KEY` (`python -m metermatters.store.secrets_box` prints
 one), which encrypts the one thing kept: the user's refresh token. The key
 lives in your host's secret store, never in the database, so a copy of the
 database alone opens nothing. To rotate it, put the new key first and the old

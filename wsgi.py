@@ -26,7 +26,7 @@ if os.environ.get("K_SERVICE") and not os.environ.get("ELEC_DATABASE_URL"):
         "refusing to start: on Cloud Run, set ELEC_DATABASE_URL to your Supabase "
         "connection string. There is no disk here to keep anything on.")
 
-from app import app  # noqa: E402 - only once we know it is safe to
+from metermatters.web.app import app  # noqa: E402 - only once we know it is safe to
 
 # A host puts a proxy in front that terminates TLS. Trust exactly that many
 # hops for the client's address and scheme - trusting more lets a visitor

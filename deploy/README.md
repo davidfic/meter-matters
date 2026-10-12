@@ -175,9 +175,9 @@ made. `--git` rehearses what git would commit instead.
 
 A clean checkout has none of your bills, so the tests written against them
 cannot run there; they skip, and say so. What runs in their place is the same
-tests against invented fixtures in `fixtures/synthetic/` - an invented
+tests against invented fixtures in `tests/fixtures/synthetic/` - an invented
 household, with invented account numbers and amounts, in files shaped exactly
-like the utility's. `fixtures/synthetic/generate.py` writes them and explains
+like the utility's. `tests/fixtures/synthetic/generate.py` writes them and explains
 each. On this machine both sets run: `.venv/bin/python -m unittest discover -p 'test_*.py'`.
 
 The Postgres tests run in the pipeline too, against a database that exists

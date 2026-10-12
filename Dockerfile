@@ -12,9 +12,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Code only. .dockerignore keeps every bill, export and secret out of the image.
 # test-report.json is the last test run's results, written by the deploy; the [n] lets
 # the build go on without one.
-COPY *.py test-report.jso[n] ./
-COPY templates ./templates
-COPY static ./static
+COPY metermatters ./metermatters
+COPY wsgi.py gunicorn.conf.py test-report.jso[n] ./
 
 RUN useradd --system --uid 10001 --create-home --home-dir /home/elec elec \
     && mkdir /data && chown elec /data

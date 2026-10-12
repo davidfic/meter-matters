@@ -28,17 +28,17 @@ build() {
   docker build --tag "$image" .
 
   # An allow-list, like .dockerignore and .gcloudignore: the image may hold
-  # the app's own modules, its templates, its static files and its
+  # the app's package, its two entry points, the test report and its
   # requirements. Anything else - a test, a fixture, a bill, a .env - stops
   # the build here, before the image leaves this machine.
   local unexpected
   unexpected="$(docker run --rm --network none --entrypoint find "$image" \
       /app -mindepth 1 ! -type d \
-      ! -path '/app/templates/*' \
-      ! -path '/app/static/*' \
+      ! -path '/app/metermatters/*' \
       ! -path '/app/requirements.txt' \
-      ! \( -path '/app/*.py' ! -path '/app/*/*' \
-           ! -name 'test_*.py' ! -name 'testing.py' ! -name 'portal.py' \) )"
+      ! -path '/app/wsgi.py' \
+      ! -path '/app/gunicorn.conf.py' \
+      ! -path '/app/test-report.json' )"
   if [ -n "$unexpected" ]; then
     echo "refusing this image - it holds files that are not the app:" >&2
     echo "$unexpected" | sed 's/^/    /' >&2

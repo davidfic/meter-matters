@@ -56,10 +56,10 @@ candidates = [line.strip() for line in Path(sys.argv[1]).read_text().splitlines(
 candidates = [c for c in candidates if Path(c).is_file()]
 
 # ---- 1. files that are yours outright ---------------------------------------
-PERSONAL = ["AccountHistory.csv", "usage/*", "data/*", "fixtures/*", ".env", ".env.*",
+PERSONAL = ["AccountHistory.csv", "usage/*", "data/*", "tests/fixtures/*", ".env", ".env.*",
             ".secret.txt", "*pswd*", "*.pem", "*.key", "deploy/cloudrun.env", ".cache/*",
             "app.db*", "users/*", "explore/*.html", "explore/*.json"]
-EXCEPT = ["fixtures/synthetic/*", ".env.example", "explore/template.html"]
+EXCEPT = ["tests/fixtures/synthetic/*", ".env.example", "explore/template.html"]
 
 def is_personal(path):
     if any(fnmatch.fnmatch(path, pattern) for pattern in EXCEPT):
@@ -113,7 +113,7 @@ def usage_export(text):
         if re.fullmatch(r"\d{8,}", head):
             note(head, "an account number", 8)
 
-for path in ["AccountHistory.csv", *sorted(map(str, Path("fixtures").glob("*.csv")))]:
+for path in ["AccountHistory.csv", *sorted(map(str, Path("tests/fixtures").glob("*.csv")))]:
     statement_history(read(path))
 for path in sorted(Path("usage").glob("*")) if Path("usage").is_dir() else []:
     if path.suffix.lower() == ".zip":
@@ -125,7 +125,7 @@ for path in sorted(Path("usage").glob("*")) if Path("usage").is_dir() else []:
             pass
     elif path.suffix.lower() == ".csv":
         usage_export(read(path))
-for path in sorted(Path("fixtures").glob("*.eml")) if Path("fixtures").is_dir() else []:
+for path in sorted(Path("tests/fixtures").glob("*.eml")) if Path("tests/fixtures").is_dir() else []:
     try:
         message = email.message_from_bytes(path.read_bytes(), policy=policy.default)
     except OSError:
@@ -195,7 +195,7 @@ if hits:
     for path, number, kind, value in hits:
         print(f"    {path}:{number}  {kind} ({value})")
     print("\nReplace each with something invented before committing. The account numbers,\n"
-          "name and address in fixtures/synthetic/generate.py are there to be borrowed.")
+          "name and address in tests/fixtures/synthetic/generate.py are there to be borrowed.")
 if not outright and not hits:
     print("nothing of yours is in them")
 sys.exit(1 if outright or hits else 0)

@@ -26,7 +26,7 @@ def post_fork(server, worker):
     in every child: the first request to need one hangs. Each worker starts
     its own instead, and the job's file lock lets exactly one of them run.
     """
-    import config
-    import jobs
+    from metermatters import config
+    from metermatters.tasks import jobs
     if config.flag("ELEC_SCHEDULER"):
         jobs.start_scheduler()

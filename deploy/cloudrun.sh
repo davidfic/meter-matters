@@ -76,7 +76,7 @@ run_tests() {
   local py=python3; [ -x .venv/bin/python ] && py=.venv/bin/python
   if ! { command -v docker >/dev/null && docker info >/dev/null 2>&1; }; then
     echo "(no Docker here: the Postgres tests will be skipped)"
-    "$py" testreport.py --label "$(date -u +%Y-%m-%d-%H%M)" \
+    "$py" -m metermatters.testreport --label "$(date -u +%Y-%m-%d-%H%M)" \
         || echo "(tests did not all pass - the report will say so)"
     return
   fi
@@ -90,7 +90,7 @@ run_tests() {
     sleep 1
   done
   ELEC_TEST_DATABASE_URL="postgresql://postgres:test-only@127.0.0.1:$port/postgres" \
-      "$py" testreport.py --label "$(date -u +%Y-%m-%d-%H%M)" \
+      "$py" -m metermatters.testreport --label "$(date -u +%Y-%m-%d-%H%M)" \
       || echo "(tests did not all pass - the report will say so)"
 }
 

@@ -149,38 +149,61 @@ offers an individual a feed for it.
 ## Where things are
 
 ```
-app.py           dashboard routes, the report every page is built from, the task endpoint
-web.py           sign-in, Add bills, Google and inbound-email routes
-analysis.py      bill parsing and the maths; no Flask
-insights.py      vs last year with the weather out, steps, carbon, tips
-forecast.py      the next statement and its backtested range
-yearly.py        the year page, share tokens, the SVG card
-benchmarks.py    similar homes: per-state buckets, salted hashes, opt-out
-rates.py         price per unit taken apart; Energy Switch MA offers
-region.py        a home's state; EPA eGRID carbon factors
-fuels.py         Electric / Gas / Water defined once: units, slugs, taglines
-importers.py     any CSV or Green Button XML; bills by hand
-greenbutton.py   Eversource's usage export, with the degree-day fit
-weather.py       daily temperatures for a place, fetched once and kept
-homes.py         more than one home: names, routing, delete / restore
-accounts.py      users, argon2id passwords, sessions
-db.py            Postgres (Supabase) when hosted, SQLite otherwise; migrations
-workspace.py     a user's files, on disk or in the database
-jobs.py          the daily check, per user
-testreport.py    runs the suite and writes test-report.json for /test-suite
-static/          ES modules per page; charts.js is the SVG chart library
-templates/       Jinja pages
-deploy/          Cloud Run deploy script, Cloud Build pipeline, privacy check
-docs/            the long-form reference
-fixtures/synthetic/  invented data with the real shape; what a clean checkout tests against
-systemd/         a single-machine mailbox timer from before the hosted app
+metermatters/              the app, one package
+  config.py                paths and settings, all from the environment
+  fuels.py                 Electric / Gas / Water defined once: units, slugs, taglines
+  region.py                a home's state; EPA eGRID carbon factors
+  testreport.py            runs the suite and writes test-report.json for /test-suite
+  analytics/               the numbers
+    analysis.py            bill parsing and the maths; no Flask
+    insights.py            vs last year with the weather out, steps, carbon, tips
+    forecast.py            the next statement and its backtested range
+    yearly.py              the year page, share tokens, the SVG card
+    benchmarks.py          similar homes: per-state buckets, salted hashes, opt-out
+    rates.py               price per unit taken apart; Energy Switch MA offers
+    weather.py             daily temperatures for a place, fetched once and kept
+    gamify.py              levels, streaks and badges
+  intake/                  getting bills and usage in
+    importers.py           any CSV or Green Button XML; bills by hand
+    greenbutton.py         Eversource's usage export, with the degree-day fit
+    ingest.py              merge and de-duplicate, shared by upload and CLI
+    billmail.py            the bill-ready email (.eml or IMAP)
+    inbound.py             bills arriving by forwarded email
+    gmail_sync.py          importing from a connected mailbox
+    backfill.py            extend bill history backwards from usage
+    import_bill.py         CLI: python -m metermatters.intake.import_bill
+  store/                   where things are kept
+    db.py                  Postgres (Supabase) when hosted, SQLite otherwise; migrations
+    workspace.py           a user's files, on disk or in the database
+    accounts.py            users, argon2id passwords, sessions
+    homes.py               more than one home: names, routing, delete / restore
+    storage.py             atomic writes and the merge lock
+    secrets_box.py         encryption for a kept Gmail token
+  web/                     the Flask app
+    app.py                 dashboard routes, the report every page is built from
+    connect.py             sign-in, Add bills, Google and inbound-email routes
+    google_oauth.py        Google sign-in and the Gmail API
+    static/                ES modules per page; charts.js is the SVG chart library
+    templates/             Jinja pages
+  tasks/                   jobs.py (the daily check), watchdog.py, notify.py
+tests/                     the suite; support.py is the shared scaffolding
+  fixtures/synthetic/      invented data with the real shape; what a clean checkout tests against
+scripts/portal.py          drives a desktop browser to fetch exports; never shipped
+wsgi.py, gunicorn.conf.py  the production entry point
+deploy/                    Cloud Run deploy script, Cloud Build pipeline, privacy check
+docs/                      the long-form reference and the screenshots
+systemd/                   a single-machine mailbox timer from before the hosted app
 ```
+
+Modules that double as commands run with `-m`: `python -m metermatters`
+is the dev server, `python -m metermatters.store.accounts list` lists users,
+`python -m metermatters.intake.import_bill --file export.csv` imports one.
 
 ## Tests
 
 ```bash
-.venv/bin/python -m unittest discover -p 'test_*.py'
-python testreport.py        # the same, written to test-report.json
+.venv/bin/python -m unittest discover -s tests -t .
+python -m metermatters.testreport     # the same, written to test-report.json
 ```
 
 Around 600 tests run on invented homes whose answers are known. Nothing
@@ -191,8 +214,8 @@ all replaced. The database tests need a Postgres to point at:
 ELEC_TEST_DATABASE_URL=postgresql://postgres:pw@127.0.0.1:55432/postgres
 ```
 
-They delete that database's tables, so `testing.py` refuses anything that is
-not local. The deploy script starts a throwaway `postgres:16` in Docker for
+They delete that database's tables, so `tests/support.py` refuses anything
+that is not local. The deploy script starts a throwaway `postgres:16` in Docker for
 exactly this.
 
 ## Deploying

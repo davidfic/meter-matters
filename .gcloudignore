@@ -9,28 +9,28 @@
 !Dockerfile
 !.dockerignore
 !requirements.txt
-!*.py
+!wsgi.py
+!gunicorn.conf.py
 !test-report.json
-!templates/
-!templates/**
-!static/
-!static/**
-portal.py
+!metermatters/
+!metermatters/**
 
 # The pipeline tests before it builds, so the tests travel with the code, along
 # with the invented fixtures they read and the scripts that are the pipeline's
 # steps. None of it reaches the image: .dockerignore, an allow-list of its own,
 # stops it there, and deploy/ci/image.sh checks the image before it is pushed.
 #
-# Your own fixtures sit directly in fixtures/, and deploy/cloudrun.env directly
-# in deploy/. To gcloud, un-ignoring a folder un-ignores everything in it -
-# unlike git - so each of the two is opened, emptied again, and only then is
-# the one subfolder that may travel let back in. The order of these lines is
+# Your own fixtures sit directly in tests/fixtures/, and deploy/cloudrun.env
+# directly in deploy/. To gcloud, un-ignoring a folder un-ignores everything in
+# it - unlike git - so each of the two is opened, emptied again, and only then
+# is the one subfolder that may travel let back in. The order of these lines is
 # what keeps your files here. deploy/deploy.sh checks the result before every
 # upload and refuses to send anything else.
-!fixtures/
-fixtures/*
-!fixtures/synthetic/
+!tests/
+!tests/**
+tests/fixtures/*
+!tests/fixtures/synthetic/
+!tests/fixtures/synthetic/**
 !deploy/
 deploy/*
 !deploy/ci/

@@ -2,10 +2,8 @@
 # fails open - the next personal file added to the checkout would ship.
 *
 !requirements.txt
-!*.py
+!wsgi.py
+!gunicorn.conf.py
 !test-report.json
-!templates/
-!static/
-test_*.py
-portal.py
-testing.py
+!metermatters/
+**/__pycache__/

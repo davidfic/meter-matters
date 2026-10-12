@@ -12,10 +12,10 @@
 #     secret-tool store --label='elec-bill' service elec-bill account <you>
 #   ELEC_IMAP_HOST   optional, defaults to imap.gmail.com
 #
-# Notifications go down every channel notify.py has configured - desktop,
+# Notifications go down every channel tasks/notify.py has configured - desktop,
 # ntfy, email - so a failure still reaches you when you're not at this machine.
 #
-# Exit codes follow import_bill.py: 0 imported, 1 error, 2 nothing new.
+# Exit codes follow intake/import_bill.py: 0 imported, 1 error, 2 nothing new.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
@@ -33,7 +33,7 @@ fi
 notify() {
   local urgency="$1" title="$2" body="$3"
   # Prints the message itself, so the journal always has it.
-  "$PYTHON" notify.py --urgency "$urgency" "$title" "$body" || true
+  "$PYTHON" -m metermatters.tasks.notify --urgency "$urgency" "$title" "$body" || true
 }
 
 if [ -z "${ELEC_IMAP_USER:-}" ]; then
@@ -45,7 +45,7 @@ fi
 # The usage exports come from a rolling ~3-year window; periods that age out
 # are gone for good. Nothing can automate the download (see README), so the
 # timer's job is to tell you before you lose anything.
-stale=$("$PYTHON" greenbutton.py --staleness 2>&1)
+stale=$("$PYTHON" -m metermatters.intake.greenbutton --staleness 2>&1)
 if [ $? -ne 0 ]; then
   notify critical "Re-export your usage data" "$stale"
 else
@@ -57,24 +57,24 @@ fi
 # so the one failure mode that needs you is an expired login. Say so loudly;
 # a silent failure would leave usage quietly stale, which is the whole point of
 # doing this at all.
-portal=$("$PYTHON" portal.py --fetch 2>&1)
+portal=$("$PYTHON" scripts/portal.py --fetch 2>&1)
 case $? in
   0) echo "$portal"; notify normal "Usage data updated" "$(echo "$portal" | tail -1)" ;;
   3) notify critical "Eversource login expired" \
-       "Run: cd $(pwd) && ./portal.py --login" ;;
+       "Run: cd $(pwd) && scripts/portal.py --login" ;;
   2) : ;;  # nothing new to download
   *) echo "$portal"
      notify normal "Usage download failed" "$(echo "$portal" | tail -1)" ;;
 esac
 
-output=$("$PYTHON" billmail.py --imap --import --fuel any 2>&1)
+output=$("$PYTHON" -m metermatters.intake.billmail --imap --import --fuel any 2>&1)
 status=$?
 echo "$output"
 
 # Run after the import, so a bill that just arrived isn't reported missing.
 # "Nothing new" is only good news while no bill is due - this is what tells
 # the two apart. It sends its own notification, at most once a week.
-"$PYTHON" watchdog.py --notify
+"$PYTHON" -m metermatters.tasks.watchdog --notify
 
 case "$status" in
   # The last line is billmail's summary ("imported N new statement(s)").

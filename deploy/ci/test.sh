@@ -3,7 +3,7 @@
 #
 # Runs in a clean checkout, where none of your own bills exist - the tests
 # written against those skip, and the ones written against the invented
-# fixtures in fixtures/synthetic/ stand in for them.
+# fixtures in tests/fixtures/synthetic/ stand in for them.
 #
 # Exits non-zero, which fails the build, if any test fails or errors, if no
 # tests were found at all, or if a database was provided and a Postgres test
@@ -21,7 +21,7 @@ import os
 import sys
 import unittest
 
-suite = unittest.defaultTestLoader.discover(".", pattern="test_*.py")
+suite = unittest.defaultTestLoader.discover("tests", pattern="test_*.py", top_level_dir=".")
 result = unittest.TextTestRunner(verbosity=1).run(suite)
 
 skipped = [(getattr(test, "id", lambda: str(test))(), why) for test, why in result.skipped]

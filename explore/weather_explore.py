@@ -34,7 +34,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(ROOT))
 
-import greenbutton  # noqa: E402
+from metermatters.intake import greenbutton  # noqa: E402
 
 CACHE = HERE / "weather-daily.json"
 TEMPLATE = HERE / "template.html"
@@ -410,7 +410,7 @@ def main() -> int:
     }
 
     page = TEMPLATE.read_text(encoding="utf-8")
-    page = page.replace("/*APP_STYLES*/", (ROOT / "static" / "styles.css").read_text(encoding="utf-8"))
+    page = page.replace("/*APP_STYLES*/", (ROOT / "metermatters" / "web" / "static" / "styles.css").read_text(encoding="utf-8"))
     page = page.replace("/*DATA*/", json.dumps(data, default=float).replace("</", "<\\/"))
     OUT.write_text(page, encoding="utf-8")
 
