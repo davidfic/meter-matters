@@ -1,0 +1,2 @@
+# Only for portal.py, which drives a desktop browser and cannot run on a host.
+playwright>=1.40

@@ -1,0 +1,58 @@
+.venv/
+__pycache__/
+*.pyc
+data/
+
+# Lock sidecars and half-written files from storage.py.
+.*.lock
+.*.tmp
+
+# These hold your name, service address and account number.
+AccountHistory.csv
+usage/*.csv
+usage/*.zip
+fixtures/*.csv
+fixtures/*.eml
+.env
+.secret.txt
+
+# Holds live session cookies for the utility portal.
+.cache/
+
+# Accounts, and every user's bills.
+app.db*
+users/
+
+deploy/cloudrun.env
+
+# Exploration output - built from your own usage data.
+explore/weather-adjusted.html
+explore/weather-daily.json
+
+# --- Added with the CI/CD pipeline (see deploy/README.md) ---------------------
+# A database password kept in a file of its own. Nothing above caught it.
+supabase-pswd
+*-pswd
+*.pem
+*.key
+
+# Whatever else lands in usage/ - the patterns above name only .csv and .zip.
+# Anchored with the leading slash, so fixtures/synthetic/usage/ is not caught.
+/usage/
+
+# Everything placed directly in fixtures/ is treated as personal, whatever its
+# extension. The invented fixtures that the pipeline tests against live one
+# level down, in fixtures/synthetic/, and are the only ones git may see.
+fixtures/*
+!fixtures/synthetic/
+
+# Any other exploration output, under whatever name it is written.
+explore/*.html
+explore/*.json
+!explore/template.html
+
+# Variants of .env (.env.local, .env.production, ...).
+.env.*
+!.env.example
+
+test-report.json

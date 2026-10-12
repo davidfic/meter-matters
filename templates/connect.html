@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en" data-base="{{ request.script_root }}">
+<head>
+<title>Add bills · Meter Matters</title>
+{% include "_head.html" %}
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <h1><a href="{{ url_for('index') }}" style="color:inherit;text-decoration:none">{% include "_brand.html" %}</a>
+        <span style="color:var(--text-muted);font-weight:400"> / Add bills</span></h1>
+    </div>
+    <div class="top-actions">
+      {% include "_homes.html" %}
+      {% if has_bills %}<a class="btn" href="{{ url_for('index') }}">← Dashboard</a>{% endif %}
+      <form method="post" action="{{ url_for('web.logout') }}" class="inline">
+        <button type="submit" title="Signed in as {{ user.email }}">Sign out</button>
+      </form>
+    </div>
+  </header>
+
+  {% for category, message in get_flashed_messages(with_categories=true) %}
+    <div class="flash {{ 'err' if category == 'err' }}" role="status">{{ message }}</div>
+  {% endfor %}
+  <div id="flash" class="flash" role="status" aria-live="polite" hidden></div>
+
+  {% if homes_view.pending %}
+  <section id="held">
+    <div class="card">
+      <h2>{{ homes_view.pending|length }} bill{{ "s" if homes_view.pending|length != 1 }} waiting for a home</h2>
+      <p class="note">These arrived by email, for an account none of your homes has seen yet.
+        Say where each belongs and it is filed there.</p>
+      {% for bill in homes_view.pending %}
+      <div class="held-bill">
+        <span><strong>{{ bill.fuel_name }}</strong> ${{ "%.2f"|format(bill.amount) }}
+          {% if bill.due_text %}due {{ bill.due_text }}{% endif %}
+          {% if bill.account_suffix %}· account …{{ bill.account_suffix }}{% endif %}</span>
+        <form method="post" action="{{ url_for('web.home_place_bill', pending_id=bill.id) }}" class="inline">
+          <select name="home" aria-label="Home for this bill">
+            {% for h in homes_view.active %}<option value="{{ h.id }}">{{ h.name }}</option>{% endfor %}
+          </select>
+          <button type="submit">File it</button>
+        </form>
+        <form method="post" action="{{ url_for('web.home_dismiss_bill', pending_id=bill.id) }}" class="inline">
+          <button type="submit" class="link">Drop</button>
+        </form>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  <section>
+    <div class="card">
+      {% if homes_view.several %}<p class="note" style="margin:0 0 6px">Adding to <strong>{{ homes_view.current.name }}</strong>
+        — uploads go there; bills that arrive by email go to the home that already has the account.</p>{% endif %}
+      <h2>{{ "How should your bills get here?" if not has_bills else "How your bills get here" }}</h2>
+      <p class="note" style="margin-bottom:0">
+        {% if not has_bills %}Pick whichever you're comfortable with. {% endif %}
+        These can be mixed and changed at any time — a bill that arrives twice is only counted once.
+      </p>
+    </div>
+  </section>
+
+  <section class="grid cols-3 ways">
+
+    <!-- ------------------------------------------------------- upload -->
+    <div class="card way">
+      <div class="way-head"><h2>Upload them yourself</h2>
+        <span class="tag">Nothing connected</span></div>
+      <p class="note">Download your usage or bill history from your utility's website and drop it
+        here. Most utilities offer a spreadsheet (CSV) or a Green Button file. Nothing is linked
+        to your email or any other account.</p>
+      <div class="dropzone" id="dropzone" tabindex="0" role="button">
+        Drop exports here, or click to choose files
+      </div>
+      <input type="file" id="file" accept=".csv,.zip,.xml,text/csv,application/zip,text/xml" multiple hidden>
+      <ul class="facts-list">
+        <li><strong>Bill history</strong> — a list of your bills, for what you were billed.</li>
+        <li><strong>Usage</strong> — a usage file, ideally with costs, for kWh, therms or gallons.
+          Green Button (CSV or XML) works; so does any spreadsheet with dates and amounts —
+          if we can't tell which column is which, we'll ask.
+          {% if not has_usage %}Only an upload can bring these in.{% endif %}</li>
+      </ul>
+      <details class="howto">
+        <summary>How to find the file on your utility's site</summary>
+        <p class="note">Menus move, so these say what to look for rather than exactly where it is. Once signed in, look for
+          <strong>Green Button</strong>, <strong>Download my data</strong>, <strong>Usage history</strong> or
+          <strong>Billing history</strong>. A CSV or XML is what you want; a PDF of a bill isn't readable here yet.</p>
+        <dl class="howto-list">
+          <dt>Eversource (MA, CT, NH)</dt>
+          <dd>eversource.com → <em>Billing &amp; payments</em> for the payment history (<code>AccountHistory.csv</code>);
+            <em>Energy usage</em> → <em>Download usage data</em> for the Green Button zip. Both drop straight in here.</dd>
+          <dt>National Grid</dt>
+          <dd>nationalgridus.com → <em>Energy usage</em> → <em>Download usage</em> (Green Button). If the billing page only
+            offers PDFs, add the bills by hand below.</dd>
+          <dt>PG&amp;E</dt>
+          <dd>pge.com → <em>Energy usage details</em> → <em>Green Button → Download my data</em>. Pick a date range and CSV or XML.
+            Export electric and gas separately; a file holding both is turned away with a note saying so.</dd>
+          <dt>Con Edison</dt>
+          <dd>coned.com → <em>My Energy Use</em> → <em>Download My Data</em> (Green Button). Pick a year or more.</dd>
+          <dt>Duke Energy</dt>
+          <dd>duke-energy.com → <em>Usage</em> → look for <em>Download</em> or <em>Green Button</em>. Budget-billed accounts
+            still work: usage pairs to each bill by its dates.</dd>
+          <dt>Xcel Energy, SCE, SDG&amp;E, Dominion</dt>
+          <dd>Each has <em>Green Button</em> or <em>Download usage</em> under its usage or energy pages. Any CSV with dates
+            and amounts will do.</dd>
+          <dt>Water and sewer</dt>
+          <dd>Many water utilities offer a usage or billing export too; gallons or CCF both work. Otherwise a quarterly
+            bill typed in by hand is enough.</dd>
+          <dt>Any other utility</dt>
+          <dd>Look for an export of your usage or bills. If we can't tell which column is which, we'll show you the
+            file and ask. Nothing to export? Add bills by hand below - a date and an amount is all it takes.</dd>
+        </dl>
+      </details>
+      <p class="note fine">You come back and upload each new bill.</p>
+    </div>
+
+    <!-- --------------------------------------------------- forwarding -->
+    <div class="card way">
+      <div class="way-head"><h2>Forward them from your email</h2>
+        <span class="tag">No access to your mailbox</span>
+        {% if not bill_emails %}<span class="tag">Eversource bills only</span>{% endif %}</div>
+      {% if not bill_emails %}<p class="note">This reads Eversource's bill emails, and nothing
+        else yet. For other utilities, upload a file or add bills by hand.</p>{% endif %}
+      {% if forwarding %}
+        <p class="note">A filter in your mailbox sends the utility's bill notices to an address
+          that belongs to you alone. We never see any other mail, and hold no password.</p>
+
+        <div class="field">
+          <span class="label" id="address-label">Your forwarding address</span>
+          <div class="copy-row">
+            <code class="address" id="address" aria-labelledby="address-label">{{ forwarding.address }}</code>
+            <button type="button" id="copy" data-copy="{{ forwarding.address }}">Copy</button>
+          </div>
+        </div>
+
+        {% if forwarding.confirm %}
+        <div class="callout">
+          <strong>Gmail is waiting for you to confirm.</strong>
+          {% if forwarding.confirm.confirm_url %}
+            <a href="{{ forwarding.confirm.confirm_url }}" target="_blank" rel="noopener noreferrer">
+              Open Gmail's confirmation link</a>{% if forwarding.confirm.confirm_code %},
+            or enter code <code>{{ forwarding.confirm.confirm_code }}</code> in Gmail{% endif %}.
+          {% elif forwarding.confirm.confirm_code %}
+            Enter code <code>{{ forwarding.confirm.confirm_code }}</code> in Gmail.
+          {% else %}
+            The message arrived but held no link we recognise. Send it again from Gmail.
+          {% endif %}
+        </div>
+        {% endif %}
+
+        <ol class="steps">
+          <li>In Gmail, open <em>Settings → Forwarding and POP/IMAP → Add a forwarding address</em>
+            and paste the address above.</li>
+          <li>Gmail sends a confirmation here. Reload this page and the link appears above.</li>
+          <li>Create a filter for mail from <code>noreply@notifications.eversource.com</code>
+            and choose <em>Forward it to</em> this address.</li>
+        </ol>
+        <p class="note fine">Other mail providers work the same way: forward the utility's
+          notices to the address above.</p>
+
+        {% if forwarding.log %}
+        <h3>What has arrived</h3>
+        <ul class="log">
+          {% for row in forwarding.log %}
+          <li class="{{ row.outcome }}">
+            <span class="when">{{ row.received_at[:10] }}</span>
+            <span class="what">{{ {"imported": "Filed", "duplicate": "Already had it",
+                                   "confirm": "Confirmation", "rejected": "Not filed", "held": "Needs a home"}[row.outcome] }}</span>
+            <span class="why">{{ row.detail }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+
+        <form method="post" action="{{ url_for('web.forwarding_rotate') }}" class="quiet">
+          <button type="submit" class="link">Issue a new address</button>
+          <p class="note fine">Do this if the address has leaked. The old one stops working at once.</p>
+        </form>
+      {% else %}
+        <p class="note">Not available on this server — its operator hasn't set up inbound email.</p>
+      {% endif %}
+    </div>
+
+    <!-- -------------------------------------------------------- gmail -->
+    <div class="card way">
+      <div class="way-head"><h2>Connect Gmail</h2>
+        <span class="tag warn">Reads your mailbox</span></div>
+      {% if gmail %}
+        {% if gmail.link %}
+          <p class="note">Connected to <strong>{{ gmail.link.email }}</strong>.
+            New bills are picked up daily.
+            {% if gmail.link.checked_at %}Last checked {{ gmail.link.checked_at[:10] }}.{% endif %}</p>
+          {% if gmail.link.last_error %}
+          <div class="callout err">The last check failed: {{ gmail.link.last_error }}.</div>
+          {% endif %}
+          <div class="row">
+            <form method="post" action="{{ url_for('web.gmail_check') }}" class="inline">
+              <button type="submit">Check now</button></form>
+            <form method="post" action="{{ url_for('web.gmail_disconnect') }}" class="inline">
+              <button type="submit">Disconnect</button></form>
+          </div>
+          <p class="note fine">Disconnecting hands access back to Google and deletes what we
+            held. Bills already imported stay.</p>
+        {% else %}
+          <p class="note">The least effort, and the most access: Google offers no way to let
+            an app read only your bills, so this grants read access to <strong>all</strong>
+            your mail. We only ever ask it for messages from the utility's bill notices
+            (today, Eversource's).</p>
+          <div class="stack">
+            <a class="btn wide" href="{{ url_for('web.google_start', purpose='gmail-once') }}">
+              Import once, keep nothing</a>
+            <p class="note fine">Brings in every bill in the mailbox now, then hands access
+              straight back. Come back and do it again when you like.</p>
+            {% if gmail.can_keep %}
+            <a class="btn wide" href="{{ url_for('web.google_start', purpose='gmail-keep') }}">
+              Stay connected</a>
+            <p class="note fine">New bills arrive on their own. We keep an encrypted key to
+              your mailbox until you disconnect.</p>
+            {% endif %}
+          </div>
+        {% endif %}
+      {% else %}
+        <p class="note">Not available on this server — its operator hasn't set up Google access.</p>
+      {% endif %}
+    </div>
+  </section>
+
+  <section id="mapping" hidden>
+    <div class="card">
+      <h2>Which column is which?</h2>
+      <p class="note" id="mapping-reason"></p>
+      <div class="table-view" id="mapping-sample"></div>
+      <form id="mapping-form" class="mapping-form"></form>
+    </div>
+  </section>
+
+  <section id="byhand">
+    <div class="card">
+      <h2>Add a bill by hand</h2>
+      <p class="note">No file to upload? Type one in. It takes a date and an amount.</p>
+      <form method="post" action="{{ url_for('web.bill_add') }}" class="controls">
+        <div class="field"><label for="bh-fuel">Fuel</label>
+          <select id="bh-fuel" name="fuel"><option>Electric</option><option>Gas</option><option>Water</option></select></div>
+        <div class="field"><label for="bh-due">Due date</label>
+          <input type="date" id="bh-due" name="due" required></div>
+        <div class="field"><label for="bh-amount">Amount ($)</label>
+          <input type="number" id="bh-amount" name="amount" step="0.01" min="0.01" required></div>
+        <button type="submit" class="primary">Add bill</button>
+        <details style="flex-basis:100%">
+          <summary>Also say how much was used</summary>
+          <div class="controls" style="margin-top:8px">
+            <div class="field"><label for="bh-used">Used</label>
+              <input type="number" id="bh-used" name="used" step="any" min="0"></div>
+            <div class="field"><label for="bh-unit">Unit</label>
+              <select id="bh-unit" name="unit"><option>kWh</option><option>therms</option><option>ccf</option><option>gal</option></select></div>
+            <div class="field"><label for="bh-start">From</label><input type="date" id="bh-start" name="start"></div>
+            <div class="field"><label for="bh-end">To</label><input type="date" id="bh-end" name="end"></div>
+          </div>
+          <p class="note fine">Used, with the dates it covers, lets the app work out your price
+            per unit and compare with last year.</p>
+        </details>
+      </form>
+    </div>
+  </section>
+
+  <section id="place">
+    <div class="card">
+      <h2>About {{ "this home" if homes_view.several else "your home" }}</h2>
+      <p class="note">Where it is and who bills it. None of it is required; it picks the right
+        carbon figure for your area and which comparisons apply.
+        {% if place.detected and not place.state %}We read <strong>{{ place.detected }}</strong>
+        from your usage file.{% endif %}</p>
+      <form method="post" action="{{ url_for('web.home_place') }}" class="controls">
+        <div class="field"><label for="pl-state">State</label>
+          <select id="pl-state" name="state">
+            <option value="">{{ "Detected: " ~ place.detected if place.detected else "Not set" }}</option>
+            {% for code, name in place.states %}<option value="{{ code }}"{{ " selected" if place.state == code }}>{{ name }}</option>{% endfor %}
+          </select></div>
+        <div class="field"><label for="pl-zip">ZIP code</label>
+          <input type="text" id="pl-zip" name="zip" value="{{ place.zip }}" inputmode="numeric" maxlength="5" style="width:90px"></div>
+        <div class="field"><label for="pl-provider">Utility</label>
+          <input type="text" id="pl-provider" name="provider" value="{{ place.provider }}" maxlength="60" placeholder="e.g. National Grid"></div>
+        <button type="submit">Save</button>
+        <label class="check" style="flex-basis:100%;font-size:12.5px;color:var(--text-secondary)">
+          <input type="checkbox" name="share_benchmark" value="1"{{ " checked" if place.share_benchmark }}>
+          Let this home's average daily usage count among homes in its state, so it and they can see where they sit.
+          Only the state, the fuel and one average go in - never an address, an account or a name.
+        </label>
+      </form>
+    </div>
+  </section>
+
+  <section id="homes">
+    <div class="card">
+      {% if homes_view.several or homes_view.deleted %}
+      <h2>Your homes</h2>
+      <ul class="homes-list">
+        {% for h in homes_view.active %}
+        <li>
+          <form method="post" action="{{ url_for('web.home_rename', home_id=h.id) }}" class="controls">
+            <input type="text" name="name" value="{{ h.name }}" maxlength="60" aria-label="Name" required>
+            <button type="submit">Rename</button>
+            <a class="btn" href="{{ h.prefix or '/' }}">{{ "Open" }}</a>
+          </form>
+          {% if not h.main %}
+          <details>
+            <summary>Delete {{ h.name }}</summary>
+            <p class="note">Hides it and its bills. You can restore it for 30 days; after that it is gone for good.</p>
+            <form method="post" action="{{ url_for('web.home_delete', home_id=h.id) }}" class="controls">
+              <div class="field">
+                <label for="del-{{ h.id }}">Type <code>{{ h.name }}</code> to confirm</label>
+                <input type="text" id="del-{{ h.id }}" name="confirm" autocomplete="off" required>
+              </div>
+              <button type="submit" class="danger">Delete</button>
+            </form>
+          </details>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% for h in homes_view.deleted %}
+      <form method="post" action="{{ url_for('web.home_restore', home_id=h.id) }}" class="controls held-bill">
+        <span><strong>{{ h.name }}</strong> is deleted · gone for good on {{ h.purge_on().strftime("%B %-d") }}</span>
+        <button type="submit">Restore</button>
+      </form>
+      {% endfor %}
+      {% endif %}
+
+      {% if homes_view.can_add %}
+      <details {{ "open" if homes_view.several else "" }}{{ " class=add-home" }}>
+        <summary>Add another home</summary>
+        <p class="note">A second house, a flat, a family member's place — each gets its own bills,
+          settings and history, and you can look at them all together.</p>
+        <form method="post" action="{{ url_for('web.home_add') }}" class="controls">
+          <div class="field">
+            <label for="home-name">What do you call it?</label>
+            <input type="text" id="home-name" name="name" maxlength="60" placeholder="Lake house" required>
+          </div>
+          <button type="submit" class="primary">Add home</button>
+        </form>
+      </details>
+      {% endif %}
+    </div>
+  </section>
+
+  <section id="account">
+    <div class="card">
+      <h2>Your account</h2>
+      <p class="note">Signed in as <strong>{{ user.email }}</strong>
+        {%- if user.has_google and not user.has_password %}, through Google{% endif %}.</p>
+      <details>
+        <summary>Delete this account</summary>
+        <p class="note">Deletes every bill, export and setting, and disconnects Gmail.
+          It cannot be undone.</p>
+        <form method="post" action="{{ url_for('web.delete_account') }}" class="controls">
+          <div class="field">
+            <label for="confirm">Type <code>{{ user.email }}</code> to confirm</label>
+            <input type="text" id="confirm" name="confirm" autocomplete="off" required>
+          </div>
+          <button type="submit" class="danger">Delete everything</button>
+        </form>
+      </details>
+    </div>
+  </section>
+</div>
+
+<script type="module" src="{{ url_for('static', filename='connect.js') }}"></script>
+</body>
+</html>

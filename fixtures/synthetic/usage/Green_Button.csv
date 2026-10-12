@@ -1,0 +1,15 @@
+12 Placeholder Ln, Exampleton MA 01000
+Data from 11/17/2023 to 7/18/2024
+Account Nickname :
+Requested By  on 9/21/2026
+Meter No: ,
+
+Account,Read Date,Usage,Number of Days,Usage per day,Charge,Read Type,Average Temperature
+55500020002,7/18/2024,830.00,30,27.67,$250.70,Actual Read,76.0
+55500020002,6/18/2024,720.00,32,22.50,$218.80,Actual Read,69.0
+55500020002,5/17/2024,640.00,30,21.33,$195.60,Actual Read,60.0
+55500020002,4/17/2024,600.00,30,20.00,$184.00,Actual Read,50.0
+55500020002,3/18/2024,655.00,31,21.13,$199.95,Actual Read,41.0
+55500020002,2/16/2024,640.00,29,22.07,$195.60,Estimated Read,31.0
+55500020002,1/18/2024,760.00,31,24.52,$230.40,Actual Read,29.0
+55500020002,12/18/2023,700.00,32,21.88,$213.00,Actual Read,36.0

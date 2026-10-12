@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en" data-base="{{ request.script_root }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Raw data · Meter Matters</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+<link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='icon.svg') }}">
+<script>
+  // Before first paint, so a chosen theme never flashes the other one.
+  try { const t = localStorage.getItem("elec-theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
+</script>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <h1><a href="{{ url_for('index') }}" style="color:inherit;text-decoration:none">{% include "_brand.html" %}</a>
+        <span style="color:var(--text-muted);font-weight:400"> / Raw data</span></h1>
+      <span class="sub" id="coverage"></span>
+    </div>
+    <div class="top-actions">
+      <a class="btn" href="{{ url_for('index') }}">← Dashboard</a>
+      {% include "_homes.html" %}
+      {% include "_account.html" %}
+      <button id="theme" type="button" aria-label="Toggle colour theme">Theme</button>
+    </div>
+  </header>
+
+  <section>
+    <div class="card">
+      <p class="note" style="margin-top:0">
+        Everything the app has read, unrounded and unfiltered — for the questions the
+        charts don't anticipate. <strong>Source</strong> says where each row came from:
+        <code>portal</code> is the utility's own export, <code>email</code> is a bill
+        notification (which reports <em>amount due</em>, not that month's charge), and
+        <strong>Verified</strong> marks the rows whose amount matched a metered period exactly.
+      </p>
+
+      <div class="controls" style="margin-bottom:4px">
+        <div class="field" style="flex:1 1 220px">
+          <label for="q">Search</label>
+          <input type="search" id="q" placeholder="any value — 248.26, 2026-10, gas…">
+        </div>
+        <div class="field"><label for="f-dataset">Dataset</label>
+          <select id="f-dataset">
+            <option value="statements">Statements &amp; payments</option>
+            <option value="usage">Metered usage periods</option>
+          </select></div>
+        <div class="field"><label for="f-fuel">Fuel</label><select id="f-fuel"></select></div>
+        <div class="field"><label for="f-account">Account</label><select id="f-account"></select></div>
+        <div class="field"><label for="f-source">Source</label><select id="f-source"></select></div>
+        <div class="field"><label for="f-from">From</label><input type="date" id="f-from"></div>
+        <div class="field"><label for="f-to">To</label><input type="date" id="f-to"></div>
+        <button id="reset" type="button">Reset</button>
+        <button class="primary" id="download" type="button">Download CSV</button>
+      </div>
+      <p class="note" id="count"></p>
+    </div>
+  </section>
+
+  <section>
+    <div class="card">
+      <div class="table-view scroll" id="grid" style="max-height:70vh"></div>
+    </div>
+  </section>
+
+  <footer class="foot" id="files"></footer>
+</div>
+<script id="bootstrap" type="application/json">{{ bootstrap | safe }}</script>
+<script type="module" src="{{ url_for('static', filename='raw.js') }}"></script>
+</body>
+</html>

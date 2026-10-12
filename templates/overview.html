@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en" data-base="{{ request.script_root }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meter Matters</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+<link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='icon.svg') }}">
+<script>
+  // Before first paint, so a chosen theme never flashes the other one.
+  try { const t = localStorage.getItem("elec-theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
+</script>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <h1>{% include "_brand.html" %}</h1>
+      <span class="sub" id="coverage"></span>
+    </div>
+    <div class="top-actions">
+      <a class="btn" href="{{ url_for('year_page') }}">Your year</a>
+      <a class="btn" href="{{ url_for('rates_page') }}">Rates</a>
+      <a class="btn" href="{{ url_for('raw_page') }}">Raw data</a>
+      {% include "_homes.html" %}
+      {% include "_account.html" %}
+      <button id="theme" type="button" aria-label="Toggle colour theme">Theme</button>
+    </div>
+  </header>
+
+  <div id="flash" class="flash" role="status" aria-live="polite" hidden></div>
+
+  <!-- ------------------------------------------------- one card per fuel -->
+  <section class="grid cols-2" id="fuel-cards"></section>
+
+  <!-- -------------------------------------------------- combined totals -->
+  <section class="grid cols-4" id="totals"></section>
+
+  <!-- --------------------------------------------------------- alerts -->
+  <section id="alerts-section" hidden>
+    <div class="card">
+      <div class="chart-head">
+        <div>
+          <h2>Worth a look</h2>
+          <p class="note" id="alerts-note"></p>
+        </div>
+      </div>
+      <div id="alerts"></div>
+    </div>
+  </section>
+
+  <!-- --------------------------------------------------------- carbon -->
+  <div id="carbon-section" hidden>
+    <div class="part">
+      <h2>Carbon footprint</h2>
+      <p>What your gas and electricity put into the air, worked out from what the meters read.</p>
+    </div>
+    <section class="grid cols-4" id="carbon-tiles"></section>
+    <section>
+      <div class="card">
+        <div class="chart-head">
+          <div>
+            <h2>Carbon dioxide by month</h2>
+            <p class="note" id="carbon-note"></p>
+          </div>
+          <button class="table-toggle" data-table="carbon-table" type="button">Table view</button>
+        </div>
+        <div class="legend" style="margin-bottom:10px" id="carbon-legend"></div>
+        <div id="chart-carbon"></div>
+        <div class="table-view scroll" id="carbon-table" hidden></div>
+      </div>
+    </section>
+    <div class="part">
+      <h2>What you spend</h2>
+    </div>
+  </div>
+
+  <!-- --------------------------------------------------------- charts -->
+  <section>
+    <div class="card">
+      <div class="chart-head">
+        <div>
+          <h2>Everything you spend on energy</h2>
+          <p class="note" id="energy-note"></p>
+        </div>
+        <button class="table-toggle" data-table="energy-table" type="button">Table view</button>
+      </div>
+      <div class="legend" id="energy-legend" style="margin-bottom:10px"></div>
+      <div id="chart-energy"></div>
+      <div class="table-view" id="energy-table" hidden></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="card">
+      <div class="chart-head">
+        <div>
+          <h2>What each month of the year costs you</h2>
+          <p class="note">Average combined bill per calendar month — the seasonal shape of your energy year.</p>
+        </div>
+        <button class="table-toggle" data-table="season-table" type="button">Table view</button>
+      </div>
+      <div class="legend" id="season-legend" style="margin-bottom:10px"></div>
+      <div id="chart-season"></div>
+      <div class="table-view" id="season-table" hidden></div>
+    </div>
+  </section>
+
+  <footer class="foot" id="foot"></footer>
+</div>
+<script id="bootstrap" type="application/json">{{ bootstrap | safe }}</script>
+<script type="module" src="{{ url_for('static', filename='overview.js') }}"></script>
+</body>
+</html>

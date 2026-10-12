@@ -1,0 +1,72 @@
+Account# or Nickname,Account Type,Pay/Due Date,Type,Amount,Status,Source
+55500010001&lt;br&gt;(demo42),Electric,2026/10/16,Current Bill,$211.19,-,portal
+55500010001&lt;br&gt;(demo42),Electric,2026/10/16,Payment,$0.00,NOTREADY,portal
+55500010001&lt;br&gt;(demo42),Electric,2026/09/16,Current Bill,$245.29,-,portal
+55500030003 (gas),Gas,2026/09/16,Current Bill,$27.52,-,email
+55500010001&lt;br&gt;(demo42),Electric,2026/09/12,Payment,$245.29,APPROVED,portal
+55500010001&lt;br&gt;(demo42),Electric,2026/08/17,Current Bill,$264.05,-,portal
+55500030003 (gas),Gas,2026/08/17,Current Bill,$29.46,-,email
+55500010001&lt;br&gt;(demo42),Electric,2026/08/13,Payment,$264.05,APPROVED,portal
+55500010001&lt;br&gt;(demo42),Electric,2026/07/16,Current Bill,$266.96,-,portal
+55500030003 (gas),Gas,2026/07/16,Current Bill,$39.16,-,email
+55500010001&lt;br&gt;(demo42),Electric,2026/07/12,Payment,$266.96,APPROVED,portal
+55500010001&lt;br&gt;(demo42),Electric,2026/06/17,Current Bill,$242.32,-,portal
+55500030003 (gas),Gas,2026/06/16,Current Bill,$68.26,-,email
+55500010001&lt;br&gt;(demo42),Electric,2026/06/13,Payment,$242.32,APPROVED,portal
+55500030003 (gas),Gas,2026/05/18,Current Bill,$136.16,-,email
+55500010001&lt;br&gt;(demo42),Electric,2026/05/15,Current Bill,$217.68,-,portal
+55500010001&lt;br&gt;(demo42),Electric,2026/05/11,Payment,$217.68,APPROVED,portal
+55500010001&lt;br&gt;(demo42),Electric,2026/04/16,Current Bill,$235.28,-,portal
+55500030003 (gas),Gas,2026/04/16,Current Bill,$223.46,-,email
+55500010001&lt;br&gt;(demo42),Electric,2026/04/12,Payment,$235.28,APPROVED,portal
+55500030003 (gas),Gas,2026/03/18,Current Bill,$301.06,-,email
+55500010001&lt;br&gt;(demo42),Electric,2026/03/17,Current Bill,$259.92,-,portal
+55500010001&lt;br&gt;(demo42),Electric,2026/03/13,Payment,$259.92,APPROVED,portal
+55500010001&lt;br&gt;(demo42),Electric,2026/02/17,Current Bill,$291.60,-,portal
+55500030003 (gas),Gas,2026/02/17,Current Bill,$312.70,-,email
+55500010001&lt;br&gt;(demo42),Electric,2026/02/13,Payment,$291.60,APPROVED,portal
+55500010001&lt;br&gt;(demo42),Electric,2026/01/15,Current Bill,$267.18,-,portal
+55500030003 (gas),Gas,2026/01/15,Current Bill,$200.18,-,email
+55500010001&lt;br&gt;(demo42),Electric,2026/01/11,Payment,$267.18,APPROVED,portal
+55500010001&lt;br&gt;(demo42),Electric,2025/12/16,Current Bill,$237.12,-,portal
+55500030003 (gas),Gas,2025/12/16,Current Bill,$91.54,-,email
+55500010001&lt;br&gt;(demo42),Electric,2025/12/12,Payment,$237.12,APPROVED,portal
+55500030003 (gas),Gas,2025/11/17,Current Bill,$39.52,-,email
+55500010001&lt;br&gt;(demo42),Electric,2025/11/14,Current Bill,$213.74,-,portal
+55500010001&lt;br&gt;(demo42),Electric,2025/11/10,Payment,$213.74,APPROVED,portal
+55500010001&lt;br&gt;(demo42),Electric,2025/10/16,Current Bill,$250.48,-,portal
+55500030003 (gas),Gas,2025/10/16,Current Bill,$27.48,-,email
+55500010001&lt;br&gt;(demo42),Electric,2025/10/12,Payment,$250.48,APPROVED,portal
+55500010001&lt;br&gt;(demo42),Electric,2025/09/16,Current Bill,$287.22,-,email
+55500030003 (gas),Gas,2025/09/16,Current Bill,$25.76,-,email
+55500030003 (gas),Gas,2025/08/17,Current Bill,$29.20,-,email
+55500010001&lt;br&gt;(demo42),Electric,2025/08/15,Current Bill,$275.53,-,email
+55500010001&lt;br&gt;(demo42),Electric,2025/07/16,Current Bill,$245.32,-,email
+55500030003 (gas),Gas,2025/07/16,Current Bill,$37.80,-,email
+55500010001&lt;br&gt;(demo42),Electric,2025/06/16,Current Bill,$223.06,-,email
+55500030003 (gas),Gas,2025/06/16,Current Bill,$68.76,-,email
+******0004 (gas),Gas,2025/05/18,Current Bill,$134.12,-,email
+55500010001&lt;br&gt;(demo42),Electric,2025/05/15,Current Bill,$200.80,-,email
+55500010001&lt;br&gt;(demo42),Electric,2025/04/16,Current Bill,$218.29,-,email
+******0004 (gas),Gas,2025/04/16,Current Bill,$214.96,-,email
+55500010001&lt;br&gt;(demo42),Electric,2025/03/18,Current Bill,$240.55,-,email
+******0004 (gas),Gas,2025/03/18,Current Bill,$288.92,-,email
+55500010001&lt;br&gt;(demo42),Electric,2025/02/17,Current Bill,$270.76,-,email
+******0004 (gas),Gas,2025/02/17,Current Bill,$266.56,-,email
+55500010001&lt;br&gt;(demo42),Electric,2025/01/15,Current Bill,$231.25,-,email
+******0004 (gas),Gas,2025/01/15,Current Bill,$170.24,-,email
+55500010001&lt;br&gt;(demo42),Electric,2024/12/16,Current Bill,$206.18,-,email
+******0004 (gas),Gas,2024/12/16,Current Bill,$77.36,-,email
+******0004 (gas),Gas,2024/11/17,Current Bill,$36.08,-,email
+55500010001&lt;br&gt;(demo42),Electric,2024/11/14,Current Bill,$188.48,-,email
+55500010001&lt;br&gt;(demo42),Electric,2024/10/16,Current Bill,$226.83,-,email
+******0004 (gas),Gas,2024/10/16,Current Bill,$27.48,-,email
+55500010001&lt;br&gt;(demo42),Electric,2024/09/16,Current Bill,$250.43,-,email
+55500020002&lt;br&gt;(demo42),Electric,2024/08/15,Current Bill,$250.70,-,email
+55500020002&lt;br&gt;(demo42),Electric,2024/07/16,Current Bill,$218.80,-,email
+55500020002&lt;br&gt;(demo42),Electric,2024/06/14,Current Bill,$195.60,-,email
+55500020002&lt;br&gt;(demo42),Electric,2024/05/15,Current Bill,$184.00,-,email
+55500020002&lt;br&gt;(demo42),Electric,2024/04/15,Current Bill,$199.95,-,email
+55500020002&lt;br&gt;(demo42),Electric,2024/03/15,Current Bill,$195.60,-,email
+55500020002&lt;br&gt;(demo42),Electric,2024/02/15,Current Bill,$230.40,-,email
+55500020002&lt;br&gt;(demo42),Electric,2024/01/15,Current Bill,$213.00,-,email

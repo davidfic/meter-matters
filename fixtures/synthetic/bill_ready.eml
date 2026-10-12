@@ -1,0 +1,82 @@
+Delivered-To: pat.sample@mailbox.example
+Return-Path: <bounces@mail-vendor.example>
+Received: from outbound.mail-vendor.example (outbound.mail-vendor.example
+ [192.0.2.25]) by mx.mailbox.example with ESMTPS id synthetic0001 for
+ <pat.sample@mailbox.example>; Mon, 21 Sep 2026 14:05:11 +0000
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=mail-vendor.example;
+ s=s1; h=from:subject:date:to; bh=c3ludGhldGljLWJvZHktaGFzaA==;
+ b=c3ludGhldGljLXNpZ25hdHVyZS1ub3QtcmVhbA==
+Date: Mon, 21 Sep 2026 14:05:09 +0000
+From: Eversource Do Not Reply <noreply@notifications.eversource.com>
+To: pat.sample@mailbox.example
+Subject: New Electric Bill from Eversource
+Message-ID: <synthetic-bill-ready-0001@mail-vendor.example>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="=_synthetic_0001"
+
+--=_synthetic_0001
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: quoted-printable
+
+Hello,
+
+Your new Eversource electric bill is ready to view. You have a total amount d=
+ue of $211.19.
+
+Sign in to your account to view your bill, or to pay it.
+
+Thank you,
+Eversource
+
+This is an invented message, used only for testing.
+
+--=_synthetic_0001
+Content-Type: text/html; charset="iso-8859-1"
+Content-Transfer-Encoding: quoted-printable
+MIME-Version: 1.0
+
+<!DOCTYPE html>
+<html lang=3D"en">
+<head>
+<meta http-equiv=3D"Content-Type" content=3D"text/html; charset=3Diso-8859-1">
+<title>Your bill is ready</title>
+<style type=3D"text/css">
+  body { margin: 0; padding: 0; background-color: #f4f4f4; }
+  .label { font-family: Arial, sans-serif; font-size: 14px; color: #333333; }
+</style>
+</head>
+<body>
+<table role=3D"presentation" width=3D"100%" cellpadding=3D"0" cellspacing=3D"=
+0" border=3D"0">
+  <tr><td align=3D"center">
+    <table role=3D"presentation" width=3D"600" cellpadding=3D"0" cellspacing=
+=3D"0" border=3D"0">
+      <tr><td class=3D"label"><h1>Your&nbsp;bill is ready</h1></td></tr>
+      <tr><td class=3D"label">Hello Pat Sample,</td></tr>
+      <tr><td class=3D"label">Your new electric bill is ready to view. You ha=
+ve a
+        total amount due of $211.19.</td></tr>
+      <tr><td>
+        <table role=3D"presentation" cellpadding=3D"4" cellspacing=3D"0" bord=
+er=3D"0">
+          <tr><td class=3D"label"><strong>Account Number:</strong></td>
+              <td class=3D"label">******0001</td></tr>
+          <tr><td class=3D"label"><strong>Bill date:</strong></td>
+              <td class=3D"label">09/20/2026</td></tr>
+          <tr><td class=3D"label"><strong>Due date:</strong></td>
+              <td class=3D"label">10/16/2026</td></tr>
+          <tr><td class=3D"label"><strong>Total&nbsp;Amount Due:</strong></td>
+              <td class=3D"label">$211.19</td></tr>
+        </table>
+      </td></tr>
+      <tr><td class=3D"label"><a href=3D"https://utility.example/account">Vie=
+w your bill</a></td></tr>
+      <tr><td class=3D"label">This is an invented message, used only for test=
+ing.</td></tr>
+    </table>
+  </td></tr>
+</table>
+</body>
+</html>
+
+--=_synthetic_0001--

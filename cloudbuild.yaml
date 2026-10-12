@@ -1,0 +1,78 @@
+# Test, build, push, deploy - in that order, stopping at the first failure.
+#
+# Started by a push to main (the trigger) or by ./deploy/deploy.sh (no git
+# hosting needed). Either way these are the steps, and each one is a script in
+# deploy/ci/ that also runs on your own machine: ./deploy/ci-local.sh
+#
+# First-time setup, rolling back and reading logs: deploy/README.md
+
+steps:
+  # A throwaway Postgres, so the tests cover the database Cloud Run really uses.
+  - id: postgres
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args: [deploy/ci/postgres.sh]
+    env:
+      - PG_PASSWORD=${_CI_DB_PASSWORD}
+
+  # The same Python as the Dockerfile's FROM line. Any failure ends the build.
+  - id: test
+    name: python:3.13-slim
+    entrypoint: bash
+    args: [deploy/ci/test.sh]
+    env:
+      - ELEC_TEST_DATABASE_URL=postgresql://postgres:${_CI_DB_PASSWORD}@elec-ci-postgres:5432/postgres
+
+  # Builds, then refuses the image if it holds anything that is not the app.
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args: [deploy/ci/image.sh, build]
+    env:
+      - IMAGE=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_IMAGE}
+      - COMMIT_SHA=${COMMIT_SHA}
+      - TAG=${_TAG}
+
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args: [deploy/ci/image.sh, push]
+    env:
+      - IMAGE=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_IMAGE}
+      - COMMIT_SHA=${COMMIT_SHA}
+      - TAG=${_TAG}
+
+  # Changes the image and nothing else: the service keeps its secrets,
+  # environment, scaling and access exactly as deploy/cloudrun.sh set them.
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args: [deploy/ci/release.sh]
+    env:
+      - PROJECT=${PROJECT_ID}
+      - REGION=${_REGION}
+      - SERVICE=${_SERVICE}
+      - IMAGE=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/${_IMAGE}
+      - COMMIT_SHA=${COMMIT_SHA}
+      - TAG=${_TAG}
+
+substitutions:
+  _REGION: us-central1
+  _SERVICE: elec-bill
+  _REPOSITORY: elec-bill
+  _IMAGE: elec-bill
+  # Images are tagged with the commit a trigger built. A build submitted by
+  # hand has no commit, so deploy.sh names the tag here instead.
+  _TAG: ''
+  # For the throwaway database above. Not a secret: it guards nothing.
+  _CI_DB_PASSWORD: ci-only-not-a-secret
+
+# Builds run as a dedicated service account, and Cloud Build will not start
+# one of those without being told where its logs go. This bucket is created by
+# deploy/ci-setup.sh; the name is BUCKET in deploy/ci.conf.
+logsBucket: gs://utility-tracker-510019-elec-bill-ci/logs
+
+options:
+  logging: GCS_ONLY
+
+timeout: 1200s

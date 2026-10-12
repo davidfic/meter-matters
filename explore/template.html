@@ -1,0 +1,975 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Compared with last year · exploration</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>⚡</text></svg>">
+<style>/*APP_STYLES*/</style>
+<style>
+/* Additions for this page. Blue is the household, aqua the weather, orange the
+   rate - the same three hues everywhere on the page. */
+:root { --series-3: #1baf7a; }
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) { --series-3: #199e70; }
+}
+:root[data-theme="dark"] { --series-3: #199e70; }
+
+.banner {
+  padding: 10px 14px; border-radius: var(--radius-sm); font-size: 13px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  color: var(--text-secondary); margin-bottom: 16px;
+}
+.part { margin: 34px 0 12px; }
+.part h2 { margin: 0; font-size: 18px; font-weight: 650; letter-spacing: -0.01em; }
+.part p { margin: 4px 0 0; color: var(--text-secondary); font-size: 13.5px; max-width: 760px; }
+
+.tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius);
+        padding: 14px 16px; box-shadow: var(--shadow); min-width: 0; }
+.tile .key { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+
+.finding { font-size: 14px; color: var(--text-primary); margin: 0 0 12px; max-width: 760px; }
+.finding strong { font-weight: 650; }
+
+.axis-title { font-size: 11.5px; fill: var(--text-muted); }
+.note-label { font-size: 11.5px; fill: var(--text-secondary); }
+.t-key { display: inline-block; width: 10px; height: 2px; border-radius: 1px;
+         margin-right: 6px; vertical-align: middle; }
+
+/* The dollar split: three bars either side of a zero line. */
+.split { display: grid; gap: 9px; margin-top: 6px; }
+.split-row { display: grid; grid-template-columns: 92px minmax(0, 1fr) 64px; gap: 10px; align-items: center; font-size: 13px; }
+.split-row .name { color: var(--text-secondary); }
+.split-row .amount { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.split-track { position: relative; height: 16px; }
+.split-track::before { content: ""; position: absolute; left: 50%; top: -4px; bottom: -4px;
+                       width: 1px; background: var(--axis); }
+.split-bar { position: absolute; top: 1px; height: 14px; }
+.split-bar.pos { left: 50%; border-radius: 0 4px 4px 0; }
+.split-bar.neg { right: 50%; border-radius: 4px 0 0 4px; }
+.split-net { display: flex; justify-content: space-between; gap: 10px; margin-top: 12px;
+             padding-top: 11px; border-top: 1px solid var(--gridline); font-size: 13px; }
+.split-net b { font-variant-numeric: tabular-nums; }
+
+.tips { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.tip h3 { margin: 0 0 6px; font-size: 14px; font-weight: 600; }
+.tip p { margin: 0; font-size: 13px; color: var(--text-secondary); }
+.tip .worth { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 12px; padding-top: 11px;
+              border-top: 1px solid var(--gridline); }
+.tip .worth div { font-size: 11.5px; color: var(--text-muted); }
+.tip .worth b { display: block; font-size: 17px; font-weight: 620; color: var(--text-primary); }
+@media (max-width: 900px) { .tips { grid-template-columns: minmax(0, 1fr); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <h1>⚡ Watt's the Damage <span style="color:var(--text-muted);font-weight:400">/ Compared with last year</span></h1>
+      <span class="sub" id="coverage"></span>
+    </div>
+    <div class="top-actions">
+      <button id="theme" type="button" aria-label="Toggle colour theme">Theme</button>
+    </div>
+  </header>
+
+  <div class="banner">An exploration built from your real usage exports and local temperatures.
+    Nothing here is in the app yet.</div>
+
+  <!-- ================================================================ gas -->
+  <div class="part">
+    <h2>Gas</h2>
+    <p id="gas-lede"></p>
+  </div>
+  <section class="grid cols-4" id="gas-tiles"></section>
+
+  <section class="grid cols-2">
+    <div class="card">
+      <div class="chart-head">
+        <div>
+          <h2>Gas follows the cold</h2>
+          <p class="note" id="gas-scatter-note"></p>
+        </div>
+        <button class="table-toggle" data-table="gas-scatter-table" type="button">Table view</button>
+      </div>
+      <div class="legend" style="margin-bottom:10px">
+        <span class="item"><span class="swatch" style="background:var(--series-1);border-radius:50%"></span>Last 12 bills</span>
+        <span class="item"><span class="swatch" style="background:var(--text-muted);opacity:.55;border-radius:50%"></span>Earlier bills</span>
+        <span class="item"><span class="swatch line" style="background:var(--series-3)"></span>What the weather predicts</span>
+      </div>
+      <div id="gas-scatter"></div>
+      <div class="table-view scroll" id="gas-scatter-table" hidden></div>
+    </div>
+
+    <div class="card">
+      <div class="chart-head">
+        <div>
+          <h2>Was it you, or was it the weather?</h2>
+          <p class="note">Each bill against the same weeks a year earlier, in therms per day. The two bars add up to the change you were billed for.</p>
+        </div>
+        <button class="table-toggle" data-table="gas-compare-table" type="button">Table view</button>
+      </div>
+      <div class="legend" style="margin-bottom:10px">
+        <span class="item"><span class="swatch" style="background:var(--series-1)"></span>You</span>
+        <span class="item"><span class="swatch" style="background:var(--series-3)"></span>The weather</span>
+      </div>
+      <div id="gas-compare"></div>
+      <div class="table-view scroll" id="gas-compare-table" hidden></div>
+    </div>
+  </section>
+
+  <!-- =========================================================== electric -->
+  <div class="part">
+    <h2>Electricity</h2>
+    <p id="electric-lede"></p>
+  </div>
+  <section class="grid cols-4" id="electric-tiles"></section>
+
+  <section>
+    <div class="card">
+      <div class="chart-head">
+        <div>
+          <h2>Electricity used per day</h2>
+          <p class="note" id="electric-line-note"></p>
+        </div>
+        <button class="table-toggle" data-table="electric-line-table" type="button">Table view</button>
+      </div>
+      <div class="legend" style="margin-bottom:10px">
+        <span class="item"><span class="swatch line" style="background:var(--series-1)"></span>Used per day</span>
+        <span class="item"><span class="swatch line" style="background:var(--text-muted)"></span>Usual level</span>
+      </div>
+      <div id="electric-line"></div>
+      <div class="table-view scroll" id="electric-line-table" hidden></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="card">
+      <div class="chart-head">
+        <div>
+          <h2>Against the same weeks last year</h2>
+          <p class="note">In kWh per day. The weather bars are there; they are just too small to see.</p>
+        </div>
+        <button class="table-toggle" data-table="electric-compare-table" type="button">Table view</button>
+      </div>
+      <div class="legend" style="margin-bottom:10px">
+        <span class="item"><span class="swatch" style="background:var(--series-1)"></span>You</span>
+        <span class="item"><span class="swatch" style="background:var(--series-3)"></span>The weather</span>
+      </div>
+      <div id="electric-compare"></div>
+      <div class="table-view scroll" id="electric-compare-table" hidden></div>
+    </div>
+  </section>
+
+  <!-- ============================================================ dollars -->
+  <div class="part">
+    <h2>Where the change in the bill came from</h2>
+    <p>The last twelve bills against the twelve before, in dollars. The three parts add up to the change exactly.</p>
+  </div>
+  <section class="grid cols-2">
+    <div class="card"><header><h2>Gas</h2></header><div id="gas-split"></div></div>
+    <div class="card"><header><h2>Electricity</h2></header><div id="electric-split"></div></div>
+  </section>
+
+  <!-- =========================================================== forecast -->
+  <div class="part">
+    <h2>Could the app say what the next bill will be?</h2>
+    <p id="forecast-lede"></p>
+  </div>
+  <section class="grid cols-4" id="forecast-tiles"></section>
+  <section>
+    <div class="card">
+      <div class="chart-head">
+        <div>
+          <h2>Gas bills: forecast against what arrived</h2>
+          <p class="note">Each forecast uses only what was known before that bill, plus the weather of its own weeks.</p>
+        </div>
+        <button class="table-toggle" data-table="forecast-table" type="button">Table view</button>
+      </div>
+      <div class="legend" style="margin-bottom:10px">
+        <span class="item"><span class="swatch line" style="background:var(--series-1)"></span>The bill that arrived</span>
+        <span class="item"><span class="swatch line" style="background:var(--series-3)"></span>Forecast from the weather</span>
+      </div>
+      <div id="forecast-chart"></div>
+      <div class="table-view scroll" id="forecast-table" hidden></div>
+    </div>
+  </section>
+
+  <!-- ============================================================= carbon -->
+  <div class="part">
+    <h2>Carbon footprint</h2>
+    <p id="carbon-lede"></p>
+  </div>
+  <section class="grid cols-4" id="carbon-tiles"></section>
+  <section>
+    <div class="card">
+      <div class="chart-head">
+        <div>
+          <h2>Carbon dioxide by month</h2>
+          <p class="note">Kilograms, from both fuels.</p>
+        </div>
+        <button class="table-toggle" data-table="carbon-table" type="button">Table view</button>
+      </div>
+      <div class="legend" style="margin-bottom:10px">
+        <span class="item"><span class="swatch" style="background:var(--series-1)"></span>Electricity</span>
+        <span class="item"><span class="swatch" style="background:var(--series-2)"></span>Gas</span>
+      </div>
+      <div id="carbon-chart"></div>
+      <div class="table-view scroll" id="carbon-table" hidden></div>
+    </div>
+  </section>
+
+  <!-- =============================================================== tips -->
+  <div class="part">
+    <h2>What specific changes would be worth</h2>
+    <p>Worked out from how this home actually behaves, not from averages.</p>
+  </div>
+  <section class="tips" id="tips"></section>
+
+  <footer class="foot" id="foot"></footer>
+</div>
+
+<script>
+const DATA = /*DATA*/;
+
+/* ------------------------------------------------------------- helpers */
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const num = (v, d = 0) => Number(v).toLocaleString("en-US",
+  { minimumFractionDigits: d, maximumFractionDigits: d });
+const sign = (v) => (v > 0 ? "+" : v < 0 ? "−" : "");
+const signed = (v, d = 0) => sign(Number(v.toFixed(d))) + num(Math.abs(v), d);
+const money = (v) => "$" + num(v);
+const signedMoney = (v) => sign(Math.round(v)) + "$" + num(Math.abs(v));
+const pct = (v, d = 1) => signed(v, d) + "%";
+const more = (v) => (v > 0 ? "more" : "less");
+
+const NS = "http://www.w3.org/2000/svg";
+const BAR_MAX = 24, BAR_RADIUS = 4, GAP = 2, RING = 2;
+
+function el(name, attrs = {}, parent = null) {
+  const node = document.createElementNS(NS, name);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v !== null && v !== undefined) node.setAttribute(k, String(v));
+  }
+  if (parent) parent.appendChild(node);
+  return node;
+}
+
+function niceTicks(min, max, count = 4) {
+  if (min === max) { min = Math.min(0, min); max = max || 1; }
+  const raw = (max - min) / count;
+  const mag = Math.pow(10, Math.floor(Math.log10(Math.abs(raw) || 1)));
+  const norm = raw / mag;
+  const step = (norm >= 5 ? 10 : norm >= 2.5 ? 5 : norm >= 2 ? 2.5 : norm >= 1 ? 2 : 1) * mag;
+  const out = [];
+  for (let v = Math.floor(min / step) * step; v <= max + step * 0.5; v += step) {
+    out.push(Number(v.toFixed(10)));
+  }
+  return out;
+}
+
+function columnPath(x, w, yBase, yVal) {
+  const up = yVal <= yBase;
+  const h = Math.abs(yBase - yVal);
+  const r = Math.max(0, Math.min(BAR_RADIUS, w / 2, h));
+  if (h < 0.5) return `M${x},${yBase} L${x + w},${yBase}`;
+  return up
+    ? `M${x},${yBase} L${x},${yVal + r} Q${x},${yVal} ${x + r},${yVal}
+       L${x + w - r},${yVal} Q${x + w},${yVal} ${x + w},${yVal + r} L${x + w},${yBase} Z`
+    : `M${x},${yBase} L${x},${yVal - r} Q${x},${yVal} ${x + r},${yVal}
+       L${x + w - r},${yVal} Q${x + w},${yVal} ${x + w},${yVal - r} L${x + w},${yBase} Z`;
+}
+
+/* Tooltip body: a title, then rows of { color?, label, value }. */
+function tipBody(title, rows) {
+  return `<div class="t-title">${esc(title)}</div>` + rows.map((r) =>
+    `<div class="t-row"><span>${r.color ? `<span class="t-key" style="background:${r.color}"></span>` : ""}`
+    + `${esc(r.label)}</span><b>${esc(r.value)}</b></div>`).join("");
+}
+
+function table(columns, rows) {
+  const head = columns.map((c) => `<th>${esc(c.head)}</th>`).join("");
+  const body = rows.map((r) =>
+    `<tr>${columns.map((c) => `<td>${esc(c.cell(r))}</td>`).join("")}</tr>`).join("");
+  return `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+}
+
+function tiles(host, items) {
+  host.innerHTML = items.map((t) => `<div class="tile">
+      <div class="label">${t.color ? `<span class="key" style="background:${t.color}"></span>` : ""}${esc(t.label)}</div>
+      <div class="value">${esc(t.value)}</div>
+      <div class="foot">${esc(t.foot)}</div></div>`).join("");
+}
+
+/* ---------------------------------------------------------------- base */
+
+class Chart {
+  constructor(host, opts = {}) {
+    this.host = host;
+    this.opts = opts;
+    this.margin = Object.assign({ top: 26, right: 20, bottom: 30, left: 52 }, opts.margin);
+    host.classList.add("chart-wrap");
+    host.innerHTML = "";
+    this.svg = el("svg", { role: "img", "aria-label": opts.label || "" }, host);
+    this.tip = document.createElement("div");
+    this.tip.className = "tooltip";
+    host.appendChild(this.tip);
+    new ResizeObserver(() => this.render()).observe(host);
+    this.render();
+  }
+
+  size() {
+    this.w = Math.max(240, this.host.clientWidth || 320);
+    this.h = this.opts.height || 250;
+    this.iw = this.w - this.margin.left - this.margin.right;
+    this.ih = this.h - this.margin.top - this.margin.bottom;
+    this.svg.setAttribute("viewBox", `0 0 ${this.w} ${this.h}`);
+    this.svg.setAttribute("width", this.w);
+    this.svg.setAttribute("height", this.h);
+    this.svg.innerHTML = "";
+    this.g = el("g", { transform: `translate(${this.margin.left},${this.margin.top})` }, this.svg);
+  }
+
+  grid(ticks, fmt) {
+    for (const t of ticks) {
+      const y = this.yScale(t);
+      if (y < -1 || y > this.ih + 1) continue;
+      el("line", { x1: 0, x2: this.iw, y1: y, y2: y, stroke: "var(--gridline)",
+                   "stroke-width": 1, "shape-rendering": "crispEdges" }, this.g);
+      el("text", { x: -10, y: y + 4, class: "tick y" }, this.g).textContent = fmt(t);
+    }
+  }
+
+  rule(y) {
+    el("line", { x1: 0, x2: this.iw, y1: y, y2: y, stroke: "var(--axis)",
+                 "stroke-width": 1, "shape-rendering": "crispEdges" }, this.g);
+  }
+
+  xLabels(items, xFor) {
+    const every = Math.max(1, Math.ceil((items.length * 58) / Math.max(this.iw, 1)));
+    const last = items.length - 1;
+    const picked = [];
+    for (let i = 0; i <= last; i += every) picked.push(i);
+    if (picked[picked.length - 1] !== last) {
+      if (last - picked[picked.length - 1] < every) picked.pop();
+      picked.push(last);
+    }
+    for (const i of picked) {
+      el("text", { x: xFor(i), y: this.ih + 20, class: "tick x" }, this.g).textContent = items[i];
+    }
+  }
+
+  pointerX(ev) {
+    const box = this.svg.getBoundingClientRect();
+    return (ev.clientX - box.left) * (this.w / box.width) - this.margin.left;
+  }
+
+  pointerY(ev) {
+    const box = this.svg.getBoundingClientRect();
+    return (ev.clientY - box.top) * (this.h / box.height) - this.margin.top;
+  }
+
+  showTip(x, y, html) {
+    this.tip.innerHTML = html;
+    // Keep the box inside the card at either edge.
+    const half = 90;
+    const left = Math.min(Math.max(this.margin.left + x, half), this.w - half);
+    this.tip.style.left = `${left}px`;
+    this.tip.style.top = `${this.margin.top + y}px`;
+    this.tip.classList.add("on");
+  }
+
+  hideTip() { this.tip.classList.remove("on"); }
+}
+
+/* ------------------------------------------------ usage against weather */
+
+class Scatter extends Chart {
+  render() {
+    const pts = this.opts.data || [];
+    if (!pts.length || !this.host.clientWidth) return;
+    this.margin.bottom = 46;
+    this.size();
+
+    const xMax = Math.max(...pts.map((p) => p.x)) * 1.06 || 1;
+    const yMax = Math.max(...pts.map((p) => p.y)) * 1.14 || 1;
+    const xs = (v) => (v / xMax) * this.iw;
+    this.yScale = (v) => this.ih - (v / yMax) * this.ih;
+    const fmt = this.opts.format;
+
+    this.grid(niceTicks(0, yMax, 4), (v) => num(v, v % 1 ? 1 : 0));
+    this.rule(this.ih);
+    for (const t of niceTicks(0, xMax, 5)) {
+      if (xs(t) > this.iw + 1) continue;
+      el("text", { x: xs(t), y: this.ih + 20, class: "tick x" }, this.g).textContent = num(t);
+    }
+    el("text", { x: this.iw / 2, y: this.ih + 40, class: "axis-title", "text-anchor": "middle" }, this.g)
+      .textContent = this.opts.xTitle;
+    el("text", { x: -this.margin.left + 4, y: -12, class: "axis-title" }, this.g)
+      .textContent = this.opts.yTitle;
+
+    // What the weather predicts: a line, because it is a rule, not a reading.
+    const [a, b] = this.opts.line;
+    el("line", { x1: xs(0), y1: this.yScale(Math.max(a, 0)), x2: xs(xMax), y2: this.yScale(a + b * xMax),
+                 stroke: "var(--series-3)", "stroke-width": 2, "stroke-linecap": "round" }, this.g);
+
+    // Context first, the recent bills on top.
+    const order = [...pts].sort((p, q) => Number(p.recent) - Number(q.recent));
+    for (const p of order) {
+      el("circle", { cx: xs(p.x), cy: this.yScale(p.y), r: 4.5,
+                     fill: p.recent ? "var(--series-1)" : "var(--text-muted)",
+                     "fill-opacity": p.recent ? 1 : 0.55,
+                     stroke: "var(--surface-1)", "stroke-width": RING }, this.g);
+    }
+
+    // One direct label: the recent bill furthest from what the weather predicts.
+    const odd = pts.filter((p) => p.recent)
+      .reduce((m, p) => (Math.abs(p.y - p.fit) > Math.abs(m.y - m.fit) ? p : m));
+    const gap = odd.y - odd.fit;
+    // Two short lines: the fitted line is steep, so a long label always crosses it.
+    const text = [odd.label.split(",")[0], `${num(Math.abs(gap), 1)} ${gap < 0 ? "below" : "above"} the line`];
+    const spot = this.room(text, xs(odd.x), this.yScale(odd.y), pts.map((p) => [xs(p.x), this.yScale(p.y)]),
+      (x) => this.yScale(a + b * (x / this.iw) * xMax), gap < 0);
+    if (spot) {
+      el("line", { x1: xs(odd.x), y1: this.yScale(odd.y) + (spot.below ? 7 : -7),
+                   x2: Math.min(xs(odd.x), spot.x + spot.w - 8), y2: spot.below ? spot.y : spot.y + spot.h,
+                   stroke: "var(--axis)", "stroke-width": 1 }, this.g);
+      text.forEach((line, k) => {
+        el("text", { x: spot.x + spot.w - 4, y: spot.y + 12 + k * 14, class: "note-label",
+                     "text-anchor": "end" }, this.g).textContent = line;
+      });
+    }
+
+    // Nearest point wins, so the pointer only has to be close.
+    const ring = el("circle", { r: 8, fill: "none", stroke: "var(--text-primary)",
+                                "stroke-width": 1.5, opacity: 0 }, this.g);
+    const hit = el("rect", { x: 0, y: 0, width: this.iw, height: this.ih, fill: "transparent" }, this.g);
+    hit.addEventListener("pointermove", (ev) => {
+      const px = this.pointerX(ev), py = this.pointerY(ev);
+      const p = pts.reduce((m, q) =>
+        (Math.hypot(xs(q.x) - px, this.yScale(q.y) - py) < Math.hypot(xs(m.x) - px, this.yScale(m.y) - py) ? q : m));
+      ring.setAttribute("cx", xs(p.x)); ring.setAttribute("cy", this.yScale(p.y));
+      ring.setAttribute("opacity", 1);
+      this.showTip(xs(p.x), this.yScale(p.y) - 6, tipBody(p.label, [
+        { color: p.recent ? "var(--series-1)" : "var(--text-muted)", label: "Used", value: fmt(p.y) },
+        { color: "var(--series-3)", label: "Weather predicts", value: fmt(p.fit) },
+        { label: "Average outside", value: `${num(p.temp)}°F` },
+      ]));
+    });
+    hit.addEventListener("pointerleave", () => { ring.setAttribute("opacity", 0); this.hideTip(); });
+  }
+}
+
+/* Somewhere near (px, py) that a label fits without sitting on a dot or on
+   the line. Tries the side the point is already on first. */
+Scatter.prototype.room = function (lines, px, py, dots, lineY, below) {
+  const w = Math.max(...lines.map((l) => l.length)) * 6.1 + 10, h = 14 * lines.length + 4;
+  const clear = (box) =>
+    box.x >= 0 && box.x + box.w <= this.iw && box.y >= 0 && box.y + box.h <= this.ih
+    && !dots.some(([cx, cy]) => cx > box.x - 9 && cx < box.x + box.w + 9
+                              && cy > box.y - 9 && cy < box.y + box.h + 9)
+    && [0, 0.25, 0.5, 0.75, 1].every((t) => {
+      const y = lineY(box.x + box.w * t);
+      return y < box.y - 6 || y > box.y + box.h + 6;
+    });
+  const sides = below ? [1, -1] : [-1, 1];
+  for (const side of sides) {
+    for (const away of [14, 24, 34, 46, 58, 72]) {
+      for (const x of [px - w + 4, px - w * 0.75, px - w / 2, px - w * 0.25, px]) {
+        const box = { x, y: side > 0 ? py + away : py - away - h, w, h, below: side > 0 };
+        if (clear(box)) return box;
+      }
+    }
+  }
+  return null;
+};
+
+/* --------------------------------------- two signed parts of one change */
+
+class GroupedBars extends Chart {
+  render() {
+    const data = this.opts.data || [], series = this.opts.series || [];
+    if (!data.length || !this.host.clientWidth) return;
+    this.size();
+    const fmt = this.opts.format;
+
+    const all = data.flatMap((d) => series.map((s) => d[s.key]));
+    const max = Math.max(...all.map(Math.abs), 0.01) * 1.22;
+    this.yScale = (v) => this.ih / 2 - (v / max) * (this.ih / 2);
+    this.grid(niceTicks(-max, max, 4), (v) => signed(v, Math.abs(max) < 3 ? 1 : 0));
+
+    const band = this.iw / data.length;
+    const w = Math.max(3, Math.min(BAR_MAX, (band - GAP * 3) / series.length));
+    const groupW = w * series.length + GAP * (series.length - 1);
+    const zero = this.yScale(0);
+    const bars = [];
+
+    data.forEach((d, i) => {
+      const group = series.map((s, j) => el("path", {
+        d: columnPath(i * band + (band - groupW) / 2 + j * (w + GAP), w, zero, this.yScale(d[s.key])),
+        fill: s.color,
+      }, this.g));
+      bars.push(group);
+      const hit = el("rect", { x: i * band, y: 0, width: band, height: this.ih,
+                               fill: "transparent", tabindex: 0 }, this.g);
+      const top = Math.min(zero, ...series.map((s) => this.yScale(d[s.key])));
+      const show = () => {
+        bars.forEach((g, k) => g.forEach((b) => b.setAttribute("opacity", k === i ? 1 : 0.45)));
+        this.showTip(i * band + band / 2, top, tipBody(d.span, [
+          ...series.map((s) => ({ color: s.color, label: s.label, value: fmt(d[s.key]) })),
+          { label: "As billed", value: fmt(d.raw) },
+          { label: "Outside", value: `${num(d.temp_now)}°F, was ${num(d.temp_then)}°F` },
+        ]));
+      };
+      const hide = () => { bars.forEach((g) => g.forEach((b) => b.setAttribute("opacity", 1))); this.hideTip(); };
+      for (const type of ["pointerenter", "pointermove", "focus"]) hit.addEventListener(type, show);
+      for (const type of ["pointerleave", "blur"]) hit.addEventListener(type, hide);
+    });
+
+    this.rule(zero);
+    el("text", { x: -this.margin.left + 4, y: -12, class: "axis-title" }, this.g)
+      .textContent = this.opts.yTitle;
+    this.xLabels(data.map((d) => d.label), (i) => i * band + band / 2);
+  }
+}
+
+/* ------------------------------------------------- one or more lines */
+
+class Lines extends Chart {
+  render() {
+    const data = this.opts.data || [], series = this.opts.series || [];
+    if (!data.length || !this.host.clientWidth) return;
+    this.size();
+    const fmt = this.opts.format;
+
+    const values = data.flatMap((d) => series.map((s) => d[s.key])).filter((v) => v != null);
+    const hi = Math.max(...values), lo = Math.min(...values);
+    const min = this.opts.zero ? 0 : Math.max(0, lo - (hi - lo) * 0.25);
+    // Labels along the top need a strip the data never reaches.
+    const max = (this.opts.levels || []).length ? hi * 1.24 : hi + (hi - lo) * 0.18;
+    this.yScale = (v) => this.ih - ((v - min) / (max - min)) * this.ih;
+    const step = data.length > 1 ? this.iw / (data.length - 1) : 0;
+    const xFor = (i) => i * step;
+
+    this.grid(niceTicks(min, max, 4), this.opts.tickFormat || ((v) => num(v)));
+
+    // A stretch worth pointing at: a wash behind the marks, never over them.
+    for (const band of this.opts.bands || []) {
+      const x0 = xFor(band.from) - step / 2, x1 = xFor(band.to) + step / 2;
+      el("rect", { x: Math.max(0, x0), y: 0, width: Math.min(this.iw, x1) - Math.max(0, x0),
+                   height: this.ih, fill: "var(--series-1)", "fill-opacity": 0.07 }, this.g);
+    }
+
+    // Usual levels: flat reference segments, each labelled once.
+    for (const level of this.opts.levels || []) {
+      const x0 = Math.max(0, xFor(level.from) - step / 2);
+      const x1 = Math.min(this.iw, xFor(level.to) + step / 2);
+      const y = this.yScale(level.value);
+      el("line", { x1: x0, x2: x1, y1: y, y2: y, stroke: "var(--text-muted)", "stroke-width": 1.5 }, this.g);
+      // The full label where the stretch is wide enough for it, the bare
+      // number where it isn't, nothing where even that would collide.
+      const fits = (text) => text.length * 6.1 + 8 <= x1 - x0;
+      const text = [level.label, level.short].find((t) => t && fits(t));
+      if (text) {
+        el("text", { x: (x0 + x1) / 2, y: 14, class: "note-label", "text-anchor": "middle" }, this.g)
+          .textContent = text;
+      }
+    }
+
+    series.forEach((s) => {
+      const pts = data.map((d, i) => [xFor(i), this.yScale(d[s.key])]);
+      const path = pts.map(([x, y], i) => `${i ? "L" : "M"}${x},${y}`).join(" ");
+      if (s.area) {
+        el("path", { d: `${path} L${pts.at(-1)[0]},${this.ih} L${pts[0][0]},${this.ih} Z`,
+                     fill: s.color, "fill-opacity": 0.1 }, this.g);
+      }
+      el("path", { d: path, fill: "none", stroke: s.color, "stroke-width": 2,
+                   "stroke-linejoin": "round", "stroke-linecap": "round" }, this.g);
+    });
+
+    // Direct labels, sparingly: only the points the caller names.
+    for (const mark of this.opts.marks || []) {
+      const s = series.find((x) => x.key === mark.key);
+      const x = xFor(mark.index), y = this.yScale(data[mark.index][mark.key]);
+      el("circle", { cx: x, cy: y, r: 4.5, fill: s.color,
+                     stroke: "var(--surface-1)", "stroke-width": RING }, this.g);
+      el("text", { x: Math.min(Math.max(x + (mark.dx || 0), 30), this.iw - 30),
+                   y: y + (mark.below ? 22 : -12), class: "mark-label" }, this.g).textContent = mark.label;
+    }
+
+    this.xLabels(data.map((d) => d.label), xFor);
+
+    const cross = el("line", { y1: 0, y2: this.ih, stroke: "var(--axis)", "stroke-width": 1,
+                               opacity: 0, "shape-rendering": "crispEdges" }, this.g);
+    const dots = series.map((s) => el("circle", { r: 4.5, fill: s.color, opacity: 0,
+                                                  stroke: "var(--surface-1)", "stroke-width": RING }, this.g));
+    const hit = el("rect", { x: 0, y: 0, width: this.iw, height: this.ih, fill: "transparent" }, this.g);
+    const move = (ev) => {
+      const i = Math.max(0, Math.min(data.length - 1, Math.round(step ? this.pointerX(ev) / step : 0)));
+      const d = data[i];
+      cross.setAttribute("x1", xFor(i)); cross.setAttribute("x2", xFor(i)); cross.setAttribute("opacity", 1);
+      series.forEach((s, k) => {
+        dots[k].setAttribute("cx", xFor(i));
+        dots[k].setAttribute("cy", this.yScale(d[s.key]));
+        dots[k].setAttribute("opacity", 1);
+      });
+      this.showTip(xFor(i), Math.min(...series.map((s) => this.yScale(d[s.key]))), tipBody(d.span || d.label, [
+        ...series.map((s) => ({ color: s.color, label: s.label, value: fmt(d[s.key]) })),
+        ...(this.opts.extra ? this.opts.extra(d) : []),
+      ]));
+    };
+    hit.addEventListener("pointermove", move);
+    hit.addEventListener("pointerdown", move);
+    hit.addEventListener("pointerleave", () => {
+      cross.setAttribute("opacity", 0);
+      dots.forEach((dot) => dot.setAttribute("opacity", 0));
+      this.hideTip();
+    });
+  }
+}
+
+/* ------------------------------------------------------ parts of a whole */
+
+class Stacked extends Chart {
+  render() {
+    const data = this.opts.data || [], series = this.opts.series || [];
+    if (!data.length || !this.host.clientWidth) return;
+    this.size();
+    const fmt = this.opts.format;
+
+    const totals = data.map((d) => series.reduce((sum, s) => sum + (d[s.key] || 0), 0));
+    const max = Math.max(...totals) * 1.14 || 1;
+    this.yScale = (v) => this.ih - (v / max) * this.ih;
+    this.grid(niceTicks(0, max, 4), (v) => num(v));
+
+    const band = this.iw / data.length;
+    const w = Math.max(1, Math.min(BAR_MAX, band - GAP));
+    const peak = totals.indexOf(Math.max(...totals));
+    const columns = [];
+
+    data.forEach((d, i) => {
+      const x = i * band + (band - w) / 2;
+      const group = el("g", {}, this.g);
+      columns.push(group);
+      let cursor = 0;
+      series.forEach((s, k) => {
+        const v = d[s.key] || 0;
+        if (v <= 0) return;
+        const yTop = this.yScale(cursor + v), yBottom = this.yScale(cursor);
+        const height = Math.max(0, yBottom - yTop - (cursor > 0 ? GAP : 0));
+        const last = k === series.length - 1 || series.slice(k + 1).every((n) => !(d[n.key] > 0));
+        if (last) {
+          el("path", { d: columnPath(x, w, yTop + height, yTop), fill: s.color }, group);
+        } else {
+          el("rect", { x, y: yTop, width: w, height, fill: s.color }, group);
+        }
+        cursor += v;
+      });
+      if (i === peak) {
+        el("text", { x: i * band + band / 2, y: this.yScale(totals[i]) - 9, class: "mark-label" }, this.g)
+          .textContent = fmt(totals[i]);
+      }
+      const hit = el("rect", { x: i * band, y: 0, width: band, height: this.ih,
+                               fill: "transparent", tabindex: 0 }, this.g);
+      const show = () => {
+        columns.forEach((c, k) => c.setAttribute("opacity", k === i ? 1 : 0.45));
+        this.showTip(i * band + band / 2, this.yScale(totals[i]), tipBody(d.label, [
+          ...series.map((s) => ({ color: s.color, label: s.label, value: fmt(d[s.key] || 0) })),
+          { label: "Total", value: fmt(totals[i]) },
+        ]));
+      };
+      const hide = () => { columns.forEach((c) => c.setAttribute("opacity", 1)); this.hideTip(); };
+      for (const type of ["pointerenter", "pointermove", "focus"]) hit.addEventListener(type, show);
+      for (const type of ["pointerleave", "blur"]) hit.addEventListener(type, hide);
+    });
+
+    this.rule(this.yScale(0));
+    this.xLabels(data.map((d) => d.label), (i) => i * band + band / 2);
+  }
+}
+
+/* ------------------------------------------------------- the dollar split */
+
+function split(host, dollars, scale) {
+  const parts = [
+    { key: "you", name: "You", color: "var(--series-1)" },
+    { key: "weather", name: "The weather", color: "var(--series-3)" },
+    { key: "rate", name: "The rate", color: "var(--series-2)" },
+  ];
+  host.innerHTML = `<div class="split">` + parts.map((p) => {
+    const v = dollars[p.key];
+    const width = Math.abs(v) / scale * 50;
+    return `<div class="split-row" title="${esc(p.name)}: ${esc(signedMoney(v))}">
+        <span class="name">${esc(p.name)}</span>
+        <span class="split-track"><span class="split-bar ${v < 0 ? "neg" : "pos"}"
+              style="width:${width.toFixed(2)}%;background:${p.color}"></span></span>
+        <span class="amount">${esc(signedMoney(v))}</span></div>`;
+  }).join("") + `</div>
+    <div class="split-net"><span>Change in twelve bills</span><b>${esc(signedMoney(dollars.total))}</b></div>`;
+}
+
+/* ------------------------------------------------------------- the page */
+
+const gas = DATA.gas, electric = DATA.electric, carbon = DATA.carbon, tips = DATA.tips;
+const perDay = (unit, d = 1) => (v) => `${num(v, d)} ${unit}/day`;
+const signedPerDay = (unit, d = 1) => (v) => `${signed(v, d)} ${unit}/day`;
+
+function compareTable(block) {
+  const u = block.unit;
+  return table([
+    { head: "Bill", cell: (r) => r.span },
+    { head: `${u}/day`, cell: (r) => num(r.now, 2) },
+    { head: "Year earlier", cell: (r) => num(r.then, 2) },
+    { head: "As billed", cell: (r) => signed(r.raw, 2) },
+    { head: "The weather", cell: (r) => signed(r.weather, 2) },
+    { head: "You", cell: (r) => signed(r.you, 2) },
+    { head: "Outside", cell: (r) => `${num(r.temp_now)}°F (was ${num(r.temp_then)}°F)` },
+  ], [...block.compare].reverse());
+}
+
+function paintGas() {
+  const t = gas.totals, m = gas.model;
+  $("gas-lede").textContent =
+    `As billed, you used ${num(Math.abs(t.raw_pct), 1)}% ${more(t.raw)} gas than the year before. `
+    + `But it was colder, and the cold alone accounts for ${pct(t.weather_pct)}. `
+    + `Take the weather out and you used ${num(Math.abs(t.you_pct), 1)}% ${more(t.you)}.`;
+  tiles($("gas-tiles"), [
+    { label: "Gas used, last 12 bills", value: `${num(t.now)} therms`,
+      foot: `${pct(t.raw_pct)} on the year before, as billed` },
+    { label: "Down to the weather", color: "var(--series-3)", value: `${signed(t.weather)} therms`,
+      foot: `${pct(t.weather_pct)}: the colder days would add this in any year` },
+    { label: "Down to you", color: "var(--series-1)", value: `${signed(t.you)} therms`,
+      foot: `${pct(t.you_pct)} once the weather is taken out` },
+    { label: "Bills where the verdict flips", value: `${t.flips} of ${t.periods}`,
+      foot: `Lower than last year in ${t.lower_raw} as billed, ${t.lower_adjusted} after weather` },
+  ]);
+
+  $("gas-scatter-note").textContent =
+    `Each dot is one bill. The weather explains ${num(m.r2 * 100)}% of the difference between them; `
+    + `this home starts heating below about ${m.heat}°F.`;
+  new Scatter($("gas-scatter"), {
+    data: gas.points, line: m.beta, height: 300, format: perDay("therms", 2),
+    xTitle: `Degrees below ${m.heat}°F, average per day`, yTitle: "therms per day",
+    label: "Gas used per day against how cold it was",
+  });
+  $("gas-scatter-table").innerHTML = table([
+    { head: "Bill", cell: (r) => r.label },
+    { head: "Outside", cell: (r) => `${num(r.temp)}°F` },
+    { head: `Below ${m.heat}°F`, cell: (r) => num(r.x, 1) },
+    { head: "Used", cell: (r) => num(r.y, 2) },
+    { head: "Predicted", cell: (r) => num(r.fit, 2) },
+  ], [...gas.points].reverse());
+
+  new GroupedBars($("gas-compare"), {
+    data: gas.compare, height: 300, yTitle: "therms per day, against a year earlier",
+    format: signedPerDay("therms", 2),
+    series: [{ key: "you", label: "You", color: "var(--series-1)" },
+             { key: "weather", label: "The weather", color: "var(--series-3)" }],
+    label: "Change in gas use against a year earlier, split into you and the weather",
+  });
+  $("gas-compare-table").innerHTML = compareTable(gas);
+}
+
+function paintElectric() {
+  const t = electric.totals, m = electric.model, s = electric.shift;
+  $("electric-lede").textContent =
+    `The weather explains ${num(m.r2 * 100)}% of your electricity use, so there is nothing to take out. `
+    + `You used ${num(Math.abs(t.raw_pct), 1)}% ${more(t.raw)} than the year before`
+    + (s ? `, and almost all of it arrived in one step: from ${s.start} to ${s.end}.` : ".");
+  tiles($("electric-tiles"), [
+    { label: "Electricity used, last 12 bills", value: `${num(t.now)} kWh`,
+      foot: `${pct(t.raw_pct)} on the year before` },
+    { label: "Down to the weather", color: "var(--series-3)", value: `${signed(t.weather)} kWh`,
+      foot: `The weather explains ${num(m.r2 * 100)}% of electricity use` },
+    ...(s ? [
+      { label: `Extra, ${s.start} to ${s.end}`, color: "var(--series-1)", value: `${num(s.extra)} kWh`,
+        foot: `About ${money(s.cost)} over ${num(s.days)} days` },
+      { label: "The size of the step", value: `${num(s.watts)} watts`,
+        foot: `Running day and night: ${num(s.per_day, 1)} kWh a day` },
+    ] : []),
+  ]);
+
+  $("electric-line-note").textContent = s
+    ? `Usage sat near ${num(s.before)} kWh a day, stepped up to ${num(s.during)}, and has come back to ${num(s.after)}. `
+      + `The step explains ${num(s.explained * 100)}% of the variation; the weather explains ${num(m.r2 * 100)}%.`
+    : "Every metered period on record.";
+  const n = electric.series.length - 1;
+  new Lines($("electric-line"), {
+    data: electric.series, height: 300, format: perDay("kWh"), zero: true,
+    series: [{ key: "value", label: "Used", color: "var(--series-1)", area: true }],
+    bands: s ? [{ from: s.from, to: s.to }] : [],
+    levels: s ? [
+      { from: 0, to: s.from - 1, value: s.before, short: `${num(s.before)}`,
+        label: `usually about ${num(s.before)} kWh a day` },
+      { from: s.from, to: s.to, value: s.during, short: `${num(s.during)}`,
+        label: `about ${num(s.during)} (${signed(s.per_day, 1)} a day)` },
+      { from: s.to + 1, to: n, value: s.after, short: `${num(s.after)}`, label: `${num(s.after)} again` },
+    ] : [],
+    extra: (d) => [{ label: "Average outside", value: `${num(d.temp)}°F` },
+                   { label: "Metered", value: `${num(d.kwh)} kWh in ${d.days} days` }],
+    label: "Electricity used per day, every metered period",
+  });
+  $("electric-line-table").innerHTML = table([
+    { head: "Period", cell: (r) => r.span },
+    { head: "kWh", cell: (r) => num(r.kwh) },
+    { head: "Days", cell: (r) => r.days },
+    { head: "kWh/day", cell: (r) => num(r.value, 1) },
+    { head: "Average outside", cell: (r) => `${num(r.temp)}°F` },
+  ], [...electric.series].reverse());
+
+  new GroupedBars($("electric-compare"), {
+    data: electric.compare, height: 270, yTitle: "kWh per day, against a year earlier",
+    format: signedPerDay("kWh"),
+    series: [{ key: "you", label: "You", color: "var(--series-1)" },
+             { key: "weather", label: "The weather", color: "var(--series-3)" }],
+    label: "Change in electricity use against a year earlier, split into you and the weather",
+  });
+  $("electric-compare-table").innerHTML = compareTable(electric);
+}
+
+function paintSplit() {
+  const g = gas.totals.dollars, e = electric.totals.dollars;
+  // One scale for both, so a bar in one card means the same as in the other.
+  const scale = Math.max(...[g, e].flatMap((d) => [d.you, d.weather, d.rate].map(Math.abs))) * 1.08;
+  split($("gas-split"), g, scale);
+  split($("electric-split"), e, scale);
+}
+
+function paintForecast() {
+  const a = gas.accuracy, b = electric.accuracy;
+  $("forecast-lede").textContent =
+    `For gas, yes. Knowing only the weather, the forecast would have landed within ${money(a.forecast.typical)} `
+    + `of the typical bill; assuming "the same as last year" misses by ${money(a.last_year.typical)}. `
+    + `For electricity the weather tells it nothing, and the best guess is simply the last bill.`;
+  tiles($("forecast-tiles"), [
+    { label: "Gas: forecast from the weather", color: "var(--series-3)", value: `within ${money(a.forecast.typical)}`,
+      foot: `Typical miss per bill, ${num(a.forecast.pct)}% of what was billed` },
+    { label: "Gas: same as last year", value: `within ${money(a.last_year.typical)}`,
+      foot: `${num(a.last_year.pct)}% of what was billed` },
+    { label: "Electricity: forecast from the weather", color: "var(--series-3)", value: `within ${money(b.forecast.typical)}`,
+      foot: `${num(b.forecast.pct)}%: no better than last year's bill` },
+    { label: "Electricity: same as the last bill", value: `within ${money(b.last_bill.typical)}`,
+      foot: `${num(b.last_bill.pct)}%: the best of the three` },
+  ]);
+
+  const rows = gas.forecast;
+  const worst = rows.reduce((m, r, i) =>
+    (Math.abs(r.forecast - r.actual) > Math.abs(rows[m].forecast - rows[m].actual) ? i : m), 0);
+  const over = rows[worst].forecast > rows[worst].actual;
+  new Lines($("forecast-chart"), {
+    data: rows, height: 290, format: money, zero: true, tickFormat: money,
+    series: [{ key: "actual", label: "Arrived", color: "var(--series-1)" },
+             { key: "forecast", label: "Forecast", color: "var(--series-3)" }],
+    marks: [
+      { key: "forecast", index: worst, label: `Forecast ${money(rows[worst].forecast)}`, below: !over },
+      { key: "actual", index: worst, label: `Arrived ${money(rows[worst].actual)}`, below: over, dx: -52 },
+    ],
+    extra: (d) => [{ label: "Same weeks last year", value: d.last_year == null ? "—" : money(d.last_year) }],
+    label: "Forecast gas bills against the bills that arrived",
+  });
+  $("forecast-table").innerHTML = table([
+    { head: "Bill", cell: (r) => r.span },
+    { head: "Arrived", cell: (r) => money(r.actual) },
+    { head: "Forecast", cell: (r) => money(r.forecast) },
+    { head: "Off by", cell: (r) => signedMoney(r.forecast - r.actual) },
+    { head: "Same weeks last year", cell: (r) => (r.last_year == null ? "—" : money(r.last_year)) },
+  ], [...rows].reverse());
+}
+
+function paintCarbon() {
+  const c = carbon;
+  const share = c.gas / c.total * 100;
+  const spend = c.gas_cost / (c.gas_cost + c.electric_cost) * 100;
+  const tonnes = (kg) => `${num(kg / 1000, 1)} tonnes`;
+  $("carbon-lede").textContent =
+    `${c.first} to ${c.last}: ${tonnes(c.total)} of carbon dioxide. `
+    + `Gas is ${num(spend)}% of what you spend and ${num(share)}% of what you emit, `
+    + `so a dollar saved on gas cuts about ${num(tips.kg_per_dollar.gas / tips.kg_per_dollar.electric, 1)} times `
+    + `the carbon of a dollar saved on electricity.`;
+  tiles($("carbon-tiles"), [
+    { label: "Twelve months", value: tonnes(c.total),
+      foot: c.prior_total ? `${pct((c.total - c.prior_total) / c.prior_total * 100)} on the year before` : "Both fuels" },
+    { label: "From gas", color: "var(--series-2)", value: tonnes(c.gas),
+      foot: `${num(share)}% of the total, ${num(spend)}% of the spend` },
+    { label: "From electricity", color: "var(--series-1)", value: tonnes(c.electric),
+      foot: `${num(100 - share)}% of the total, ${num(100 - spend)}% of the spend` },
+    { label: "Carbon cut per dollar saved", value: `${num(tips.kg_per_dollar.gas, 1)} kg on gas`,
+      foot: `${num(tips.kg_per_dollar.electric, 1)} kg on electricity` },
+  ]);
+  new Stacked($("carbon-chart"), {
+    data: c.months, height: 280, format: (v) => `${num(v)} kg`,
+    series: [{ key: "electric", label: "Electricity", color: "var(--series-1)" },
+             { key: "gas", label: "Gas", color: "var(--series-2)" }],
+    label: "Carbon dioxide by month from electricity and gas",
+  });
+  $("carbon-table").innerHTML = table([
+    { head: "Month", cell: (r) => r.label },
+    { head: "Electricity, kg", cell: (r) => num(r.electric) },
+    { head: "Gas, kg", cell: (r) => num(r.gas) },
+    { head: "Total, kg", cell: (r) => num(r.electric + r.gas) },
+  ], [...c.months].reverse());
+}
+
+function paintTips() {
+  const one = tips.thermostat[0], s = electric.shift, w = tips.watts100;
+  const card = (t) => `<div class="card tip"><h3>${esc(t.title)}</h3><p>${esc(t.body)}</p>
+      <div class="worth">${t.worth.map(([v, k]) => `<div><b>${esc(v)}</b>${esc(k)}</div>`).join("")}</div></div>`;
+  $("tips").innerHTML = [
+    { title: "Turn the heating down one degree",
+      body: `This home burns ${num(gas.model.beta[1], 3)} therms for every degree-day below ${gas.model.heat}°F. `
+        + `One degree lower on the thermostat, over last year's weather:`,
+      worth: [[money(one.dollars), "a year"], [`${num(one.therms)} therms`, `${num(one.share)}% of gas`],
+              [`${num(one.kg)} kg`, "of carbon"]] },
+    ...(s ? [{ title: "Find what came on in " + s.start,
+      body: `Something the size of ${num(s.watts)} watts ran day and night until ${s.end}. `
+        + `It is off now. If it was heating, a dehumidifier or equipment left running, that is what it cost:`,
+      worth: [[money(s.cost), `in ${num(s.days)} days`], [`${num(s.extra)} kWh`, "extra"],
+              [`${num(s.kg)} kg`, "of carbon"]] }] : []),
+    { title: "Switch off 100 watts for good",
+      body: `Electricity here barely moves with the seasons, so most of it is things that are always on. `
+        + `Every 100 watts you find and switch off is worth:`,
+      worth: [[money(w.dollars), "a year"], [`${num(w.kwh)} kWh`, "a year"], [`${num(w.kg)} kg`, "of carbon"]] },
+  ].map(card).join("");
+}
+
+function initTheme() {
+  const stored = (() => { try { return localStorage.getItem("elec-theme"); } catch { return null; } })();
+  if (stored) document.documentElement.dataset.theme = stored;
+  $("theme").addEventListener("click", () => {
+    const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+    const current = document.documentElement.dataset.theme || (dark ? "dark" : "light");
+    const next = current === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem("elec-theme", next); } catch { /* private mode */ }
+  });
+}
+
+function initTables() {
+  for (const btn of document.querySelectorAll(".table-toggle")) {
+    btn.addEventListener("click", () => {
+      const target = $(btn.dataset.table);
+      target.hidden = !target.hidden;
+      btn.textContent = target.hidden ? "Table view" : "Hide table";
+    });
+  }
+}
+
+$("coverage").textContent = `${gas.first} – ${electric.last} · ${DATA.place}`;
+$("foot").textContent = `Temperatures: Open-Meteo (CC BY 4.0). Carbon: EPA eGRID New England `
+  + `(${num(carbon.kg_per_kwh, 3)} kg per kWh) and EPA natural gas (${num(carbon.kg_per_therm, 1)} kg per therm). `
+  + `Built ${DATA.built}.`;
+initTheme();
+initTables();
+paintGas();
+paintElectric();
+paintSplit();
+paintForecast();
+paintCarbon();
+paintTips();
+</script>
+</body>
+</html>

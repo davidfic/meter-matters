@@ -1,0 +1,7 @@
+{#- The signed-in user's corner of the header. Empty when there are no accounts. -#}
+{% if accounts_on and user %}
+<a class="btn" href="{{ url_for('web.connect') }}">Add bills</a>
+<form method="post" action="{{ url_for('web.logout') }}" class="inline">
+  <button type="submit" title="Signed in as {{ user.email }}">Sign out</button>
+</form>
+{% endif %}

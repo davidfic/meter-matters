@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en" data-base="{{ request.script_root }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Test suite · Meter Matters</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+<link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='icon.svg') }}">
+<script>
+  try { const t = localStorage.getItem("elec-theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
+</script>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <h1>{% include "_brand.html" %}<span style="color:var(--text-muted);font-weight:400"> / Test suite</span></h1>
+    </div>
+    <div class="top-actions">
+      <button id="theme" type="button" aria-label="Toggle colour theme">Theme</button>
+    </div>
+  </header>
+
+  {% if not report %}
+  <section>
+    <div class="card">
+      <h2>No results yet</h2>
+      <p class="note" style="margin-bottom:0">No test report came with this deploy. The tests are run on the
+        developer's machine, never on this server; <code>./deploy/cloudrun.sh deploy</code> runs them
+        and ships the results with the code.</p>
+    </div>
+  </section>
+  {% else %}
+  {% set c = view.counts %}
+  {% set bad = c.failed + c.error %}
+
+  <section>
+    <div class="card suite-head {{ 'bad' if bad else 'good' }}">
+      <div class="suite-verdict">
+        <span class="suite-dot" aria-hidden="true"></span>
+        <div>
+          <div class="suite-title">{{ "Failing" if bad else "All passing" }}</div>
+          <div class="note" style="margin:0">
+            {% if bad %}{{ bad }} of {{ c.total }} tests {{ "fails" if bad == 1 else "fail" }}.{% else %}{{ c.passed }} of {{ c.total }} tests passed{% if c.skipped %}, {{ c.skipped }} skipped{% endif %}.{% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="suite-meta">
+        Run {{ view.started.strftime("%b %-d, %Y at %H:%M UTC") }}
+        {% if view.age_days >= 1 %}· <strong>{{ view.age_days }} day{{ "s" if view.age_days != 1 }} ago</strong>{% endif %}
+        · {{ report.seconds }}s · Python {{ report.python }}{% if report.system %} on {{ report.system }}{% endif %}
+        {% if report.label %}· <code>{{ report.label }}</code>{% endif %}
+        <br>Not run on this server{% if revision %} (serving <code>{{ revision }}</code>){% endif %} —
+        these are the results of a run elsewhere, published here.
+        {% if view.age_days >= 7 %}<strong>This report is old; the code may have changed since.</strong>{% endif %}
+      </div>
+    </div>
+  </section>
+
+  <section class="grid cols-4">
+    {% for label, n, kind in (("Passed", c.passed, "good"), ("Failed", c.failed, "bad"),
+                              ("Errors", c.error, "bad"), ("Skipped", c.skipped, "skip")) %}
+    <div class="card tile"><div class="label">{{ label }}</div>
+      <div class="value suite-{{ kind if n else 'none' }}">{{ n }}</div>
+      <div class="foot">{{ "<1" if n and n * 100 < c.total else ("%.0f"|format(n / c.total * 100) if c.total else 0) }}% of {{ c.total }}</div></div>
+    {% endfor %}
+  </section>
+
+  <section>
+    <div class="card">
+      <div class="suite-bar" role="img"
+           aria-label="{{ c.passed }} passed, {{ c.failed }} failed, {{ c.error }} errors, {{ c.skipped }} skipped">
+        {% for n, kind in ((c.passed, "passed"), (c.failed, "failed"), (c.error, "error"), (c.skipped, "skipped")) %}
+          {% if n %}<i class="s-{{ kind }}" style="flex:{{ n }}"></i>{% endif %}
+        {% endfor %}
+      </div>
+      <div class="legend" style="margin-top:10px">
+        <span class="item"><span class="swatch s-passed"></span>Passed</span>
+        <span class="item"><span class="swatch s-failed"></span>Failed</span>
+        <span class="item"><span class="swatch s-error"></span>Error</span>
+        <span class="item"><span class="swatch s-skipped"></span>Skipped</span>
+      </div>
+    </div>
+  </section>
+
+  {% if bad %}
+  <div class="part"><h2>What failed</h2></div>
+  <section>
+    <div class="card">
+      {% for m in view.modules %}{% for case in m.cases %}{% for t in case.tests if t.status in ("failed", "error") %}
+      <details class="suite-fail" open>
+        <summary><span class="pill s-{{ t.status }}">{{ t.status }}</span>
+          <strong>{{ t.name }}</strong> <span class="note" style="margin:0">{{ m.module }} · {{ case.case }}</span></summary>
+        {% if t.doc %}<p class="note">{{ t.doc }}</p>{% endif %}
+        <pre>{{ t.message }}</pre>
+      </details>
+      {% endfor %}{% endfor %}{% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  <div class="part"><h2>Every test</h2></div>
+  <section>
+    <div class="card">
+      <div class="suite-tools">
+        <div class="suite-filter" role="group" aria-label="Show">
+          <button type="button" data-show="all" aria-pressed="true">All {{ c.total }}</button>
+          <button type="button" data-show="bad" aria-pressed="false">Failing {{ bad }}</button>
+          <button type="button" data-show="skipped" aria-pressed="false">Skipped {{ c.skipped }}</button>
+          <button type="button" data-show="passed" aria-pressed="false">Passed {{ c.passed }}</button>
+        </div>
+        <input type="search" id="suite-search" placeholder="Search tests" aria-label="Search tests">
+        <button type="button" id="suite-toggle">Expand all</button>
+      </div>
+      <p class="note" id="suite-empty" hidden>No test matches.</p>
+
+      {% for m in view.modules %}
+      <details class="suite-module" data-module>
+        <summary>
+          <span class="suite-name">{{ m.module }}</span>
+          <span class="suite-counts">
+            {% if m.counts.failed + m.counts.error %}<span class="pill s-failed">{{ m.counts.failed + m.counts.error }} failing</span>{% endif %}
+            {% if m.counts.skipped %}<span class="pill s-skipped">{{ m.counts.skipped }} skipped</span>{% endif %}
+            <span class="note" style="margin:0">{{ m.counts.passed }}/{{ m.counts.total }} · {{ m.seconds }}s</span>
+          </span>
+        </summary>
+        {% for case in m.cases %}
+        <h3 class="suite-case">{{ case.case }}</h3>
+        <ul class="suite-tests">
+          {% for t in case.tests %}
+          <li data-status="{{ t.status }}" data-text="{{ (t.name ~ ' ' ~ t.doc ~ ' ' ~ case.case ~ ' ' ~ m.module)|lower }}">
+            <span class="pill s-{{ t.status }}">{{ t.status }}</span>
+            <span class="suite-test">{{ t.name|replace("test_", "", 1)|replace("_", " ") }}</span>
+            <span class="suite-time">{{ "%.0f"|format(t.seconds * 1000) }} ms</span>
+            {% if t.message %}<details class="suite-msg"><summary>{{ "reason" if t.status == "skipped" else "details" }}</summary><pre>{{ t.message }}</pre></details>{% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% endfor %}
+      </details>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+</div>
+<script type="module" src="{{ url_for('static', filename='test-suite.js') }}"></script>
+</body>
+</html>

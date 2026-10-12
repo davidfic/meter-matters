@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<title>{{ "Create an account" if mode == "register" else "Sign in" }} · Meter Matters</title>
+{% include "_head.html" %}
+</head>
+<body>
+<div class="wrap narrow">
+
+  <header class="top">
+    <div class="brand"><h1>{% include "_brand.html" %}</h1></div>
+  </header>
+
+  <section>
+    <div class="card auth">
+      {% if mode == "closed" %}
+        <h2>Sign-ups are closed</h2>
+        <p class="note">This server isn't taking new accounts. If you have one,
+          <a href="{{ url_for('web.login') }}">sign in</a>.</p>
+      {% else %}
+        <h2>{{ "Create an account" if mode == "register" else "Sign in" }}</h2>
+        <p class="note">
+          {% if mode == "register" %}
+            An account keeps your bills yours. It doesn't connect to anything —
+            you choose how bills get in afterwards, and uploading them yourself is always one of the choices.
+          {% else %}
+            Your bills, and nobody else's.
+          {% endif %}
+        </p>
+
+        {% for category, message in get_flashed_messages(with_categories=true) %}
+          <div class="flash {{ 'err' if category == 'err' }}" role="status">{{ message }}</div>
+        {% endfor %}
+        {% if error %}<div class="flash err" role="alert">{{ error }}</div>{% endif %}
+
+        <form method="post" class="stack">
+          <input type="hidden" name="next" value="{{ next }}">
+          {% if mode == "register" %}
+          <div class="field">
+            <label for="name">Name <span class="hint">optional</span></label>
+            <input type="text" id="name" name="name" value="{{ name }}" autocomplete="name" maxlength="100">
+          </div>
+          {% endif %}
+          <div class="field">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" value="{{ email }}" required
+                   autocomplete="email" autofocus>
+          </div>
+          <div class="field">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" required
+                   {% if mode == "register" %}minlength="10" autocomplete="new-password"
+                   aria-describedby="password-hint"
+                   {% else %}autocomplete="current-password"{% endif %}>
+            {% if mode == "register" %}
+            <span class="hint" id="password-hint">At least 10 characters. A few unrelated words works well.</span>
+            {% endif %}
+          </div>
+          <button class="primary" type="submit">
+            {{ "Create account" if mode == "register" else "Sign in" }}</button>
+        </form>
+
+        {% if google %}
+        <div class="or"><span>or</span></div>
+        <a class="btn wide" href="{{ url_for('web.google_start', purpose='signin', next=next) }}">
+          Continue with Google</a>
+        <p class="note fine">Google tells us your name and email address. It gives us no access
+          to your mail or anything else.</p>
+        {% endif %}
+
+        <p class="note switch">
+          {% if mode == "register" %}
+            Already have an account? <a href="{{ url_for('web.login') }}">Sign in</a>
+          {% elif signups %}
+            New here? <a href="{{ url_for('web.register') }}">Create an account</a>
+          {% endif %}
+        </p>
+      {% endif %}
+    </div>
+  </section>
+</div>
+</body>
+</html>

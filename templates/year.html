@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en" data-base="{{ request.script_root }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+{% if shared_view %}<meta name="robots" content="noindex">{% endif %}
+<title>{{ "Energy year" if shared_view else "Your year" }} {{ year or "" }} · Meter Matters</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+<link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='icon.svg') }}">
+<script>
+  try { const t = localStorage.getItem("elec-theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
+</script>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <h1>{% if shared_view %}{% include "_brand.html" %}{% else %}<a href="{{ url_for('index') }}" style="color:inherit;text-decoration:none">{% include "_brand.html" %}</a>{% endif %}
+        <span style="color:var(--text-muted);font-weight:400"> / {{ "An energy year" if shared_view else "Your year" }}{% if home_name %} · {{ home_name }}{% endif %}</span></h1>
+    </div>
+    <div class="top-actions">
+      {% if not shared_view %}
+      {% include "_homes.html" %}
+      <a class="btn" href="{{ url_for('index') }}">← Dashboard</a>
+      {% include "_account.html" %}
+      {% endif %}
+      <button id="theme" type="button" aria-label="Toggle colour theme">Theme</button>
+    </div>
+  </header>
+
+  {% if not summary %}
+  <section><div class="card"><p class="note" style="margin:0">Nothing to sum up yet.
+    {% if not shared_view %}<a href="{{ url_for('web.connect') }}">Add bills</a> and come back.{% endif %}</p></div></section>
+  {% else %}
+  {% set s = summary %}
+
+  {% if years|length > 1 and not shared_view %}
+  <nav class="year-nav">
+    {% for y in years %}<a href="{{ url_for('year_page', year=y) }}"{% if y == year %} aria-current="page"{% endif %}>{{ y }}</a>{% endfor %}
+  </nav>
+  {% endif %}
+
+  <section>
+    <div class="card year-hero">
+      <div>
+        <div class="hero-label">{{ s.year }} · {{ s.fuels|length }} utilit{{ "y" if s.fuels|length == 1 else "ies" }}</div>
+        <div class="hero-figure">${{ "{:,.0f}".format(s.total) }}</div>
+        <div class="hero-meta">
+          {% if s.prior_total %}
+            {% set pct = (s.total - s.prior_total) / s.prior_total * 100 %}
+            <span class="{{ 'down' if pct < 0 else 'up' }}">{{ "%+.0f"|format(pct) }}%</span> on {{ s.year - 1 }} (${{ "{:,.0f}".format(s.prior_total) }})
+          {% else %}No full year before it to compare with.{% endif %}
+          {% if s.peak_month %} · dearest month {{ s.peak_month }}{% endif %}
+          {% if s.kg %} · {{ "%.1f"|format(s.kg / 1000) }} t CO₂e{% endif %}
+          {% if s.badges %} · {{ s.badges }} badge{{ "s" if s.badges != 1 }} earned{% endif %}
+        </div>
+      </div>
+      {% if not shared_view %}
+      <div class="year-share">
+        {% if token %}
+          <p class="note" style="margin:0 0 6px">Anyone with this link can see this page - without your name, address or account numbers.</p>
+          <div class="copy-row"><code class="address" id="share-url">{{ site }}/s/{{ token }}</code>
+            <button type="button" id="copy-share" data-copy="{{ site }}/s/{{ token }}">Copy</button></div>
+          <div class="controls" style="margin-top:8px">
+            <a class="btn" href="/s/{{ token }}.svg" download="energy-year-{{ s.year }}.svg">Save as a picture</a>
+            <button type="button" id="stop-share" data-year="{{ s.year }}" class="link">Stop sharing</button>
+          </div>
+        {% else %}
+          <button type="button" id="start-share" data-year="{{ s.year }}" class="primary">Share this year</button>
+          <p class="note fine" style="margin:6px 0 0">Makes a link with the numbers and nothing that names you. You can stop it any time.</p>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="grid cols-{{ [s.fuels|length, 3]|min }}">
+    {% for f in s.fuels %}
+    <div class="card fuel-card year-fuel">
+      <div class="fuel-head"><span class="fuel-name"><span class="dot-lg" style="background:var(--series-{{ loop.index }})"></span>{{ f.tagline }}</span>
+        <span class="go">{{ f.statements }} statements</span></div>
+      <div class="figure">${{ "{:,.0f}".format(f.spend) }}</div>
+      <div class="sub-line">
+        {% if f.change_pct is not none %}<span class="{{ 'down' if f.change_pct < 0 else 'up' }}">{{ "%+.0f"|format(f.change_pct) }}%</span> on {{ s.year - 1 }} · {% endif %}
+        {% if f.usage is not none %}{{ "{:,.0f}".format(f.usage) }} {{ f.unit }} used{% else %}usage not on file{% endif %}
+      </div>
+      <div class="facts">
+        <div class="fact"><div class="k">Dearest</div><div class="v">{{ f.dearest.label }} · ${{ "{:,.0f}".format(f.dearest.amount) }}</div></div>
+        <div class="fact"><div class="k">Cheapest</div><div class="v">{{ f.cheapest.label }} · ${{ "{:,.0f}".format(f.cheapest.amount) }}</div></div>
+        {% if f.rate_change_pct is not none %}<div class="fact"><div class="k">Price per {{ f.unit }}</div><div class="v">${{ "%.3f"|format(f.rate_first) }} → ${{ "%.3f"|format(f.rate_last) }} ({{ "%+.0f"|format(f.rate_change_pct) }}%)</div></div>{% endif %}
+        {% if f.kg %}<div class="fact"><div class="k">Carbon</div><div class="v">{{ "{:,.0f}".format(f.kg) }} kg CO₂e</div></div>{% endif %}
+      </div>
+      {% if f.badges %}<div class="year-badges">{% for b in f.badges %}<span class="pill s-passed">🏅 {{ b.name }}</span>{% endfor %}</div>{% endif %}
+    </div>
+    {% endfor %}
+  </section>
+
+  <section>
+    <div class="card">
+      <div class="chart-head"><div><h2>Month by month</h2><p class="note">Every utility, by statement month.</p></div></div>
+      {% set top = s.months|map(attribute='total')|max %}
+      <div class="year-bars" role="img" aria-label="Monthly spend in {{ s.year }}">
+        {% for m in s.months %}
+        <div class="year-bar" title="{{ m.short }}: ${{ '{:,.0f}'.format(m.total) }}">
+          <div class="stack">
+            {% for f in s.fuels %}{% if m[f.key] %}<i style="height:{{ (m[f.key] / top * 100)|round(1) }}%;background:var(--series-{{ loop.index }})"></i>{% endif %}{% endfor %}
+          </div>
+          <span>{{ m.short }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  <p class="note">{{ "Carbon uses EPA figures for " ~ s.grid ~ " and for natural gas. " if s.kg }}Bills are dated by the due date on the statement.{% if shared_view %} Made with <a href="https://metermatters.app">Meter Matters</a>.{% endif %}</p>
+  {% endif %}
+</div>
+<script type="module" src="{{ url_for('static', filename='year.js') }}"></script>
+</body>
+</html>

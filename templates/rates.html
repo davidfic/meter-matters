@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en" data-base="{{ request.script_root }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rates · Meter Matters</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+<link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='icon.svg') }}">
+<script>
+  try { const t = localStorage.getItem("elec-theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
+</script>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <h1><a href="{{ url_for('index') }}" style="color:inherit;text-decoration:none">{% include "_brand.html" %}</a>
+        <span style="color:var(--text-muted);font-weight:400"> / Rates</span></h1>
+      <span class="sub" id="coverage"></span>
+    </div>
+    <div class="top-actions">
+      <a class="btn" href="{{ url_for('fuel_page', fuel='electric') }}">← Electric</a>
+      {% include "_homes.html" %}
+      {% include "_account.html" %}
+      <button id="theme" type="button" aria-label="Toggle colour theme">Theme</button>
+    </div>
+  </header>
+
+  <div id="flash" class="flash" role="status" aria-live="polite" hidden></div>
+  <div id="loading" class="card"><p class="note" style="margin:0">Reading your rates…</p></div>
+  <div id="empty" class="card" hidden></div>
+
+  <div id="page" hidden>
+    <section class="grid cols-4" id="tiles"></section>
+
+    <section>
+      <div class="card">
+        <div class="chart-head">
+          <div>
+            <h2>Where each kWh's price goes</h2>
+            <p class="note" id="split-note"></p>
+          </div>
+        </div>
+        <div id="split"></div>
+      </div>
+    </section>
+
+    <section class="grid cols-2">
+      <div class="card">
+        <div class="chart-head">
+          <div>
+            <h2>Your price, statement by statement</h2>
+            <p class="note" id="history-note"></p>
+          </div>
+          <button class="table-toggle" data-table="history-table" type="button">Table view</button>
+        </div>
+        <div id="chart-history"></div>
+        <div class="table-view scroll" id="history-table" hidden></div>
+      </div>
+      <div class="card">
+        <div class="chart-head">
+          <div>
+            <h2>What each month costs per kWh</h2>
+            <p class="note" id="season-note"></p>
+          </div>
+          <button class="table-toggle" data-table="season-table" type="button">Table view</button>
+        </div>
+        <div id="chart-season"></div>
+        <div class="table-view" id="season-table" hidden></div>
+      </div>
+    </section>
+
+    <div class="part">
+      <h2>Other suppliers near you</h2>
+      <p id="market-lede"></p>
+    </div>
+
+    <section id="market" hidden>
+      <div class="card">
+        <div class="rate-controls" id="controls">
+          <label>Sort
+            <select id="sort">
+              <option value="cents">Cheapest first</option>
+              <option value="renewable">Most renewable first</option>
+              <option value="term">Shortest term first</option>
+            </select>
+          </label>
+          <label>Term
+            <select id="term">
+              <option value="">Any</option>
+              <option value="12">12 months or less</option>
+              <option value="24">24 months or less</option>
+            </select>
+          </label>
+          <label class="check"><input type="checkbox" id="f-green"> 100% renewable</label>
+          <label class="check"><input type="checkbox" id="f-nofee"> No exit fee</label>
+          <label class="check"><input type="checkbox" id="f-existing" checked> Open to current customers</label>
+        </div>
+        <p class="note" id="market-note" style="margin:10px 0 6px"></p>
+        <div id="offers" class="offers"></div>
+      </div>
+    </section>
+
+    <section id="whatif-section" hidden>
+      <div class="card">
+        <div class="chart-head">
+          <div>
+            <h2>What if your supply were…</h2>
+            <p class="note">Drag to try a supply price. Delivery stays as it is.</p>
+          </div>
+        </div>
+        <div class="whatif">
+          <input type="range" id="whatif" min="8" max="30" step="0.1" aria-label="Supply price in cents per kWh">
+          <div class="whatif-out" id="whatif-out"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="fineprint" class="card note-card"></section>
+  </div>
+
+  <footer class="foot" id="foot"></footer>
+</div>
+<script type="module" src="{{ url_for('static', filename='rates.js') }}"></script>
+</body>
+</html>

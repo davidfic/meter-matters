@@ -1,0 +1,10 @@
+[Unit]
+Description=Check for a new Eversource statement and import it
+Documentation=file://@ROOT@/README.md
+
+[Service]
+Type=oneshot
+WorkingDirectory=@ROOT@
+ExecStart=@ROOT@/systemd/fetch.sh
+# Exit 2 means "nothing new", which is a normal outcome, not a failure.
+SuccessExitStatus=0 2

@@ -1,0 +1,19 @@
+[Unit]
+Description=Monthly Eversource statement check
+
+[Timer]
+# Measured from the mailbox: bill emails land on day 21-24 every month, both
+# fuels on the same day. Check the 22nd to catch the early ones, then the 25th
+# and 28th as fallbacks. Extra runs cost nothing - they exit 2 and stay quiet.
+OnCalendar=*-*-22 09:00:00
+OnCalendar=*-*-25 09:00:00
+OnCalendar=*-*-28 09:00:00
+# By the 1st a bill that lands on the 21st-24th is a week late. This run is
+# for the watchdog: it is the one that says the import has stopped working.
+OnCalendar=*-*-01 09:00:00
+# Catch up after the machine was off rather than silently skipping a month.
+Persistent=true
+RandomizedDelaySec=30m
+
+[Install]
+WantedBy=timers.target

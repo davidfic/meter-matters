@@ -1,0 +1,10 @@
+{#- The home switcher. Rendered only when there are two or more homes. -#}
+{% if homes_nav %}
+<select id="home-switch" aria-label="Home">
+  <option value="{{ homes_nav.all.url }}"{{ " selected" if homes_nav.all.current }}>All homes</option>
+  {% for h in homes_nav['items'] %}
+  <option value="{{ h.url }}"{{ " selected" if h.current }}>{{ h.name }}</option>
+  {% endfor %}
+</select>
+<script type="module" src="{{ url_for('static', filename='homes-nav.js') }}"></script>
+{% endif %}

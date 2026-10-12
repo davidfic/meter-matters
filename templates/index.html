@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="en" data-base="{{ request.script_root }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ fuel }} · Meter Matters</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+<link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='icon.svg') }}">
+<script>
+  // Before first paint, so a chosen theme never flashes the other one.
+  try { const t = localStorage.getItem("elec-theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
+</script>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <h1><a href="{{ url_for('index') }}" style="color:inherit;text-decoration:none">{% include "_brand.html" %}</a>
+        <span style="color:var(--text-muted);font-weight:400"> / {{ tagline or fuel }}</span></h1>
+      <span class="sub" id="coverage"></span>
+    </div>
+    <div class="top-actions">
+      <nav class="fuel-nav" id="fuel-nav"></nav>
+      <select id="account" hidden aria-label="Account"></select>
+      <a class="btn" href="{{ url_for('year_page') }}">Your year</a>
+      {% if fuel == "Electric" %}<a class="btn" href="{{ url_for('rates_page') }}">Rates</a>{% endif %}
+      <a class="btn" href="{{ url_for('raw_page') }}">Raw data</a>
+      {% include "_homes.html" %}
+      {% include "_account.html" %}
+      <button id="refresh" type="button">Refresh</button>
+      <button id="theme" type="button" aria-label="Toggle colour theme">Theme</button>
+    </div>
+  </header>
+
+  <div id="flash" class="flash" role="status" aria-live="polite" hidden></div>
+
+  <!-- ------------------------------------------------------ hero + streak -->
+  <section>
+    <div class="card">
+      <div class="hero">
+        <div>
+          <div class="hero-label" id="hero-label">Current statement</div>
+          <div class="hero-figure" id="hero-figure">—</div>
+          <div id="hero-delta"></div>
+          <div class="hero-meta" id="hero-meta"></div>
+          <div class="hero-forecast" id="hero-forecast" hidden></div>
+        </div>
+        <div class="streak compare-box" id="compare-box">
+          <div class="count" id="compare-figure">…</div>
+          <div class="copy">
+            <div id="compare-copy">Comparing with the same weeks last year…</div>
+            <div class="pips" id="compare-pips" aria-hidden="true"></div>
+            <div id="compare-weather" class="hero-meta" style="margin-top:8px"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------ compared with last year -->
+  <div id="insights" hidden>
+    <div class="part">
+      <h2>Compared with last year</h2>
+      <p id="insights-lede"></p>
+    </div>
+    <section class="grid cols-4" id="insights-tiles"></section>
+
+    <section class="grid cols-2" id="insights-charts">
+      <div class="card">
+        <div class="chart-head">
+          <div>
+            <h2 id="compare-title">Was it you, or was it the weather?</h2>
+            <p class="note" id="compare-note"></p>
+          </div>
+          <button class="table-toggle" data-table="compare-table" type="button">Table view</button>
+        </div>
+        <div class="legend" style="margin-bottom:10px">
+          <span class="item"><span class="swatch" style="background:var(--series-1)"></span>You</span>
+          <span class="item" id="compare-legend-weather"><span class="swatch" style="background:var(--series-3)"></span>The weather</span>
+        </div>
+        <div id="chart-compare"></div>
+        <div class="table-view scroll" id="compare-table" hidden></div>
+      </div>
+
+      <div class="card">
+        <header><h2>Where the change in the bill came from</h2></header>
+        <p class="note" id="split3-note"></p>
+        <div id="split3"></div>
+      </div>
+    </section>
+
+    <section id="changed" hidden>
+      <div class="card">
+        <div class="chart-head">
+          <div>
+            <h2 id="changed-title">Something changed</h2>
+            <p class="note" id="changed-note"></p>
+          </div>
+          <button class="table-toggle" data-table="changed-table" type="button">Table view</button>
+        </div>
+        <div class="legend" style="margin-bottom:10px">
+          <span class="item"><span class="swatch line" style="background:var(--series-1)"></span><span id="changed-legend">Used per day</span></span>
+          <span class="item"><span class="swatch line" style="background:var(--text-muted)"></span>Usual level</span>
+        </div>
+        <div id="chart-changed"></div>
+        <div class="table-view scroll" id="changed-table" hidden></div>
+        <form class="controls note-form" id="note-form">
+          <div class="field" style="flex:1 1 320px">
+            <label for="note-text">What was it? <span class="hint">A note for yourself — it stops being flagged once it has a name.</span></label>
+            <input type="text" id="note-text" maxlength="200" autocomplete="off"
+                   placeholder="space heater in the office, a dehumidifier, guests…">
+          </div>
+          <button class="primary" type="submit">Save note</button>
+          <button type="button" id="note-clear" hidden>Remove note</button>
+        </form>
+      </div>
+    </section>
+
+    <section id="scatter-section" hidden>
+      <div class="card">
+        <div class="chart-head">
+          <div>
+            <h2 id="scatter-title">Usage follows the weather</h2>
+            <p class="note" id="scatter-note"></p>
+          </div>
+          <button class="table-toggle" data-table="scatter-table" type="button">Table view</button>
+        </div>
+        <div class="legend" style="margin-bottom:10px">
+          <span class="item"><span class="swatch" style="background:var(--series-1);border-radius:50%"></span>Last 12 bills</span>
+          <span class="item"><span class="swatch" style="background:var(--text-muted);opacity:.55;border-radius:50%"></span>Earlier bills</span>
+          <span class="item"><span class="swatch line" style="background:var(--series-3)"></span>What the weather predicts</span>
+        </div>
+        <div id="chart-scatter"></div>
+        <div class="table-view scroll" id="scatter-table" hidden></div>
+      </div>
+    </section>
+
+    <div id="tips-part" hidden>
+      <div class="part">
+        <h2>What specific changes would be worth</h2>
+        <p>Worked out from how this home actually behaves, not from averages.</p>
+      </div>
+      <section class="tips" id="tips"></section>
+    </div>
+
+    <p class="note" id="insights-foot" style="margin:0 0 16px"></p>
+  </div>
+
+  <!-- --------------------------------------------- what's this costing me -->
+  <section id="calc-section" hidden>
+    <div class="card">
+      <div class="chart-head">
+        <div>
+          <h2>What's this costing me?</h2>
+          <p class="note" id="calc-note">Pick something, say how long it runs, and see what it costs at your own price.</p>
+        </div>
+      </div>
+      <div class="calc">
+        <label><span class="k">Thing</span>
+          <select id="calc-preset"></select><span class="u">&nbsp;</span></label>
+        <label id="calc-power-label"><span class="k">Power</span>
+          <input type="number" id="calc-power" min="0" step="any" style="width:110px"><span class="u" id="calc-power-unit"></span></label>
+        <label><span class="k">Runs for</span>
+          <input type="number" id="calc-hours" min="0" max="24" step="0.25" value="1" style="width:80px"><span class="u" id="calc-hours-unit">hours a day</span></label>
+        <div class="calc-out" id="calc-out"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Shown instead when there is nothing to compare yet. -->
+  <section id="insights-empty" hidden>
+    <div class="card">
+      <header><h2>Compared with last year</h2></header>
+      <p class="note" id="insights-need" style="margin-bottom:0"></p>
+      <form class="controls" id="zip-form" hidden style="margin-top:14px">
+        <div class="field">
+          <label for="zip">ZIP code, for the weather</label>
+          <input type="text" id="zip" inputmode="numeric" pattern="\d{5}" maxlength="5" autocomplete="postal-code">
+        </div>
+        <button class="primary" type="submit">Save</button>
+      </form>
+    </div>
+  </section>
+
+  <div class="part">
+    <h2>The bills</h2>
+    <p>What you were charged, statement by statement.</p>
+  </div>
+
+  <!-- ----------------------------------------------------------- stat tiles -->
+  <section class="grid cols-4" id="tiles"></section>
+
+  <!-- --------------------------------------------------------------- alerts -->
+  <section id="anomaly-section" hidden>
+    <div class="card">
+      <div class="chart-head">
+        <div>
+          <h2>Worth a look</h2>
+          <p class="note" id="anomaly-note"></p>
+        </div>
+      </div>
+      <div id="anomaly-list"></div>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------- baseload and rates -->
+  <section class="grid cols-2" id="baseload-section" hidden>
+    <div class="card">
+      <div class="chart-head">
+        <div>
+          <h2>What's always on</h2>
+          <p class="note" id="baseload-note"></p>
+        </div>
+        <button class="table-toggle" data-table="baseload-table" type="button">Table view</button>
+      </div>
+      <div class="legend" style="margin-bottom:10px">
+        <span class="item"><span class="swatch" style="background:var(--series-1)"></span>Always-on floor</span>
+        <span class="item"><span class="swatch" style="background:var(--series-2)"></span>Everything else</span>
+      </div>
+      <div id="chart-baseload"></div>
+      <div class="table-view" id="baseload-table" hidden></div>
+    </div>
+
+    <div class="card">
+      <div class="chart-head">
+        <div>
+          <h2 id="rate-title">The price you pay per kWh</h2>
+          <p class="note" id="rate-note"></p>
+        </div>
+        <button class="table-toggle" data-table="rate-table" type="button">Table view</button>
+      </div>
+      {% if fuel == "Electric" %}<p class="note" style="margin-top:0"><a href="{{ url_for('rates_page') }}">Break it down and compare suppliers near you →</a></p>{% endif %}
+      <div id="chart-rate"></div>
+      <div class="table-view" id="rate-table" hidden></div>
+    </div>
+  </section>
+
+  <!-- --------------------------------------------------------- all energy -->
+  <!-- ------------------------------------------------------------ compare -->
+  <section id="cmp-section" hidden>
+    <div class="card">
+      <div class="chart-head">
+        <div>
+          <h2>Compare</h2>
+          <p class="note" id="cmp-note"></p>
+        </div>
+      </div>
+      <div class="compare-controls">
+        <div class="suite-filter" role="radiogroup" aria-label="How to compare">
+          <label class="choice"><input type="radio" name="cmp-mode" value="two" checked> Two statements</label>
+          <label class="choice"><input type="radio" name="cmp-mode" value="years"> Same month, every year</label>
+        </div>
+        <div id="cmp-two" class="controls">
+          <label>From <select id="cmp-a" aria-label="First statement"></select></label>
+          <button type="button" id="cmp-swap" title="Swap">⇄</button>
+          <label>To <select id="cmp-b" aria-label="Second statement"></select></label>
+        </div>
+        <div id="cmp-years" class="controls" hidden>
+          <label>Month <select id="cmp-month" aria-label="Calendar month"></select></label>
+        </div>
+      </div>
+      <div id="chart-cmp"></div>
+      <div class="table-view" id="cmp-table"></div>
+    </div>
+  </section>
+
+  <section id="energy-section" hidden>
+    <div class="card">
+      <div class="chart-head">
+        <div>
+          <h2>All your utilities, not just {{ fuel|lower }}</h2>
+          <p class="note" id="energy-note"></p>
+        </div>
+        <button class="table-toggle" data-table="energy-table" type="button">Table view</button>
+      </div>
+      <div class="legend" id="energy-legend" style="margin-bottom:10px"></div>
+      <div id="chart-energy"></div>
+      <div class="table-view" id="energy-table" hidden></div>
+    </div>
+  </section>
+
+  <!-- --------------------------------------------------------------- charts -->
+  <section>
+    <div class="card">
+      <div class="chart-head">
+        <div>
+          <h2>{{ fuel }} bill by statement</h2>
+          <p class="note" id="trend-note">Every statement on record, dated by its due date.</p>
+        </div>
+        <button class="table-toggle" data-table="trend-table" type="button">Table view</button>
+      </div>
+      <div id="chart-trend"></div>
+      <div class="table-view" id="trend-table" hidden></div>
+    </div>
+  </section>
+
+  <section class="grid cols-2" id="usage-section" hidden>
+    <div class="card">
+      <div class="chart-head">
+        <div>
+          <h2 id="usage-title">Energy actually used</h2>
+          <p class="note" id="usage-note">Usage per day, so billing periods of different lengths compare fairly. This is the number you control.</p>
+        </div>
+        <button class="table-toggle" data-table="usage-table" type="button">Table view</button>
+      </div>
+      <div id="chart-usage"></div>
+      <div class="table-view" id="usage-table" hidden></div>
+    </div>
+
+    <div class="card">
+      <div class="chart-head">
+        <div>
+          <h2>Was it you, or was it the rate?</h2>
+          <p class="note">Every change in the bill splits exactly into the kWh you used and the price per kWh.</p>
+        </div>
+        <button class="table-toggle" data-table="split-table" type="button">Table view</button>
+      </div>
+      <div class="legend" style="margin-bottom:10px">
+        <span class="item"><span class="swatch" style="background:var(--series-1)"></span>Your usage</span>
+        <span class="item"><span class="swatch" style="background:var(--series-2)"></span>The rate</span>
+      </div>
+      <div id="chart-split"></div>
+      <div class="table-view" id="split-table" hidden></div>
+    </div>
+  </section>
+
+  <section class="grid cols-2">
+    <div class="card">
+      <div class="chart-head">
+        <div>
+          <h2>Month-over-month change</h2>
+          <p class="note">Green bars are months you spent less than the one before.</p>
+        </div>
+        <button class="table-toggle" data-table="delta-table" type="button">Table view</button>
+      </div>
+      <div class="legend" style="margin-bottom:10px">
+        <span class="item"><span class="swatch" style="background:var(--good)"></span>▼ Lower than prior month</span>
+        <span class="item"><span class="swatch" style="background:var(--critical)"></span>▲ Higher than prior month</span>
+      </div>
+      <div id="chart-delta"></div>
+      <div class="table-view" id="delta-table" hidden></div>
+    </div>
+
+    <div class="card">
+      <div class="chart-head">
+        <div>
+          <h2 id="banked-title">Money banked</h2>
+          <p class="note" id="banked-note"></p>
+        </div>
+        <button class="table-toggle" data-table="banked-table" type="button">Table view</button>
+      </div>
+      <div id="chart-banked"></div>
+      <div class="table-view" id="banked-table" hidden></div>
+    </div>
+  </section>
+
+  <section class="grid cols-2">
+    <div class="card">
+      <div class="chart-head">
+        <div>
+          <h2>What each month of the year costs</h2>
+          <p class="note">Average statement per calendar month — the seasonal shape you're fighting.</p>
+        </div>
+        <button class="table-toggle" data-table="season-table" type="button">Table view</button>
+      </div>
+      <div id="chart-season"></div>
+      <div class="table-view" id="season-table" hidden></div>
+    </div>
+
+    <div class="card">
+      <header><h2>Same month, last year</h2></header>
+      <p class="note">The seasonally fair comparison — it fills in as your history passes twelve months.</p>
+      <div id="yoy-body"></div>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------- controls -->
+  <section class="grid cols-2">
+    <div class="card">
+      <header><h2>Set your target</h2></header>
+      <p class="note">Your goal drives the “Called Your Shot” badge; the sustained cut drives the forecast.</p>
+      <div class="controls">
+        <div class="field">
+          <label for="goal">Goal for next statement ($)</label>
+          <input type="number" id="goal" min="0" step="1" placeholder="none set">
+        </div>
+        <div class="field">
+          <label for="target-pct">Sustained cut (%)</label>
+          <input type="number" id="target-pct" min="0" max="50" step="0.5">
+        </div>
+        <div class="field">
+          <label for="baseline-months">Baseline = first N statements</label>
+          <input type="number" id="baseline-months" min="1" max="24" step="1">
+        </div>
+        <button class="primary" id="save-settings" type="button">Save</button>
+      </div>
+      <p class="note" id="projection" style="margin:16px 0 0"></p>
+    </div>
+
+    <div class="card">
+      <header><h2>Add a new export</h2></header>
+      <p class="note">Drop a bill history or a usage export from your utility — a spreadsheet (CSV), a Green Button file, or the <code>.zip</code> straight from the portal. It's sorted by what's inside; new rows are merged and nothing is overwritten.</p>
+      <div class="dropzone" id="dropzone" tabindex="0" role="button">
+        Drop exports here, or click to choose files
+      </div>
+      <input type="file" id="file" accept=".csv,.zip,.xml,text/csv,application/zip,text/xml" multiple hidden>
+      {% if accounts_on %}<p class="note fine" style="margin-top:12px">Or have bills arrive on their own:
+        <a href="{{ url_for('web.connect') }}">forwarding and Gmail</a>.</p>{% endif %}
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------- the game -->
+  <div class="part">
+    <h2>The game</h2>
+    <p>Streaks, levels and badges, all earned from the bills above.</p>
+  </div>
+  <section class="grid cols-3">
+    <div class="card">
+      <header><h2>Streak</h2></header>
+      <div class="streak" style="margin-top:8px">
+        <div class="count" id="streak-count">0</div>
+        <div class="copy">
+          <div id="streak-copy"></div>
+          <div class="pips" id="streak-pips" aria-hidden="true"></div>
+          <div id="streak-usage" class="hero-meta" style="margin-top:8px"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="level-head">
+        <div>
+          <div class="level-title" id="level-title">—</div>
+          <div class="level-num" id="level-num"></div>
+        </div>
+        <div class="delta-pill good" id="banked-pill"><span class="dot"></span><span id="banked-text"></span></div>
+      </div>
+      <div class="meter"><span id="level-meter" style="width:0%"></span></div>
+      <div class="meter-foot">
+        <span id="level-floor"></span>
+        <span id="level-ceiling"></span>
+      </div>
+      <p class="note" id="level-note" style="margin-top:12px"></p>
+      <div class="earned-strip" id="earned-strip"></div>
+    </div>
+
+    <div class="card">
+      <header><h2>Next up</h2></header>
+      <p class="note">The three achievements you're closest to.</p>
+      <div class="badges" id="next-up"></div>
+    </div>
+  </section>
+
+  <!-- -------------------------------------------------------------- badges -->
+  <section>
+    <div class="card">
+      <div class="chart-head">
+        <div>
+          <h2>Achievements <span class="level-num" id="badge-count"></span></h2>
+          <p class="note">Every one of these is checked against your statements — nothing is awarded for showing up.</p>
+          <p class="note" id="badge-scope" style="margin-top:-8px"></p>
+        </div>
+      </div>
+      <div class="badges" id="badges"></div>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------ full table -->
+  <section>
+    <div class="card">
+      <div class="chart-head">
+        <div>
+          <h2>Every statement</h2>
+          <p class="note" id="source-note"></p>
+          <p class="note" id="provenance-note" style="margin-top:-8px"></p>
+        </div>
+        <button class="table-toggle" data-table="full-table" type="button">Hide</button>
+      </div>
+      <div class="table-view" id="full-table"></div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    Bills are dated by the due date on the statement. Every figure comes from the files and bills you brought in - nothing is estimated unless it says so.
+  </footer>
+</div>
+
+<script id="bootstrap" type="application/json">{{ bootstrap | safe }}</script>
+<script type="module" src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
