@@ -726,7 +726,8 @@ Set `ELEC_INBOUND_DOMAIN`, then one of:
 |---|---|---|
 | **Mailgun** | a route: *forward* to `https://<app>/api/inbound/email` | `ELEC_MAILGUN_SIGNING_KEY` |
 | **Postmark** | webhook `https://any:<secret>@<app>/api/inbound/email`, with *include raw email content* on | `ELEC_INBOUND_SECRET` |
-| **Cloudflare Email Worker**, or anything else | POST the raw message, `Content-Type: message/rfc822`, `Authorization: Bearer <secret>`, recipient in `X-Envelope-To` | `ELEC_INBOUND_SECRET` |
+| **Cloudflare Email Routing** (free; what metermatters.app uses) | the worker in `deploy/cloudflare-email-worker.js`, as a catch-all route; its setup steps are at the top of the file | `ELEC_INBOUND_SECRET` |
+| Anything else | POST the raw message, `Content-Type: message/rfc822`, `Authorization: Bearer <secret>`, recipient in `X-Envelope-To` | `ELEC_INBOUND_SECRET` |
 
 A message is filed only if the request is authenticated, the address is a
 real user's, and it is from the utility's own sender. The utility's DKIM

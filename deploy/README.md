@@ -122,6 +122,18 @@ edit `deploy/cloudrun.env` or run `./deploy/cloudrun.sh secrets`, then
 That command also builds and deploys whatever code is in this directory,
 without testing it - so run it from a state you would be happy to have live.
 
+## Inbound email (the private bills address)
+
+Mail for `bills-<token>@metermatters.app` is received by Cloudflare Email
+Routing, free, on the same zone as the domain. A catch-all route hands every
+message to the Email Worker in `cloudflare-email-worker.js`, which posts it to
+`/api/inbound/email` with the shared secret `elec-inbound-secret` from Secret
+Manager. The setup steps are at the top of that file; the app side is
+`ELEC_INBOUND_DOMAIN` in `cloudrun.env` and the secret, which `cloudrun.sh
+deploy` mounts by name. To read the secret for the worker's settings:
+
+    gcloud secrets versions access latest --secret elec-inbound-secret --project utility-tracker-510019
+
 ## Rolling back
 
 Every deploy is a revision, and the old ones stay. See them, newest first:
