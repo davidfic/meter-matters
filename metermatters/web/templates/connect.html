@@ -66,6 +66,75 @@
 
   <section class="grid cols-3 ways">
 
+    <!-- --------------------------------------------------- forwarding -->
+    <div class="card way featured">
+      <div class="way-head"><h2>Your private bills address</h2>
+        <span class="tag good">Nothing connected, nothing granted</span>
+        {% if not bill_emails %}<span class="tag">Eversource bills only</span>{% endif %}</div>
+      {% if not bill_emails %}<p class="note">This reads Eversource's bill emails, and nothing
+        else yet. For other utilities, upload a file or add bills by hand.</p>{% endif %}
+      {% if forwarding %}
+        <p class="note">An email address that is yours alone. Add one filter in your mailbox that
+          forwards your utility's bill emails to it, and new bills file themselves. We never see
+          any other mail, and hold no password. Works from Gmail, Outlook, iCloud, anything.</p>
+
+        <div class="field">
+          <span class="label" id="address-label">Your forwarding address</span>
+          <div class="copy-row">
+            <code class="address" id="address" aria-labelledby="address-label">{{ forwarding.address }}</code>
+            <button type="button" id="copy" data-copy="{{ forwarding.address }}">Copy</button>
+          </div>
+        </div>
+
+        {% if forwarding.confirm %}
+        <div class="callout">
+          <strong>Gmail is waiting for you to confirm.</strong>
+          {% if forwarding.confirm.confirm_url %}
+            <a href="{{ forwarding.confirm.confirm_url }}" target="_blank" rel="noopener noreferrer">
+              Open Gmail's confirmation link</a>{% if forwarding.confirm.confirm_code %},
+            or enter code <code>{{ forwarding.confirm.confirm_code }}</code> in Gmail{% endif %}.
+          {% elif forwarding.confirm.confirm_code %}
+            Enter code <code>{{ forwarding.confirm.confirm_code }}</code> in Gmail.
+          {% else %}
+            The message arrived but held no link we recognise. Send it again from Gmail.
+          {% endif %}
+        </div>
+        {% endif %}
+
+        <ol class="steps">
+          <li>In Gmail, open <em>Settings → Forwarding and POP/IMAP → Add a forwarding address</em>
+            and paste the address above.</li>
+          <li>Gmail sends a confirmation here. Reload this page and the link appears above.</li>
+          <li>Create a filter for mail from your utility's bill notices
+            (Eversource: <code>noreply@notifications.eversource.com</code>)
+            and choose <em>Forward it to</em> this address.</li>
+        </ol>
+        <p class="note fine">Other mail providers work the same way: a rule that forwards the
+          utility's notices to the address above.</p>
+
+        {% if forwarding.log %}
+        <h3>What has arrived</h3>
+        <ul class="log">
+          {% for row in forwarding.log %}
+          <li class="{{ row.outcome }}">
+            <span class="when">{{ row.received_at[:10] }}</span>
+            <span class="what">{{ {"imported": "Filed", "duplicate": "Already had it",
+                                   "confirm": "Confirmation", "rejected": "Not filed", "held": "Needs a home"}[row.outcome] }}</span>
+            <span class="why">{{ row.detail }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+
+        <form method="post" action="{{ url_for('web.forwarding_rotate') }}" class="quiet">
+          <button type="submit" class="link">Issue a new address</button>
+          <p class="note fine">Do this if the address has leaked. The old one stops working at once.</p>
+        </form>
+      {% else %}
+        <p class="note">Not available on this server — its operator hasn't set up inbound email.</p>
+      {% endif %}
+    </div>
+
     <!-- ------------------------------------------------------- upload -->
     <div class="card way">
       <div class="way-head"><h2>Upload them yourself</h2>
@@ -118,77 +187,10 @@
       <p class="note fine">You come back and upload each new bill.</p>
     </div>
 
-    <!-- --------------------------------------------------- forwarding -->
-    <div class="card way">
-      <div class="way-head"><h2>Forward them from your email</h2>
-        <span class="tag">No access to your mailbox</span>
-        {% if not bill_emails %}<span class="tag">Eversource bills only</span>{% endif %}</div>
-      {% if not bill_emails %}<p class="note">This reads Eversource's bill emails, and nothing
-        else yet. For other utilities, upload a file or add bills by hand.</p>{% endif %}
-      {% if forwarding %}
-        <p class="note">A filter in your mailbox sends the utility's bill notices to an address
-          that belongs to you alone. We never see any other mail, and hold no password.</p>
-
-        <div class="field">
-          <span class="label" id="address-label">Your forwarding address</span>
-          <div class="copy-row">
-            <code class="address" id="address" aria-labelledby="address-label">{{ forwarding.address }}</code>
-            <button type="button" id="copy" data-copy="{{ forwarding.address }}">Copy</button>
-          </div>
-        </div>
-
-        {% if forwarding.confirm %}
-        <div class="callout">
-          <strong>Gmail is waiting for you to confirm.</strong>
-          {% if forwarding.confirm.confirm_url %}
-            <a href="{{ forwarding.confirm.confirm_url }}" target="_blank" rel="noopener noreferrer">
-              Open Gmail's confirmation link</a>{% if forwarding.confirm.confirm_code %},
-            or enter code <code>{{ forwarding.confirm.confirm_code }}</code> in Gmail{% endif %}.
-          {% elif forwarding.confirm.confirm_code %}
-            Enter code <code>{{ forwarding.confirm.confirm_code }}</code> in Gmail.
-          {% else %}
-            The message arrived but held no link we recognise. Send it again from Gmail.
-          {% endif %}
-        </div>
-        {% endif %}
-
-        <ol class="steps">
-          <li>In Gmail, open <em>Settings → Forwarding and POP/IMAP → Add a forwarding address</em>
-            and paste the address above.</li>
-          <li>Gmail sends a confirmation here. Reload this page and the link appears above.</li>
-          <li>Create a filter for mail from <code>noreply@notifications.eversource.com</code>
-            and choose <em>Forward it to</em> this address.</li>
-        </ol>
-        <p class="note fine">Other mail providers work the same way: forward the utility's
-          notices to the address above.</p>
-
-        {% if forwarding.log %}
-        <h3>What has arrived</h3>
-        <ul class="log">
-          {% for row in forwarding.log %}
-          <li class="{{ row.outcome }}">
-            <span class="when">{{ row.received_at[:10] }}</span>
-            <span class="what">{{ {"imported": "Filed", "duplicate": "Already had it",
-                                   "confirm": "Confirmation", "rejected": "Not filed", "held": "Needs a home"}[row.outcome] }}</span>
-            <span class="why">{{ row.detail }}</span>
-          </li>
-          {% endfor %}
-        </ul>
-        {% endif %}
-
-        <form method="post" action="{{ url_for('web.forwarding_rotate') }}" class="quiet">
-          <button type="submit" class="link">Issue a new address</button>
-          <p class="note fine">Do this if the address has leaked. The old one stops working at once.</p>
-        </form>
-      {% else %}
-        <p class="note">Not available on this server — its operator hasn't set up inbound email.</p>
-      {% endif %}
-    </div>
-
     <!-- -------------------------------------------------------- gmail -->
     <div class="card way">
       <div class="way-head"><h2>Connect Gmail</h2>
-        <span class="tag warn">Reads your mailbox</span></div>
+        <span class="tag warn">Reads your whole mailbox</span></div>
       {% if gmail %}
         {% if gmail.link %}
           <p class="note">Connected to <strong>{{ gmail.link.email }}</strong>.
@@ -206,10 +208,10 @@
           <p class="note fine">Disconnecting hands access back to Google and deletes what we
             held. Bills already imported stay.</p>
         {% else %}
-          <p class="note">The least effort, and the most access: Google offers no way to let
-            an app read only your bills, so this grants read access to <strong>all</strong>
-            your mail. We only ever ask it for messages from the utility's bill notices
-            (today, Eversource's).</p>
+          <p class="note">The most access: Google offers no way to let an app read only your
+            bills, so this grants read access to <strong>all</strong> your mail. We only ever
+            ask it for messages from the utility's bill notices (today, Eversource's). The
+            private address above does the same job without granting anything.</p>
           <div class="stack">
             <a class="btn wide" href="{{ url_for('web.google_start', purpose='gmail-once') }}">
               Import once, keep nothing</a>

@@ -311,7 +311,7 @@ class TestThePage(GoogleCase):
         os.environ.update(ELEC_INBOUND_DOMAIN="in.example.com", ELEC_INBOUND_SECRET="x")
         user = self.sign_up()
         page = self.client.get("/connect").get_data(as_text=True)
-        for text in ("Upload them yourself", "Forward them from your email", "Connect Gmail",
+        for text in ("Upload them yourself", "Your private bills address", "Connect Gmail",
                      "Import once, keep nothing", "Stay connected",
                      f"bills-{user.inbound_token}@in.example.com"):
             with self.subTest(text):
