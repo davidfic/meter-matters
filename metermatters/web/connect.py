@@ -268,6 +268,16 @@ def forwarding_rotate():
     return redirect(url_for("web.connect"))
 
 
+@bp.get("/connect/arrivals")
+def forwarding_arrivals():
+    """What has arrived at the bills address, for the page to refresh itself."""
+    if not g.user or g.user is accounts.LOCAL or not inbound.enabled():
+        return jsonify({"rows": []})
+    return jsonify({"rows": [{"id": r["id"], "received_at": r["received_at"][:10],
+                              "outcome": r["outcome"], "detail": r["detail"]}
+                             for r in inbound.log_for(g.user)]})
+
+
 @bp.post("/connect/forwarding/confirmed")
 def forwarding_confirmed():
     if g.user and g.user is not accounts.LOCAL:

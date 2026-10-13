@@ -805,3 +805,6 @@ details.howto summary { cursor: pointer; font-size: 13px; font-weight: 600; }
 #fuel-switch { max-width: 200px; }
 .callout form.quiet { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
 .callout form.quiet .note.fine { margin: 0; }
+
+.log li.fresh { animation: landed 2.4s ease-out; }
+@keyframes landed { from { background: color-mix(in srgb, var(--series-1) 18%, transparent); } to { background: transparent; } }

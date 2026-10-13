@@ -115,19 +115,19 @@
         <p class="note fine">Everything that arrives is listed below, filed or not. Eversource's
           bill emails are read today; more utilities are being added.</p>
 
-        {% if forwarding.log %}
-        <h3>What has arrived</h3>
-        <ul class="log">
-          {% for row in forwarding.log %}
-          <li class="{{ row.outcome }}">
-            <span class="when">{{ row.received_at[:10] }}</span>
-            <span class="what">{{ {"imported": "Filed", "duplicate": "Already had it",
-                                   "confirm": "Confirmation", "confirmed": "Confirmed", "rejected": "Not filed", "held": "Needs a home"}[row.outcome] }}</span>
-            <span class="why">{{ row.detail }}</span>
-          </li>
-          {% endfor %}
-        </ul>
-        {% endif %}
+        <div id="arrivals" data-newest="{{ forwarding.log[0].id if forwarding.log else 0 }}"{{ "" if forwarding.log else " hidden" }}>
+          <h3>What has arrived</h3>
+          <ul class="log" id="arrivals-list">
+            {% for row in forwarding.log %}
+            <li class="{{ row.outcome }}">
+              <span class="when">{{ row.received_at[:10] }}</span>
+              <span class="what">{{ {"imported": "Filed", "duplicate": "Already had it",
+                                     "confirm": "Confirmation", "confirmed": "Confirmed", "rejected": "Not filed", "held": "Needs a home"}[row.outcome] }}</span>
+              <span class="why">{{ row.detail }}</span>
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
 
         <form method="post" action="{{ url_for('web.forwarding_rotate') }}" class="quiet">
           <button type="submit" class="link">Issue a new address</button>

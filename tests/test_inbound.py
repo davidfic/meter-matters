@@ -120,6 +120,16 @@ class TestDelivery(InboundCase):
         del msg["Date"]
         self.assertEqual(inbound.transit_note(msg), "")
 
+    def test_the_page_can_ask_what_has_arrived(self):
+        self.assertEqual(self.client.get("/connect/arrivals").get_json(), {"rows": []})
+        self.deliver()
+        rows = self.client.get("/connect/arrivals").get_json()["rows"]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["outcome"], "imported")
+        self.assertEqual(set(rows[0]), {"id", "received_at", "outcome", "detail"})
+        page = self.client.get("/connect").get_data(as_text=True)
+        self.assertIn(f'data-newest="{rows[0]["id"]}"', page)
+
     def test_a_forwarded_bill_is_filed_for_its_owner(self):
         res = self.deliver()
         self.assertEqual(res.get_json(), {"ok": True, "outcome": "imported"})

@@ -140,3 +140,47 @@ function initCopy() {
 
 initUpload();
 initCopy();
+
+/* ------------------------------------------------- "what has arrived" */
+
+/* A bill forwarded while this page is open should appear without a reload.
+   Every few seconds for a while after the page opens, then more slowly; a
+   fresh confirmation from Gmail changes the box above the list, so that
+   reloads the page. */
+const LABELS = { imported: "Filed", duplicate: "Already had it", confirm: "Confirmation",
+                 confirmed: "Confirmed", rejected: "Not filed", held: "Needs a home" };
+
+function watchArrivals() {
+  const box = $("arrivals");
+  if (!box) return;
+  let newest = Number(box.dataset.newest || 0);
+  const started = Date.now();
+  async function check() {
+    if (document.hidden) return;
+    let data;
+    try {
+      const res = await fetch(url("/connect/arrivals"), { headers: { Accept: "application/json" } });
+      if (!res.ok) return;
+      data = await res.json();
+    } catch { return; }
+    const rows = data.rows || [];
+    if (!rows.length || rows[0].id === newest) return;
+    if (rows.some((r) => r.id > newest && r.outcome === "confirm")) { location.reload(); return; }
+    $("arrivals-list").innerHTML = rows.map((r) =>
+      `<li class="${esc(r.outcome)}${r.id > newest ? " fresh" : ""}">
+         <span class="when">${esc(r.received_at)}</span>
+         <span class="what">${esc(LABELS[r.outcome] || r.outcome)}</span>
+         <span class="why">${esc(r.detail)}</span></li>`).join("");
+    newest = rows[0].id;
+    box.hidden = false;
+  }
+  const tick = () => {
+    check();
+    const age = Date.now() - started;
+    setTimeout(tick, age < 3 * 60 * 1000 ? 4000 : 30000);
+  };
+  setTimeout(tick, 4000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) check(); });
+}
+
+watchArrivals();
