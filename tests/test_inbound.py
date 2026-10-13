@@ -44,6 +44,29 @@ def from_someone_else(to: str) -> bytes:
     return msg.as_bytes()
 
 
+def forwarded_by_hand(to: str, sender="ann@gmail.com") -> bytes:
+    """What Gmail sends when a person opens the bill and presses Forward."""
+    msg = EmailMessage()
+    msg["From"] = f"Ann Example <{sender}>"
+    msg["To"] = to
+    msg["Subject"] = "Fwd: New Electric Bill from Eversource"
+    msg.set_content("---------- Forwarded message ---------\n"
+                    "From: Eversource Do Not Reply <noreply@notifications.eversource.com>\n"
+                    "Date: Mon, 12 Oct 2026 09:00:00 -0400\n"
+                    "Subject: New Electric Bill from Eversource\n"
+                    "To: <ann@gmail.com>\n\n"
+                    "Total Amount Due: $123.45  Due date: 10/16/2026  Account Number: ******0001")
+    msg.add_alternative(
+        '<div dir="ltr"><br><div class="gmail_quote"><div dir="ltr" class="gmail_attr">'
+        '---------- Forwarded message ---------<br>From: <strong>Eversource Do Not Reply</strong> '
+        '<span dir="auto">&lt;noreply@notifications.eversource.com&gt;</span><br>'
+        'Date: Mon, 12 Oct 2026 at 09:00<br>Subject: New Electric Bill from Eversource<br>'
+        'To: &lt;ann@gmail.com&gt;<br></div><br><br>'
+        '<p>Total Amount Due: $123.45</p><p>Due date: 10/16/2026</p>'
+        '<p>Account Number: ******0001</p></div></div>', subtype="html")
+    return msg.as_bytes()
+
+
 @unittest.skipIf(not SAMPLE.exists(), "no sample email")
 class InboundCase(HostedCase):
     env = {"ELEC_INBOUND_DOMAIN": DOMAIN, "ELEC_INBOUND_SECRET": "s3cret-hook"}
@@ -70,6 +93,21 @@ class InboundCase(HostedCase):
 
 
 class TestDelivery(InboundCase):
+    def test_a_bill_forwarded_by_hand_is_filed_from_the_original_inside_it(self):
+        res = self.deliver(forwarded_by_hand(self.address))
+        self.assertEqual(res.get_json(), {"ok": True, "outcome": "imported"})
+        row = self.log()[0]
+        self.assertEqual(row["outcome"], "imported")
+        self.assertIn("Electric $123.45, due 2026-10-16.", row["detail"])
+        self.assertIn("Forwarded by ann@gmail.com.", row["detail"])
+
+    def test_a_hand_forward_of_something_else_is_still_refused(self):
+        raw = forwarded_by_hand(self.address).replace(b"noreply@notifications.eversource.com",
+                                                      b"billing@eversource-payments.example")
+        res = self.deliver(raw)
+        self.assertEqual(res.get_json()["outcome"], "rejected")
+        self.assertIn("Not from the utility's address", self.log()[0]["detail"])
+
     def test_a_forwarded_bill_is_filed_for_its_owner(self):
         res = self.deliver()
         self.assertEqual(res.get_json(), {"ok": True, "outcome": "imported"})

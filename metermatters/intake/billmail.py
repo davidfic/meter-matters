@@ -102,8 +102,12 @@ def _date(value: str) -> date | None:
     return None
 
 
-def parse_message(msg) -> BillNotice:
-    """Pull the bill details out of a parsed email message."""
+def parse_message(msg, subject: str | None = None) -> BillNotice:
+    """Pull the bill details out of a parsed email message.
+
+    `subject` replaces the message's own when the bill was forwarded by hand
+    and the real subject - the one that says which fuel - is in the body.
+    """
     chunks = []
     for part in ("html", "plain"):
         try:
@@ -139,7 +143,7 @@ def parse_message(msg) -> BillNotice:
         except (TypeError, ValueError):
             pass
 
-    subject = str(msg.get("Subject") or "")
+    subject = subject or str(msg.get("Subject") or "")
     return BillNotice(
         amount=amount,
         due=due,

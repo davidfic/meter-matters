@@ -215,13 +215,39 @@ def mark_confirmed(user) -> bool:
     return True
 
 
-def _confirmation(msg) -> tuple[str | None, str | None]:
+def _body_text(msg) -> str:
     text = ""
     for part in ("plain", "html"):
         body = msg.get_body(preferencelist=(part,))
         if body is not None:
             content = body.get_content()
             text += "\n" + (billmail.visible_text(content) if part == "html" else content)
+    return text
+
+
+# The header block a mail client writes into a message forwarded by hand:
+# "---------- Forwarded message --------- From: Eversource <noreply@...> Date: ...
+# Subject: ... To: ...". HTML comes to us flattened to one line, so nothing
+# here is anchored to a line start.
+RE_FWD_FROM = re.compile(r"\bFrom:\s*(?:[^<\n]{0,80}?<)?\s*([\w.+-]+@[\w.-]+\.\w+)", re.I)
+RE_FWD_SUBJECT = re.compile(r"\bSubject:\s*(.+?)\s*(?=\bTo:|\bCc:|\n|$)", re.I)
+
+
+def forwarded_original(msg) -> tuple[str | None, str | None]:
+    """The sender and subject of the message this one forwards, if it is a
+    forward made by hand. (None, None) when it isn't."""
+    text = _body_text(msg)
+    if "forwarded message" not in text.lower():
+        return None, None
+    tail = text[text.lower().index("forwarded message"):]
+    sender = RE_FWD_FROM.search(tail)
+    subject = RE_FWD_SUBJECT.search(tail)
+    return ((sender.group(1).lower() if sender else None),
+            (subject.group(1).strip() if subject else None))
+
+
+def _confirmation(msg) -> tuple[str | None, str | None]:
+    text = _body_text(msg)
     link = None
     for url in RE_URL.findall(text):
         host = url.split("/")[2].lower()
@@ -254,20 +280,29 @@ def receive(delivery: Delivery) -> tuple[str, str]:
              link, code)
         return "confirm", ""
 
+    # Straight from the utility, or forwarded by hand by the person - in which
+    # case the utility's From and Subject are in the body, and the signature
+    # on the message is the forwarder's, not the utility's.
+    forwarded_by = None
     if sender != billmail.DEFAULT_SENDER:
-        _log(user, "rejected", subject,
-             f"Not from the utility's address, so not filed. It came from {sender or 'nobody'}.")
-        return "rejected", "sender"
+        original, original_subject = forwarded_original(msg)
+        if original != billmail.DEFAULT_SENDER:
+            _log(user, "rejected", subject,
+                 f"Not from the utility's address, so not filed. It came from {sender or 'nobody'}.")
+            return "rejected", "sender"
+        forwarded_by = sender
+        if original_subject:
+            subject = original_subject
 
-    verdict = dkim_result(delivery.raw)
+    verdict = "forwarded" if forwarded_by else dkim_result(delivery.raw)
     mode = os.environ.get("ELEC_INBOUND_DKIM", "warn").lower()
-    if verdict != "pass" and mode == "require":
+    if verdict != "pass" and mode == "require" and not forwarded_by:
         _log(user, "rejected", subject,
              "The utility's signature on this message didn't verify, so it wasn't filed.")
         return "rejected", "dkim"
 
     try:
-        notice = billmail.parse_message(msg)
+        notice = billmail.parse_message(msg, subject=subject)
         with workspace.open_(user, write=True) as paths:
             filed = homes.file_notices(paths, [notice])
     except ValueError as exc:
@@ -278,7 +313,8 @@ def receive(delivery: Delivery) -> tuple[str, str]:
              "The subject names neither electric nor gas, so it wasn't filed.")
         return "rejected", "fuel"
 
-    note = "" if verdict == "pass" or mode == "off" else " Signature not verified."
+    note = (f" Forwarded by {forwarded_by}." if forwarded_by
+            else "" if verdict == "pass" or mode == "off" else " Signature not verified.")
     outcome = "held" if filed.held else "imported" if filed.added else "duplicate"
     _log(user, outcome, subject,
          f"{notice.fuel.capitalize()} ${notice.amount:,.2f}, due {notice.due}."
