@@ -8,7 +8,7 @@ from metermatters import fuels
 from metermatters.intake import greenbutton
 from metermatters.intake import importers
 from metermatters.analytics import insights
-from tests.test_importers import WebCase
+from tests.test_importers import WebCase, daily
 
 
 def water_csv(unit="gal", rows=8, service="Water"):
@@ -66,6 +66,23 @@ class TestWaterPages(WebCase):
                                              "start": "2026-07-01", "end": "2026-09-30"})
         row = self.client.get("/api/report?fuel=Water").get_json()["series"][-1]
         self.assertEqual((row["kwh"], row["unit"]), (3200.0, "gal"))
+
+    def test_the_water_page_with_no_water_bills_shows_how_to_add_some_not_the_electric_ones(self):
+        self.upload("export.csv", daily())                       # electric only
+        report = self.client.get("/api/report?fuel=Water").get_json()
+        self.assertTrue(report["empty"])
+        self.assertEqual((report["fuel"], report["fuels"], report["series"]), ("Water", ["Electric"], []))
+        page = self.client.get("/water").get_data(as_text=True)
+        self.assertIn("No water bills yet", page)
+        self.assertIn("Add bills", page)
+        # The home page still falls back to whatever is on file.
+        self.assertEqual(self.client.get("/api/report").get_json()["fuel"], "Electric")
+
+    def test_a_brand_new_account_gets_the_same_card(self):
+        report = self.client.get("/api/report?fuel=Gas").get_json()
+        self.assertTrue(report["empty"])
+        self.assertEqual((report["fuel"], report["fuels"]), ("Gas", []))
+        self.assertIn("No gas bills yet", self.client.get("/gas").get_data(as_text=True))
 
     def test_water_says_nothing_about_the_weather(self):
         self.upload("water.csv", water_csv(rows=14))

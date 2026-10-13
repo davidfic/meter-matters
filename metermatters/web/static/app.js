@@ -621,12 +621,34 @@ function renderSettings(r) {
   $("baseline-months").value = r.settings.baseline_months;
 }
 
+/* Nothing on file for this fuel: the card that says how to add some, and a
+   way across to the fuels that do have bills. The rest of the page stays
+   hidden - an empty dashboard reads as a broken one. */
+function renderEmpty(r) {
+  const box = $("empty-state");
+  if (!box) { flash(r.error, true); return; }
+  box.hidden = false;
+  const others = (r.fuels || []).filter((f) => f !== r.fuel);
+  const nav = $("fuel-nav");
+  if (nav && others.length) {
+    nav.hidden = false;
+    nav.innerHTML = others.map((f) => `<a href="${url("/" + f.toLowerCase())}">${f}</a>`).join("");
+  }
+  const note = $("empty-others");
+  if (note) {
+    note.hidden = !others.length;
+    note.innerHTML = others.length
+      ? `Bills you do have: ${others.map((f) => `<a href="${url("/" + f.toLowerCase())}">${f}</a>`).join(" · ")}`
+      : "";
+  }
+}
+
 function renderAll(data) {
   calc.init(data);
   compare.init(data);
   report = data;
   if (data.error && !(data.series || []).length) {
-    flash(data.error, true);
+    if (data.empty) renderEmpty(data); else flash(data.error, true);
     return;
   }
   // Each panel on its own: one that can't draw must not take the rest of the

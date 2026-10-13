@@ -35,6 +35,29 @@
 
   <div id="flash" class="flash" role="status" aria-live="polite" hidden></div>
 
+  <!-- ------------------------------------------------- nothing on file yet -->
+  <section id="empty-state" hidden>
+    <div class="card empty">
+      <h2>No {{ fuel|lower }} bills yet</h2>
+      <p class="note">Three ways to add them, all on the <a href="{{ url_for('web.connect') }}">Add bills</a> page. One is enough.</p>
+      <div class="empty-ways">
+        <div>
+          <h3>Upload a file</h3>
+          <p>A bill history or a usage export from your utility's website. Years of bills in one go.</p>
+        </div>
+        <div>
+          <h3>Forward the emails</h3>
+          <p>Your account has its own bills address. Forward a "your bill is ready" email to it, or add a mail filter so new ones go by themselves. The Add bills page says whose emails it can read.</p>
+        </div>
+        <div>
+          <h3>Type one in</h3>
+          <p>The amount, the due date, and what was used. Fine for a bill on paper.</p>
+        </div>
+      </div>
+      <p class="note fine" id="empty-others" hidden></p>
+    </div>
+  </section>
+
   <!-- ------------------------------------------------------ hero + streak -->
   <section>
     <div class="card">

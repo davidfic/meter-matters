@@ -801,3 +801,14 @@ details.howto summary { cursor: pointer; font-size: 13px; font-weight: 600; }
 #cmp-table .down { color: var(--good-text); font-weight: 600; }
 #cmp-note .up { color: var(--critical); }
 #cmp-note .down { color: var(--good-text); }
+
+/* The fuel page with nothing on file for that fuel: one card, and nothing
+   after it that would read as a dashboard. */
+#empty-state:not([hidden]) ~ :not(footer, script) { display: none !important; }
+.card.empty h2 { font-size: 18px; margin-bottom: 4px; }
+.card.empty .note { margin-bottom: 16px; }
+.empty-ways { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.empty-ways h3 { margin: 0 0 4px; font-size: 14px; font-weight: 600; }
+.empty-ways p { margin: 0; color: var(--text-muted); font-size: 13px; line-height: 1.5; }
+.card.empty .note.fine { margin: 16px 0 0; }
+@media (max-width: 720px) { .empty-ways { grid-template-columns: 1fr; } }

@@ -380,13 +380,25 @@ def coerce_settings(payload: dict, state: dict) -> dict:
 # Report assembly
 # --------------------------------------------------------------------------
 
+def _empty_report(fuel: str, present: list[str]) -> dict:
+    """What a page gets when the home has no bills for the fuel it asked for.
+
+    The page draws its empty state from this - the fuel it is about, the
+    fuels that do have bills (for the tabs), and nothing else to mislead.
+    """
+    return {
+        "error": f"No {fuel.lower()} bills on file yet." if present else "No bills on file yet.",
+        "empty": True,
+        "fuel": fuel,
+        "fuels": present,
+        "accounts": [],
+        "series": [],
+    }
+
+
 def build_report(state: dict, fuel: str | None = None) -> dict:
     if not paths().csv.exists():
-        return {
-            "error": "No bills on file yet. Add an export to get started.",
-            "accounts": [],
-            "series": [],
-        }
+        return _empty_report(fuel or "Electric", [])
 
     entries = analysis.load_entries(paths().csv)
     bills = analysis.build_bills(entries)
@@ -401,7 +413,13 @@ def build_report(state: dict, fuel: str | None = None) -> dict:
     # other - only accounts of the SAME fuel that never overlap in time, which
     # is what a renumbered account looks like.
     all_bills = list(bills)
-    present = sorted({b.fuel for b in all_bills}) or ["Electric"]
+    present = sorted({b.fuel for b in all_bills})
+    if fuel and fuel not in present:
+        # The water page, with no water bills: say so, rather than quietly
+        # showing the electric ones under a water heading.
+        return _empty_report(fuel, present)
+    if not present:
+        return _empty_report("Electric", [])
     wanted = fuel or state.get("fuel")
     fuel = wanted if wanted in present else (
         "Electric" if "Electric" in present else present[0])
