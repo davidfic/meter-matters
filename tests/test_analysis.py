@@ -48,6 +48,25 @@ class TestFields(unittest.TestCase):
         self.assertIsNone(analysis.parse_date("not a date"))
 
 
+class TestParseMoney(unittest.TestCase):
+    """Every imported amount comes through here, so what it lets past matters."""
+
+    def test_money_as_the_export_and_people_write_it(self):
+        for text, want in (("$1,248.26", 1248.26), ("(50.00)", -50.0), ("$-114.41", -114.41),
+                           ("-$5", -5.0), ("0", 0.0), (".5", 0.5), ("$0.00", 0.0), ("($25.00)", -25.0),
+                           ("1,601", 1601.0), (" 12 ", 12.0), ("\u22125", -5.0), ("\u20135", -5.0),
+                           ("$25.00 CR", -25.0), ("25cr", -25.0), ("12 kWh", 12.0), ("5 USD", 5.0),
+                           ("\u00a3 7.50", 7.5), (12, 12.0)):
+            with self.subTest(text):
+                self.assertEqual(analysis.parse_money(text), want)
+
+    def test_what_is_not_money_is_not_guessed_at(self):
+        for text in ("12abc34", "1e9", "5e2", "1.234.56", "", "-", "--", "N/A", "abc", "1-2",
+                     "-.", ".", "$", "00:00", None):
+            with self.subTest(text):
+                self.assertIsNone(analysis.parse_money(text))
+
+
 class TestBuild(unittest.TestCase):
     def setUp(self):
         self.bills = analysis.build_bills(analysis.read_entries(SAMPLE))
@@ -232,3 +251,102 @@ class TestDataQualityDetectors(unittest.TestCase):
         flagged = {r["period"] for r in analysis.anomalies(series, {"anomaly_pct": 25})}
         self.assertNotIn("2026-01", flagged)
         self.assertNotIn("2018-01", flagged)
+
+
+class TestZeroFirstStatement(unittest.TestCase):
+    """A $0.00 opening statement - a new account's first, pro-rated bill."""
+
+    def test_a_free_first_month_does_not_crash_the_scoreboard(self):
+        text = ("Account# or Nickname,Account Type,Pay/Due Date,Type,Amount,Status,\n"
+                "A&lt;br&gt;(n),Electric,2026/01/16,Current Bill,$0.00,-\n"
+                "A&lt;br&gt;(n),Electric,2026/02/16,Current Bill,$50.00,-\n")
+        bills = analysis.build_bills(analysis.read_entries(text))
+        report = analysis.analyse(bills, {"baseline_months": 6, "target_pct": 5})
+        self.assertIsNone(report["series"][1]["pct"])       # a rise from nothing has no percentage
+        board = gamify.scoreboard(report)
+        swing = next(b for b in board["badges"] if b["id"] == "big-swing")
+        self.assertFalse(swing["earned"])
+        self.assertIsInstance(swing["detail"], str)
+
+
+class TestFuelNames(unittest.TestCase):
+    HEADER = "Account# or Nickname,Account Type,Pay/Due Date,Type,Amount,Status,\n"
+
+    def test_account_type_is_read_whatever_its_case_or_spacing(self):
+        for spelled, want in (("ELECTRIC", "Electric"), (" Electric ", "Electric"),
+                              ("electric", "Electric"), ("GAS", "Gas"), ("water", "Water")):
+            with self.subTest(spelled):
+                text = self.HEADER + f"A&lt;br&gt;(n),{spelled},2026/01/16,Current Bill,$100.00,-\n"
+                bill, = analysis.build_bills(analysis.read_entries(text))
+                self.assertEqual(bill.fuel, want)
+
+    def test_a_blank_account_type_is_electric_as_it_always_was(self):
+        text = self.HEADER + "A&lt;br&gt;(n),,2026/01/16,Current Bill,$100.00,-\n"
+        bill, = analysis.build_bills(analysis.read_entries(text))
+        self.assertEqual(bill.fuel, "Electric")
+
+
+class TestCreditMonth(unittest.TestCase):
+    """A credit on the account is not a bill, let alone the lowest one."""
+
+    def report(self):
+        amounts = [100, 110, 95, 105, -20, 100, 98]
+        bills = [analysis.Bill(period=f"2026-{i + 1:02d}", due=date(2026, i + 1, 16), amount=float(a),
+                               account="A", nickname="n") for i, a in enumerate(amounts)]
+        return analysis.analyse(bills, {"baseline_months": 2, "target_pct": 5})
+
+    def test_a_credit_earns_no_under_x_badge(self):
+        badges = [b for b in gamify.achievements(self.report()) if b["id"].startswith("under-")]
+        self.assertTrue(badges)
+        for badge in badges:
+            self.assertFalse(badge["earned"], badge["id"])
+            self.assertEqual(badge["detail"], "Best so far: $95.00")
+
+    def test_a_credit_is_not_a_record_low(self):
+        badge = next(b for b in gamify.achievements(self.report()) if b["id"] == "record-low")
+        self.assertTrue(badge["earned"])                    # March's $95 was one
+        self.assertEqual(badge["earned_on"], "Mar 2026")
+        self.assertIn("$95.00", badge["detail"])
+
+
+class TestPinnedArithmetic(unittest.TestCase):
+    """Figures that are right today, worked out by hand so they stay that way."""
+
+    HEADER = "Account# or Nickname,Account Type,Pay/Due Date,Type,Amount,Status,\n"
+
+    def series(self, amounts, start_year=2024):
+        rows = "".join(
+            f"A&lt;br&gt;(n),Electric,{start_year + i // 12}/{i % 12 + 1:02d}/16,Current Bill,${a:.2f},-\n"
+            for i, a in enumerate(amounts))
+        return analysis.monthly_series(analysis.build_bills(analysis.read_entries(self.HEADER + rows)))
+
+    def test_two_years_of_statements_compare_with_the_prior_twelve(self):
+        from statistics import mean
+        amounts = [100.0 + 3 * i for i in range(24)]
+        s = analysis.summarise(self.series(amounts), {})
+        self.assertAlmostEqual(s["avg_12"], mean(amounts[12:]), places=2)
+        self.assertAlmostEqual(s["avg_prior_12"], mean(amounts[:12]), places=2)
+        self.assertAlmostEqual(s["rolling_delta"], mean(amounts[12:]) - mean(amounts[:12]), places=1)
+
+    def usage_rows(self, per_day):
+        return [{"period": f"2025-{i + 1:02d}", "label": f"M{i + 1}", "short": f"M{i + 1}", "month": i + 1,
+                 "year": 2025, "amount": 100.0, "kwh_per_day": v, "kwh": v * 30, "days": 30,
+                 "rate": 0.25, "unit": "kWh"} for i, v in enumerate(per_day)]
+
+    def test_baseload_wants_six_periods_and_takes_the_tenth_percentile(self):
+        self.assertIsNone(analysis.baseload(self.usage_rows([12, 7, 15, 9, 20]), {}))
+        per_day = [12, 7, 15, 9, 20, 11, 8, 14, 10, 13]
+        out = analysis.baseload(self.usage_rows(per_day), {})
+        ordered = sorted(per_day)
+        self.assertEqual(out["kwh_per_day"], ordered[max(0, int(len(ordered) * 0.10) - 1)])
+        self.assertLessEqual(out["share"], 100)
+
+    def test_the_compare_rate_is_a_number_or_nothing(self):
+        rows = self.usage_rows([10 + i for i in range(15)])
+        for i, r in enumerate(rows):
+            r["rate"] = 0.22 + 0.01 * (i % 4)
+        self.assertIsNone(analysis.rate_history(rows, {"compare_rate": "abc"})["compare"])
+        out = analysis.rate_history(rows, {"compare_rate": "0.20"})["compare"]
+        want = sum(r["kwh"] * (0.20 - r["rate"]) for r in rows[-12:])
+        self.assertAlmostEqual(out["delta"], want, places=2)
+        self.assertEqual(out["months"], 12)

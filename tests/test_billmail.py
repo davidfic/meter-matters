@@ -88,6 +88,70 @@ class TestParsing(unittest.TestCase):
                 mail, policy=__import__("email").policy.default))
 
 
+class TestHostileMail(unittest.TestCase):
+    """What a parser fed by strangers' email has to shrug off."""
+
+    def parse(self, mail: str):
+        import email
+        from email import policy
+        return billmail.parse_message(email.message_from_string(mail, policy=policy.default))
+
+    def test_amounts_are_dollars_and_cents_or_nothing(self):
+        self.assertEqual(self.parse(HTML_MAIL.replace("$1,248.26", "$0.00")).amount, 0.0)
+        for bad in ("$1,248", "$-12.34", "$1.234.56"):
+            with self.subTest(bad), self.assertRaises(billmail.ParseError):
+                self.parse(HTML_MAIL.replace("$1,248.26", bad))
+
+    def test_impossible_due_dates_are_refused(self):
+        for bad in ("02/30/2026", "13/01/2026", "10-16-2026"):
+            with self.subTest(bad), self.assertRaises(billmail.ParseError):
+                self.parse(HTML_MAIL.replace("10/16/2026", bad))
+
+    def test_a_due_date_years_from_the_message_is_refused(self):
+        # A typo'd or forged year would file the bill far outside every trend.
+        for bad in ("10/16/0026", "10/16/2062", "10/16/2023"):
+            with self.subTest(bad), self.assertRaisesRegex(billmail.ParseError, "years"):
+                self.parse(HTML_MAIL.replace("10/16/2026", bad))
+        self.assertEqual(self.parse(HTML_MAIL.replace("10/16/2026", "10/16/2027")).due,
+                         date(2027, 10, 16))
+
+    def test_without_a_date_header_today_is_the_yardstick(self):
+        from datetime import timedelta
+        undated = HTML_MAIL.replace("Date: Tue, 22 Sep 2026 19:55:26 +0000\n", "")
+        self.assertNotIn("Date:", undated.split("\n\n")[0])
+        soon = (date.today() + timedelta(days=30)).strftime("%m/%d/%Y")
+        self.assertEqual(self.parse(undated.replace("10/16/2026", soon)).due,
+                         date.today() + timedelta(days=30))
+        far = (date.today() + timedelta(days=3 * 365)).strftime("%m/%d/%Y")
+        with self.assertRaisesRegex(billmail.ParseError, "years"):
+            self.parse(undated.replace("10/16/2026", far))
+
+    def test_a_subject_naming_both_fuels_is_electric(self):
+        # The tie-break, pinned so that it cannot drift unnoticed.
+        self.assertEqual(billmail.fuel_of("Your Gas and Electric bills"), "electric")
+        self.assertEqual(billmail.fuel_of("Electric and gas"), "electric")
+
+    def test_a_message_with_nothing_readable_says_so(self):
+        from email.message import EmailMessage
+        only_attachment = EmailMessage()
+        only_attachment["Subject"] = "New Electric Bill from Eversource"
+        only_attachment.add_attachment(b"Total Amount Due: $1.00 Due date: 10/16/2026",
+                                       maintype="application", subtype="pdf", filename="bill.pdf")
+        no_boundary = ("Subject: New Electric Bill from Eversource\n"
+                       "Content-Type: multipart/alternative\n\n"
+                       "Total Amount Due: $1.00 Due date: 10/16/2026\n")
+        with self.assertRaisesRegex(billmail.ParseError, "no readable body"):
+            billmail.parse_message(only_attachment)
+        with self.assertRaisesRegex(billmail.ParseError, "no readable body"):
+            self.parse(no_boundary)
+
+    def test_an_unknown_charset_is_unreadable_not_a_crash(self):
+        # Python raises LookupError for it, which is not a ValueError and
+        # would otherwise come out of the inbound endpoint as a 500.
+        with self.assertRaisesRegex(billmail.ParseError, "no readable body"):
+            self.parse(HTML_MAIL.replace('charset="utf-8"', 'charset="x-bogus"'))
+
+
 class TestBackfillSynthetic(unittest.TestCase):
     """13 statements on file, 26 periods in the export: 13 to fill in."""
 

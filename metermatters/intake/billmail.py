@@ -47,9 +47,13 @@ DEFAULT_HOST = "imap.gmail.com"
 RE_DUE = re.compile(r"Due date:?\s*(\d{1,2}/\d{1,2}/\d{2,4})", re.I)
 RE_BILL_DATE = re.compile(r"Bill date:?\s*(\d{1,2}/\d{1,2}/\d{2,4})", re.I)
 # 2018-era mail says "Amount Due:"; later mail says "Total Amount Due:".
-RE_TOTAL = re.compile(r"(?:Total\s+)?Amount Due:?\s*\$\s*([\d,]+\.\d{2})", re.I)
+# Exactly two decimals: "$1.234.56" is not a bill of $1.23.
+RE_TOTAL = re.compile(r"(?:Total\s+)?Amount Due:?\s*\$\s*([\d,]+\.\d{2})(?!\d|\.\d)", re.I)
 RE_ACCOUNT = re.compile(r"Account Number:?\s*\*+\s*(\d{3,4})", re.I)
-RE_ANY_AMOUNT = re.compile(r"total amount due of \$\s*([\d,]+\.\d{2})", re.I)
+RE_ANY_AMOUNT = re.compile(r"total amount due of \$\s*([\d,]+\.\d{2})(?!\d|\.\d)", re.I)
+# A due date further than this from the message itself is a typo or a
+# forgery, and filing it would put the bill outside every trend.
+MAX_DUE_DISTANCE = timedelta(days=2 * 365)
 
 
 class ParseError(ValueError):
@@ -116,7 +120,10 @@ def parse_message(msg, subject: str | None = None) -> BillNotice:
             body = None
         if body is None:
             continue
-        content = body.get_content()
+        try:
+            content = body.get_content()
+        except (LookupError, UnicodeError):     # a charset Python has never heard of
+            continue
         chunks.append(visible_text(content) if part == "html" else content)
     blob = "\n".join(chunks)
     if not blob.strip():
@@ -127,21 +134,24 @@ def parse_message(msg, subject: str | None = None) -> BillNotice:
         raise ParseError("no 'Total Amount Due' found")
     amount = float(total.group(1).replace(",", ""))
 
-    due_match = RE_DUE.search(blob)
-    due = _date(due_match.group(1)) if due_match else None
-    if due is None:
-        # Refuse to guess. A wrong due date files the bill in the wrong month,
-        # which silently corrupts every trend on the dashboard.
-        raise ParseError("no 'Due date' found - the HTML part is required")
-
-    bill_match = RE_BILL_DATE.search(blob)
-    acct = RE_ACCOUNT.search(blob)
     received = None
     if msg.get("Date"):
         try:
             received = email.utils.parsedate_to_datetime(msg["Date"]).date()
         except (TypeError, ValueError):
             pass
+
+    due_match = RE_DUE.search(blob)
+    due = _date(due_match.group(1)) if due_match else None
+    if due is None:
+        # Refuse to guess. A wrong due date files the bill in the wrong month,
+        # which silently corrupts every trend on the dashboard.
+        raise ParseError("no 'Due date' found - the HTML part is required")
+    if abs(due - (received or date.today())) > MAX_DUE_DISTANCE:
+        raise ParseError(f"the due date {due} is years away from when the message was sent")
+
+    bill_match = RE_BILL_DATE.search(blob)
+    acct = RE_ACCOUNT.search(blob)
 
     subject = subject or str(msg.get("Subject") or "")
     return BillNotice(
@@ -253,6 +263,8 @@ class Filed:
     skipped: int = 0              # of unknown fuel - never guessed at
     new_accounts: list = None
     held: int = 0                 # for no home in particular; waiting to be placed
+    waiting: int = 0              # held before and still waiting - not "already on file"
+    dropped: int = 0              # not kept: too many were already waiting
 
 
 def file_notices(notices: list[BillNotice], csv_path, usage_dir) -> Filed:

@@ -113,12 +113,15 @@ def read(request) -> Delivery:
         raise Refused("bad credentials", 401)
 
     if kind == "application/json":                                     # postmark
-        payload = request.get_json(silent=True) or {}
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            raise Refused("the payload isn't a JSON object", 422)
         raw = payload.get("RawEmail")
-        if not raw:
+        if not raw or not isinstance(raw, str):
             raise Refused("no RawEmail in the payload - switch on "
                           "'include raw email content' for the inbound stream", 422)
-        return Delivery(payload.get("OriginalRecipient") or payload.get("To", ""),
+        recipient = payload.get("OriginalRecipient") or payload.get("To", "")
+        return Delivery(recipient if isinstance(recipient, str) else "",
                         raw.encode("utf-8", "surrogateescape"))
 
     body = request.get_data()                                          # raw
@@ -219,9 +222,12 @@ def mark_confirmed(user) -> bool:
 def _body_text(msg) -> str:
     text = ""
     for part in ("plain", "html"):
-        body = msg.get_body(preferencelist=(part,))
-        if body is not None:
-            content = body.get_content()
+        try:
+            body = msg.get_body(preferencelist=(part,))
+            content = body.get_content() if body is not None else None
+        except (LookupError, UnicodeError):     # a charset Python has never heard of
+            continue
+        if content is not None:
             text += "\n" + (billmail.visible_text(content) if part == "html" else content)
     return text
 
@@ -229,9 +235,11 @@ def _body_text(msg) -> str:
 # The header block a mail client writes into a message forwarded by hand:
 # "---------- Forwarded message --------- From: Eversource <noreply@...> Date: ...
 # Subject: ... To: ...". HTML comes to us flattened to one line, so nothing
-# here is anchored to a line start.
+# here is anchored to a line start, and the subject ends at whichever header
+# comes next - Apple Mail and Outlook order them differently - or the line.
 RE_FWD_FROM = re.compile(r"\bFrom:\s*(?:[^<\n]{0,80}?<)?\s*([\w.+-]+@[\w.-]+\.\w+)", re.I)
-RE_FWD_SUBJECT = re.compile(r"\bSubject:\s*(.+?)\s*(?=\bTo:|\bCc:|\n|$)", re.I)
+RE_FWD_SUBJECT = re.compile(
+    r"\bSubject:\s*(.+?)\s*(?=\bDate:|\bSent:|\bFrom:|\bTo:|\bCc:|\n|$)", re.I)
 
 
 def forwarded_original(msg) -> tuple[str | None, str | None]:
@@ -283,14 +291,27 @@ def receive(delivery: Delivery) -> tuple[str, str]:
 
     # Straight from the utility, or forwarded by hand by the person - in which
     # case the utility's From and Subject are in the body, and the signature
-    # on the message is the forwarder's, not the utility's.
+    # on the message is the forwarder's, not the utility's. So a forward is
+    # taken only from the person themselves: anyone else who knows the
+    # address could otherwise plant a bill, signature checking or not.
     forwarded_by = None
     if sender != billmail.DEFAULT_SENDER:
         original, original_subject = forwarded_original(msg)
         if original != billmail.DEFAULT_SENDER:
+            # A body that can't be read may well have been a forward; say
+            # that, rather than call the person's own message a stranger's.
+            if not _body_text(msg).strip():
+                _log(user, "rejected", subject,
+                     "Couldn't read a bill out of it: the message had no readable body.")
+                return "rejected", "parse"
             _log(user, "rejected", subject,
                  f"Not from the utility's address, so not filed. It came from {sender or 'nobody'}.")
             return "rejected", "sender"
+        if sender != (user.email or "").lower():
+            _log(user, "rejected", subject,
+                 f"Forwarded by {sender or 'nobody'}, who isn't you, so it wasn't filed. "
+                 "Only forwards from your own address count.")
+            return "rejected", "forwarder"
         forwarded_by = sender
         if original_subject:
             subject = original_subject
@@ -317,11 +338,18 @@ def receive(delivery: Delivery) -> tuple[str, str]:
     note = (f" Forwarded by {forwarded_by}." if forwarded_by
             else "" if verdict == "pass" or mode == "off" else " Signature not verified.")
     note += transit_note(msg)
-    outcome = "held" if filed.held else "imported" if filed.added else "duplicate"
-    _log(user, outcome, subject,
-         f"{notice.fuel.capitalize()} ${notice.amount:,.2f}, due {notice.due}."
+    said = f"{notice.fuel.capitalize()} ${notice.amount:,.2f}, due {notice.due}."
+    if filed.dropped:
+        _log(user, "rejected", subject, said + " Too many bills are already waiting for a home, "
+             "so this one wasn't kept - place or drop some on the Add bills page." + note)
+        return "rejected", "full"
+    outcome = ("held" if filed.held or filed.waiting else "imported" if filed.added
+               else "duplicate")
+    _log(user, outcome, subject, said
          + (" It matches none of your homes yet - say which one it belongs to on the Add bills page."
-            if filed.held else "" if filed.added else " Already on file.") + note)
+            if filed.held
+            else " It is still waiting for a home - say which one it belongs to on the Add bills page."
+            if filed.waiting else "" if filed.added else " Already on file.") + note)
     return outcome, str(notice)
 
 

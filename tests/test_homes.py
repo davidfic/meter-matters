@@ -1,8 +1,11 @@
 """Tests for more than one home: the registry, the addresses, and keeping each home's bills apart."""
 
 import io
+import os
 import tempfile
+import threading
 import unittest
+from unittest import mock
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -214,6 +217,45 @@ class TestRouting(Tree):
         with self.assertRaisesRegex(homes.HomeError, "no such home"):
             homes.place(self.base, homes.pending(self.base)[0]["id"], self.cabin.id)
 
+    def test_a_bill_for_a_deleted_homes_account_waits_for_it(self):
+        # The home can come back for thirty days. Filing its bill in the one
+        # home left would put it where a restore can't find it.
+        homes.delete(self.base, self.cabin.id, "Cabin", NOW)
+        placed, held = homes.route(self.base, [notice("0002"), notice("0001"), notice(None)])
+        self.assertEqual(len(held), 1)
+        self.assertEqual(held[0].account_suffix, "0002")
+        self.assertEqual({k: len(v) for k, v in placed.items()}, {homes.MAIN: 2})
+        done = homes.file_notices(self.base, [notice("0002", 222.0)])
+        self.assertEqual((done.added, done.held), (0, 1))
+        self.assertNotIn("222.00", homes.paths_for(self.base, self.main).csv.read_text())
+        homes.restore(self.base, self.cabin.id, NOW)
+        placed, held = homes.route(self.base, [notice("0002")])
+        self.assertEqual((list(placed), held), ([self.cabin.id], []))
+
+    def test_corrupt_pending_rows_are_dropped_not_fatal(self):
+        import json
+        good = {"id": "good", "amount": 12.5, "fuel": "gas", "due": "2026-10-16",
+                "account_suffix": "7777", "subject": "x", "message_id": "",
+                "bill_date": None, "received": None}
+        bad = [{**good, "id": None}, {k: v for k, v in good.items() if k != "id"},
+               {**good, "id": "a", "amount": "12.50"}, {**good, "id": "b", "amount": None},
+               {**good, "id": "c", "fuel": "water"}, {**good, "id": "d", "fuel": None},
+               {**good, "id": "e", "due": "soon"}, {**good, "id": "f", "due": 5},
+               {**good, "id": "g", "bill_date": "never"}, {**good, "id": "h", "account_suffix": 7777},
+               "not a row", 7]
+        path = self.base.state.parent / "pending_bills.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(bad + [good, {**good, "id": "nodue", "due": None}]))
+        self.assertEqual([r["id"] for r in homes.pending(self.base)], ["good", "nodue"])
+        for missing in ("a", "nope"):
+            with self.assertRaises(homes.HomeError):
+                homes.place(self.base, missing, self.cabin.id)
+        homes.dismiss(self.base, "a")                   # nothing to do, and no crash
+        homes.place(self.base, "good", self.cabin.id)
+        self.assertIn("12.50", homes.paths_for(self.base, self.cabin).csv.read_text())
+        homes.dismiss(self.base, "nodue")
+        self.assertEqual(homes.pending(self.base), [])
+
     def test_a_bill_of_unknown_fuel_is_counted_skipped_never_held(self):
         done = homes.file_notices(self.base, [notice("7777", fuel="unknown")])
         self.assertEqual((done.skipped, done.held), (1, 0))
@@ -277,8 +319,11 @@ class TestOneHome(WebCase):
         self.assertEqual(self.client.get("/home/" + "a" * 60 + "/electric").status_code, 404)
 
     def test_the_machine_endpoints_are_the_same_under_a_home_prefix(self):
-        # Each checks a credential of its own; a prefix must not open a way round that.
-        self.assertEqual(self.client.post("/home/anything/api/tasks/check").status_code, 404)
+        # Each checks a credential of its own; a prefix must not open a way
+        # round that, and the browser session this client holds never counts.
+        with mock.patch.dict(os.environ, {"ELEC_TASK_TOKEN": "tok-123"}):
+            self.assertEqual(self.client.post("/api/tasks/check").status_code, 403)
+            self.assertEqual(self.client.post("/home/anything/api/tasks/check").status_code, 403)
 
     def test_an_address_for_a_home_that_does_not_exist_is_not_found(self):
         self.assertEqual(self.client.get("/home/nowhere/").status_code, 404)
@@ -341,6 +386,108 @@ class TestAddingAHome(WebCase):
         res = webapp.app.test_client().get("/home/cabin/electric")
         self.assertEqual(res.status_code, 302)
         self.assertEqual(res.headers["Location"], "/home/cabin/login?next=/home/cabin/electric")
+
+
+class TestNamingHomes(WebCase):
+    def flashed(self):
+        return self.client.get("/connect").get_data(as_text=True)
+
+    def test_a_name_that_makes_no_address_still_gets_one(self):
+        res = self.add_home("\U0001f3e0")
+        self.assertEqual(res.headers["Location"], "/home/home/connect")
+        res = self.add_home("\U0001f3e1")
+        self.assertEqual(res.headers["Location"], "/home/home-2/connect")
+        self.assertEqual([h.name for h in homes.active(self.base)][1:], ["\U0001f3e0", "\U0001f3e1"])
+
+    def test_renaming_to_a_name_another_home_has_is_refused(self):
+        self.add_home("Cabin")
+        self.add_home("Flat")
+        cabin = homes.find(self.base, "cabin")
+        for taken in ("Flat", "flat", homes.DEFAULT_NAME, homes.DEFAULT_NAME.upper()):
+            with self.subTest(taken):
+                self.client.post(f"/homes/{cabin.id}/rename", data={"name": taken})
+                self.assertIn("already have a home called", self.flashed())
+                self.assertEqual(homes.by_id(self.base, cabin.id).name, "Cabin")
+        self.assertEqual([h.name for h in homes.active(self.base)], [homes.DEFAULT_NAME, "Cabin", "Flat"])
+
+    def test_renaming_only_by_case_is_allowed(self):
+        self.add_home("Cabin")
+        cabin = homes.find(self.base, "cabin")
+        self.client.post(f"/homes/{cabin.id}/rename", data={"name": "CABIN"})
+        self.assertEqual(homes.by_id(self.base, cabin.id).name, "CABIN")
+        self.assertEqual(homes.by_id(self.base, cabin.id).slug, "cabin")
+
+    def test_a_deleted_home_can_neither_be_renamed_nor_deleted_again(self):
+        self.add_home("Cabin")
+        cabin = homes.find(self.base, "cabin")
+        self.client.post(f"/homes/{cabin.id}/delete", data={"confirm": "Cabin"})
+        self.client.post(f"/homes/{cabin.id}/rename", data={"name": "Mountain cabin"})
+        self.assertIn("no such home", self.flashed())
+        self.client.post(f"/homes/{cabin.id}/delete", data={"confirm": "Cabin"})
+        self.assertIn("no such home", self.flashed())
+        gone, = homes.deleted(self.base)
+        self.assertEqual(gone.name, "Cabin")
+        self.assertEqual(homes.by_id(self.base, cabin.id).deleted_at, gone.deleted_at)
+
+    def test_an_active_home_cannot_be_restored(self):
+        self.add_home("Cabin")
+        cabin = homes.find(self.base, "cabin")
+        self.client.post(f"/homes/{cabin.id}/restore")
+        self.assertIn("can&#39;t be restored", self.flashed())
+        self.client.post(f"/homes/{homes.MAIN}/restore")
+        self.assertIn("can&#39;t be restored", self.flashed())
+        self.assertEqual(len(homes.active(self.base)), 2)
+
+    def test_restoring_into_a_full_account_is_refused(self):
+        self.add_home("Cabin")
+        cabin = homes.find(self.base, "cabin")
+        self.client.post(f"/homes/{cabin.id}/delete", data={"confirm": "Cabin"})
+        for n in range(homes.MAX_HOMES - 1):
+            self.assertEqual(self.add_home(f"Home {n}").status_code, 302)
+        self.assertEqual(len(homes.active(self.base)), homes.MAX_HOMES)
+        self.client.post(f"/homes/{cabin.id}/restore")
+        self.assertIn("most homes", self.flashed())
+        self.assertIsNone(homes.find(self.base, "cabin"))
+        self.assertEqual(len(homes.deleted(self.base)), 1)
+
+    def test_another_users_home_ids_do_nothing(self):
+        self.add_home("Cabin")
+        cabin = homes.find(self.base, "cabin")
+        self.client.post(f"/homes/{cabin.id}/delete", data={"confirm": "Cabin"})
+        self.add_home("Flat")
+        flat = homes.find(self.base, "flat")
+        before = (self.base.state.parent / "homes.json").read_text()
+        from metermatters.web import app as webapp
+        other = webapp.app.test_client()
+        bea = self.sign_up("bea@example.com", client=other)
+        other.post(f"/homes/{flat.id}/delete", data={"confirm": "Flat"})
+        other.post(f"/homes/{flat.id}/rename", data={"name": "Theirs"})
+        other.post(f"/homes/{cabin.id}/restore")
+        other.post(f"/homes/{homes.MAIN}/rename", data={"name": "Theirs"})
+        self.assertEqual((self.base.state.parent / "homes.json").read_text(), before)
+        self.assertEqual([h.name for h in homes.active(self.base)], [homes.DEFAULT_NAME, "Flat"])
+        self.assertEqual([h.name for h in homes.active(bea.paths)], ["Theirs"])
+
+    def test_adding_from_six_requests_at_once_loses_none(self):
+        # Each request takes the user's write lock; without it the home list,
+        # a read-modify-write file, would keep only the last writer's home.
+        from metermatters.web import app as webapp
+        from tests.support import PASSWORD
+        results, ready = [], threading.Barrier(6)
+
+        def add(n):
+            client = webapp.app.test_client()
+            client.post("/login", data={"email": "ann@example.com", "password": PASSWORD})
+            ready.wait()
+            results.append(client.post("/homes/add", data={"name": f"Home {n}"}).headers["Location"])
+
+        threads = [threading.Thread(target=add, args=(n,)) for n in range(6)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        self.assertEqual(sorted(results), [f"/home/home-{n}/connect" for n in range(6)])
+        self.assertEqual(len(homes.active(self.base)), 7)
 
 
 class TestKeepingHomesApart(WebCase):
@@ -489,6 +636,17 @@ class TestBillsThatArriveForNoHome(WebCase):
         pending, = homes.pending(self.base)
         self.client.post(f"/homes/bills/{pending['id']}/dismiss")
         self.assertEqual(homes.pending(self.base), [])
+
+    def test_a_corrupt_pending_file_does_not_take_the_page_down(self):
+        import json
+        path = self.base.state.parent / "pending_bills.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps([{"amount": "lots", "fuel": "gas"},
+                                    {"id": "ok", "amount": 1.0, "fuel": "gas", "due": None}]))
+        html = self.client.get("/connect").get_data(as_text=True)
+        self.assertIn("1 bill waiting for a home", html)
+        self.assertEqual(self.client.post("/homes/bills/missing", data={"home": self.cabin.id}).status_code, 302)
+        self.assertEqual(self.client.post("/homes/bills/missing/dismiss").status_code, 302)
 
 
 if __name__ == "__main__":

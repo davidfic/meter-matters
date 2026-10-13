@@ -3,6 +3,7 @@
 import io
 import json
 import os
+import re
 import unittest
 import unittest.mock
 from datetime import date, datetime, timedelta, timezone
@@ -40,6 +41,10 @@ def bills(rows=7, due="Due Date", fuel="Electric"):
     for m in range(1, rows + 1):
         out.append(f"2024-{m:02d}-01,2024-{m:02d}-21,${100 + m * 3:.2f},{fuel}")
     return "\n".join(out).encode()
+
+
+CONSUMPTION = b"Start,End,Consumption,Cost\n" + "\n".join(
+    f"2024-{m:02d}-01,2024-{m:02d}-28,{600 + m},${(600 + m) * 0.2:.2f}" for m in range(1, 8)).encode()
 
 
 def espi(days=70, uom=72, multiplier=0):
@@ -152,6 +157,80 @@ class TestReading(unittest.TestCase):
             with self.subTest(body), self.assertRaises(importers.ImportFailed):
                 importers.read(body, "j.csv")
 
+    def test_a_file_mixing_two_fuels_is_refused_with_a_reason(self):
+        text = "Statement Date,Due Date,Amount Due,Service\n" + "\n".join(
+            f"2024-{m:02d}-01,2024-{m:02d}-21,$100.00,{'Electric' if m % 2 else 'Gas'}" for m in range(1, 7))
+        with self.assertRaisesRegex(importers.ImportFailed, r"more than one fuel \(Electric and Gas\)"):
+            importers.read(text.encode(), "b.csv")
+
+    def test_a_column_picked_for_two_things_is_put_back_to_the_person(self):
+        with self.assertRaises(importers.Unsure) as caught:
+            importers.read(CONSUMPTION, "m.csv", mapping={
+                "kind": "usage", "fuel": "Electric", "unit": "kWh",
+                "columns": {"start": "Start", "end": "End", "usage": "Consumption", "money": "Consumption"}})
+        for word in ("Consumption", "usage", "money"):
+            self.assertIn(word, caught.exception.reason)
+
+    def test_a_fuel_that_contradicts_the_unit_is_put_back_to_the_person(self):
+        with self.assertRaises(importers.Unsure) as caught:
+            importers.read(CONSUMPTION, "m.csv", mapping={
+                "kind": "usage", "fuel": "Gas", "unit": "kWh",
+                "columns": {"start": "Start", "end": "End", "usage": "Consumption", "money": "Cost"}})
+        self.assertEqual(caught.exception.reason,
+                         "kWh is an electric unit, not gas. Pick the unit that matches the fuel.")
+
+    def test_a_row_that_ends_before_it_starts_is_skipped_and_said(self):
+        lines = monthly().decode().splitlines()
+        lines[3] = "2024-03-28,2024-03-01,630,$126.00"
+        r = importers.read("\n".join(lines).encode(), "m.csv")
+        self.assertEqual(r.periods, 8)
+        self.assertTrue(any("ended before it started" in n for n in r.notes), r.notes)
+
+    def test_start_and_end_the_wrong_way_round_is_refused_with_the_question(self):
+        with self.assertRaisesRegex(importers.ImportFailed, "wrong way round"):
+            importers.read(CONSUMPTION, "m.csv", mapping={
+                "kind": "usage", "fuel": "Electric", "unit": "kWh",
+                "columns": {"start": "End", "end": "Start", "usage": "Consumption", "money": "Cost"}})
+
+    def test_rows_with_no_readable_date_or_amount_are_counted_not_dropped_quietly(self):
+        text = monthly().decode() + "\nTotal,,5000,$900.00\n2024-10-01,2024-10-28,n/a,$5.00\n"
+        r = importers.read(text.encode(), "m.csv")
+        self.assertEqual(r.periods, 9)
+        self.assertIn("2 rows with no readable date or amount were skipped.", r.notes)
+        text = bills(rows=3).decode() + "\n2024-04-01,soon,$5.00,Electric\n"
+        r = importers.read(text.encode(), "b.csv")
+        self.assertEqual(r.periods, 3)
+        self.assertIn("1 row with no readable date or amount was skipped.", r.notes)
+
+    def test_a_byte_order_mark_leaves_the_column_names_clean(self):
+        r = importers.read(b"\xef\xbb\xbf" + monthly(), "m.csv", mapping={
+            "kind": "usage", "fuel": "Electric", "unit": "kWh",
+            "columns": {"start": "Billing Start", "end": "Billing End", "usage": "Usage (kWh)"}})
+        self.assertEqual(r.periods, 9)
+
+    def test_a_windows_encoded_file_is_read(self):
+        r = importers.read(monthly().replace(b"Charges", "Co\u00fbt".encode("cp1252")), "m.csv")
+        self.assertEqual(r.periods, 9)
+
+    def test_quoted_thousands_are_one_number(self):
+        text = 'Billing Start,Billing End,Usage (kWh),Charges\n' + "\n".join(
+            f'2024-{m:02d}-01,2024-{m:02d}-28,"1,60{m}","$320.{m}0"' for m in range(1, 8))
+        r = importers.read(text.encode(), "m.csv")
+        self.assertEqual(greenbutton.parse(r.text).periods[0].kwh, 1601.0)
+
+    def test_a_file_with_too_many_rows_is_refused(self):
+        with unittest.mock.patch.object(importers, "MAX_ROWS", 5):
+            with self.assertRaisesRegex(importers.ImportFailed, "more rows"):
+                importers.read(monthly(), "m.csv")
+
+    def test_column_names_with_nothing_under_them_are_said(self):
+        with self.assertRaisesRegex(importers.ImportFailed, "column names but no rows under them"):
+            importers.sniff("Start,End,Usage (kWh),Cost\n")
+
+    def test_a_row_of_the_wrong_width_is_said_with_its_number(self):
+        with self.assertRaisesRegex(importers.ImportFailed, r"row 2 has 3 cells.*4"):
+            importers.sniff("Start,End,Usage (kWh),Cost\n2024-01-01,2024-01-28,600\n")
+
 
 class TestGreenButtonXml(unittest.TestCase):
     def test_interval_readings_are_added_up_by_month(self):
@@ -182,6 +261,18 @@ class TestGreenButtonXml(unittest.TestCase):
     def test_garbage_xml_is_refused(self):
         with self.assertRaises(importers.ImportFailed):
             importers.read(b"<feed><oops>", "gb.xml")
+
+    def test_a_reading_that_is_not_a_number_or_a_date_is_refused_in_words(self):
+        good = espi()
+        for label, bad in (
+                ("value", good.replace(b"<espi:value>13000<", b"<espi:value>lots<", 1)),
+                ("cost", good.replace(b"<espi:cost>3100000<", b"<espi:cost>lots<", 1)),
+                ("start", re.sub(rb"<espi:start>\d+", b"<espi:start>soon", good, count=1)),
+                ("huge start", re.sub(rb"<espi:start>\d+", b"<espi:start>99999999999999999999", good, count=1)),
+                ("multiplier", espi(multiplier="x")),
+                ("huge multiplier", espi(multiplier=400))):
+            with self.subTest(label), self.assertRaisesRegex(importers.ImportFailed, "isn't a number or a date"):
+                importers.read(bad, "gb.xml")
 
 
 class TestByHand(unittest.TestCase):
@@ -327,6 +418,18 @@ class TestUploadingFromAnotherUtility(WebCase):
     def test_junk_is_still_refused_outright(self):
         self.assertEqual(self.upload("n.csv", b"just,some,junk\n1,2,3\n").status_code, 400)
 
+    def test_a_column_choice_that_is_not_a_table_is_a_question_or_a_refusal_never_a_crash(self):
+        res = self.upload("m.csv", CONSUMPTION, mapping={
+            "kind": "usage", "fuel": "Electric", "unit": "kWh", "columns": "Start"})
+        self.assertIn(res.status_code, (200, 400), res.get_data(as_text=True)[:300])
+        if res.status_code == 200:
+            self.assertEqual(res.get_json()["uploads"][0]["kind"], "unsure")
+
+    def test_a_green_button_file_with_a_bad_reading_is_refused_not_a_crash(self):
+        res = self.upload("gb.xml", espi().replace(b"<espi:value>13000<", b"<espi:value>lots<", 1))
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("isn't a number or a date", res.get_json()["error"])
+
     def test_the_address_in_the_file_gives_the_state_and_a_figure_for_its_grid(self):
         self.upload("export.csv", daily())
         out = self.client.get("/api/insights").get_json()
@@ -429,6 +532,24 @@ class TestManualBill(WebCase):
     def test_bad_input_is_said_not_swallowed(self):
         self.post(fuel="Electric", due="", amount="150")
         self.assertIn("due", self.client.get("/connect").get_data(as_text=True))
+        self.assertFalse(self.user.paths.csv.exists())
+
+    def test_what_is_not_an_amount_is_refused_and_nothing_is_written(self):
+        for amount in ("1e9", "12abc34", "\u22125", "-5", "0", "(50)"):
+            with self.subTest(amount):
+                self.post(fuel="Gas", due="2026-10-16", amount=amount)
+                self.assertIn("Enter the amount", self.client.get("/connect").get_data(as_text=True))
+                self.assertFalse(self.user.paths.csv.exists())
+
+    def test_amounts_as_people_write_them_are_filed_as_written(self):
+        self.post(fuel="Gas", due="2026-09-16", amount="12,345.67")
+        self.post(fuel="Gas", due="2026-10-16", amount="$87.50")
+        series = self.client.get("/api/report?fuel=Gas").get_json()["series"]
+        self.assertEqual([r["amount"] for r in series], [12345.67, 87.5])
+
+    def test_a_date_that_does_not_exist_is_refused(self):
+        self.post(fuel="Gas", due="2026-02-30", amount="50")
+        self.assertIn("Enter the date", self.client.get("/connect").get_data(as_text=True))
         self.assertFalse(self.user.paths.csv.exists())
 
 

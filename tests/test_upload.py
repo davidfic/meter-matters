@@ -1,6 +1,7 @@
 """Tests for uploading exports through the web app."""
 
 import io
+import json
 import shutil
 import tempfile
 import unittest
@@ -9,7 +10,9 @@ from pathlib import Path
 from unittest import mock
 
 from metermatters.web import app as webapp
+from metermatters.intake import greenbutton
 from metermatters.intake import ingest
+from metermatters.intake import scan
 
 HISTORY = """Account# or Nickname,Account Type,Pay/Due Date,Type,Amount,Status,
 55500010001&lt;br&gt;(electric10),Electric,2026/03/20,Current Bill,$300.00,-
@@ -28,8 +31,12 @@ Electric billing,2025-12-20,2026-01-20,800.00,$400.00
 
 GAS_BILLING = BILLING.replace("55500010001", "55500030003").replace("kWh", "therms")
 
+# A usage file in no layout the loader knows by heart: the general importer reads it.
+GENERIC = "Start,End,Usage (kWh),Cost\n" + "\n".join(
+    f"2024-{m:02d}-01,2024-{m:02d}-28,{600 + m},${(600 + m) * 0.2:.2f}" for m in range(1, 8)) + "\n"
 
-def zipped(text: str, name: str = "BillingData.csv") -> bytes:
+
+def zipped(text: str | bytes, name: str = "BillingData.csv") -> bytes:
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as archive:
         archive.writestr(name, text)
@@ -106,9 +113,44 @@ class TestUsageUpload(UploadCase):
                 self.assertEqual(list(self.usage.iterdir()) if self.usage.exists() else [], [])
 
     def test_a_zip_bomb_is_refused(self):
-        with mock.patch.object(ingest, "MAX_UNPACKED_BYTES", 10):
-            res = self.post(("big.zip", zipped(BILLING)))
+        # Both ways in: the layout the loader knows by heart, and the general
+        # importer the app falls back to when that one says no.
+        for layout, text in (("eversource", BILLING), ("generic", GENERIC)):
+            with self.subTest(layout), mock.patch.object(ingest, "MAX_UNPACKED_BYTES", 10):
+                res = self.post(("big.zip", zipped(text)))
+                self.assertEqual(res.status_code, 400)
+                self.assertIn("unpacks to far more", res.get_json()["error"])
+                self.assertEqual(self.stored() if self.usage.exists() else [], [])
+
+    def test_a_zip_holding_only_another_zip_says_so(self):
+        res = self.post(("outer.zip", zipped(zipped(BILLING), "inner.zip")))
         self.assertEqual(res.status_code, 400)
+        self.assertIn("holds no csv or xml", res.get_json()["error"].lower())
+        self.assertEqual(self.stored() if self.usage.exists() else [], [])
+
+    def test_a_re_export_with_changed_figures_keeps_the_first_and_says_so(self):
+        # The loader keeps the first figure it meets for a period, reading files
+        # in name order - so here the first upload is also the first name.
+        self.post(("a-export.zip", zipped(BILLING)))
+        changed = BILLING.replace("$300.00", "$333.00").replace("$400.00", "$444.00")
+        upload, = self.post(("b-export.zip", zipped(changed))).get_json()["uploads"]
+        self.assertTrue(upload["stored"])
+        self.assertIn("2 periods", " ".join(upload.get("notes", [])))
+        self.assertEqual(sorted(p.cost for p in greenbutton.load_dir(self.usage).periods), [300.0, 400.0])
+
+    def test_an_error_keeps_its_own_capitals(self):
+        # str.capitalize() would make this "That zip holds no csv or xml file."
+        res = self.post(("outer.zip", zipped(zipped(BILLING), "inner.zip")))
+        self.assertEqual(res.get_json()["error"], "That zip holds no CSV or XML file.")
+
+    def test_a_generic_re_export_with_changed_figures_says_so_too(self):
+        # The same note as above, on the path through the general importer.
+        generic = "Start,End,Usage (kWh),Cost\n" + "\n".join(
+            f"2024-{m:02d}-01,2024-{m:02d}-28,{600 + m},${100 + m}.00" for m in range(1, 9))
+        self.post(("a-export.csv", generic.encode()))
+        upload, = self.post(("b-export.csv", generic.replace("$101.00", "$999.00").encode())).get_json()["uploads"]
+        self.assertTrue(upload["stored"])
+        self.assertIn("already on file", " ".join(upload.get("notes", [])))
 
     def test_masked_accounts_learn_their_real_number(self):
         row = ingest.bill_row("******0003 (gas)", "2026-03-20", 52.74, account_type="Gas")
@@ -139,7 +181,21 @@ class TestMixedUpload(UploadCase):
     def test_an_oversized_upload_is_refused(self):
         res = self.post(("huge.csv", b"x" * (6 * 1024 * 1024)))
         self.assertEqual(res.status_code, 413)
-        self.assertIn("error", res.get_json())
+        self.assertIn("export", res.get_json()["error"])
+
+    def test_an_oversized_scan_is_told_it_is_an_image(self):
+        with mock.patch.object(scan, "enabled", return_value=True):
+            res = self.client.post("/api/scan", content_type="multipart/form-data",
+                                   data={"file": (io.BytesIO(b"x" * (6 * 1024 * 1024)), "bill.png")})
+        self.assertEqual(res.status_code, 413)
+        self.assertIn("image", res.get_json()["error"])
+
+    def test_a_column_choice_goes_with_one_file_only(self):
+        data = {"file": [(io.BytesIO(GENERIC.encode()), "a.csv"), (io.BytesIO(GENERIC.encode()), "b.csv")],
+                "mapping": json.dumps({"kind": "usage", "fuel": "Electric", "unit": "kWh", "columns": {}})}
+        res = self.client.post("/api/upload", data=data, content_type="multipart/form-data")
+        self.assertEqual(res.status_code, 400)
+        self.assertFalse(self.usage.exists() and self.stored())
 
 
 class TestPages(UploadCase):

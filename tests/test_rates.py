@@ -1,5 +1,6 @@
 """Tests for the supply-offer comparison. Nothing here reaches the network."""
 
+import io
 import json
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -161,6 +162,18 @@ class TestApi(Held):
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.get_json()["series"], [])
         self.assertEqual(self.site.calls, [])
+
+    def test_bills_without_usage_say_that_usage_is_needed(self):
+        rows = ("Account# or Nickname,Account Type,Pay/Due Date,Type,Amount,Status,\n"
+                + "".join(f"74000011111,Electric,2026/{m:02d}/16,Current Bill,$100.00,-\n"
+                          for m in range(1, 7))).encode()
+        res = self.client.post("/api/upload", content_type="multipart/form-data",
+                               data={"file": [(io.BytesIO(rows), "AccountHistory.csv")]})
+        self.assertEqual(res.status_code, 200, res.get_data(as_text=True)[:200])
+        out = self.client.get("/api/rates").get_json()
+        self.assertEqual(out["series"], [])
+        self.assertIsInstance(out["error"], str)
+        self.assertIn("usage", out["error"].lower())
 
     def test_the_page_needs_signing_in(self):
         res = webapp_client().get("/rates")

@@ -130,5 +130,16 @@ class TestCli(unittest.TestCase):
         self.assertEqual(list(json.loads(self.state.read_text())), ["111|2026-11-12"])
 
 
+class TestFutureDated(unittest.TestCase):
+    def test_a_bill_dated_in_the_future_silences_nothing(self):
+        real = [date(2026, m, 16) for m in range(1, 10)]           # to 2026-09-16
+        rows = watchdog.check(bills(("Electric", "111", real),
+                                    ("Electric", "222", [date(2062, 1, 16)])), date(2026, 12, 1))
+        by_account = {r["account"]: r for r in rows}
+        self.assertIn("111", by_account)
+        self.assertTrue(by_account["111"]["overdue"])
+        self.assertFalse(by_account.get("222", {}).get("overdue"))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -64,9 +64,13 @@ def check(bills, today: date | None = None) -> list[dict]:
     for bill in bills:
         by_account.setdefault((bill.fuel, bill.account), []).append(bill.due)
 
+    # A statement dated in the future - a typo'd year on one account - must
+    # not make every other account of that fuel look superseded and current.
     newest_in_fuel: dict[str, date] = {}
     for (fuel, _), dues in by_account.items():
-        newest_in_fuel[fuel] = max(max(dues), newest_in_fuel.get(fuel, date.min))
+        past = [d for d in dues if d <= today]
+        if past:
+            newest_in_fuel[fuel] = max(max(past), newest_in_fuel.get(fuel, date.min))
 
     rows = []
     for (fuel, account), dues in sorted(by_account.items()):
@@ -74,7 +78,7 @@ def check(bills, today: date | None = None) -> list[dict]:
         last = dues[-1]
         # A renumbered account stops billing the day its successor starts.
         # Only the newest account of each fuel can be missing a bill.
-        if last < newest_in_fuel[fuel]:
+        if last < newest_in_fuel.get(fuel, date.min):
             continue
         interval = billing_interval(dues)
         expected = last + timedelta(days=interval - LEAD_DAYS)

@@ -157,6 +157,20 @@ class TestEmailFiling(unittest.TestCase):
         self.assertIn("Gas (email)", csv.read_text())
 
 
+class TestMergingStatementHistory(unittest.TestCase):
+    def test_rows_the_reader_would_throw_away_are_not_merged_or_counted(self):
+        tmp = Path(tempfile.mkdtemp())
+        junk = ("123,Electric,soon,Current Bill,$10.00,-,\n"            # no date
+                "123,Electric,2026/03/16,,$10.00,-,\n"                  # no type
+                "123,Electric,2026/03/16,Current Bill,ten dollars,-,\n")  # no amount
+        result = ingest.merge_csv_text(tmp / "AccountHistory.csv", HEAD + junk + row("123", "Electric", "2026/03/16", 200))
+        self.assertEqual((result.added, result.total), (1, 1))
+        text = (tmp / "AccountHistory.csv").read_text()
+        self.assertNotIn("soon", text)
+        self.assertNotIn("ten dollars", text)
+        self.assertEqual(len(analysis.read_entries(text)), 1)
+
+
 class TestZipsFromOtherPortals(unittest.TestCase):
     def test_a_zip_holding_an_unknown_csv_is_read(self):
         buffer = io.BytesIO()

@@ -43,10 +43,11 @@
     twenty-four random characters, one of roughly 10<sup>36</sup> possibilities, so it cannot be guessed.
     A message to an address that belongs to nobody is dropped, and the service is told it was accepted,
     so nobody can probe for real addresses by watching what bounces.</li>
-  <li><strong>The app checks who sent it.</strong> Only the utility's own sender address is accepted
-    (or, for a message you forwarded by hand, the utility's address quoted inside it). A message from
-    anyone else is logged as <em>Not filed</em> and nothing is read out of it. So a stranger who somehow
-    learns your address cannot plant a bill.</li>
+  <li><strong>The app checks who sent it.</strong> Only the utility's own sender address is accepted.
+    A message you forwarded by hand counts too, but only from the address you signed up with, and only
+    when the utility's address is quoted inside it. A message from anyone else is logged as
+    <em>Not filed</em> and nothing is read out of it. So a stranger who somehow learns your address
+    cannot plant a bill, whether or not they know what a forwarded bill looks like.</li>
   <li><strong>The utility's signature is checked.</strong> Utilities sign their mail (DKIM). The app
     verifies the signature and, depending on how the server is set, either files an unverified bill
     with a note in your log or refuses it.</li>

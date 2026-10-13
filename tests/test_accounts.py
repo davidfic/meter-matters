@@ -47,6 +47,34 @@ class TestRegister(HostedCase):
                 self.assertEqual(res.status_code, 400)
         self.assertEqual(accounts.everyone(), [])
 
+    def test_the_password_boundary_is_ten_characters(self):
+        res = self.client.post("/register", data={"email": "ann@example.com", "password": "x" * 9})
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(accounts.everyone(), [])
+        res = self.client.post("/register", data={"email": "ann@example.com", "password": "x" * 10})
+        self.assertEqual(res.status_code, 302)
+
+    def test_an_email_that_is_too_long_is_not_an_email(self):
+        email = "a" * 250 + "@example.com"
+        res = self.client.post("/register", data={"email": email, "password": PASSWORD})
+        self.assertEqual(res.status_code, 400)
+        self.assertIn(b"look like an email", res.data)
+        self.assertEqual(accounts.everyone(), [])
+
+    def test_an_address_google_vouched_for_cannot_be_taken_with_a_password(self):
+        accounts.from_google("sub-1", "ann@example.com", "Ann")
+        res = self.client.post("/register", data={"email": "ann@example.com", "password": PASSWORD})
+        self.assertEqual(res.status_code, 400)
+        self.assertIn(b"already an account", res.data)
+        for password in (PASSWORD, "", "x" * 10):
+            with self.subTest(password=password):
+                res = self.client.post("/login", data={"email": "ann@example.com", "password": password})
+                self.assertEqual(res.status_code, 401)
+        self.assertEqual(self.client.get("/api/report").status_code, 401)
+        user = accounts.by_email("ann@example.com")
+        self.assertTrue(user.has_google)
+        self.assertFalse(user.has_password)
+
     def test_sign_ups_can_be_closed(self):
         os.environ["ELEC_ALLOW_SIGNUP"] = "0"
         res = self.client.post("/register", data={"email": "ann@example.com", "password": PASSWORD})
@@ -100,6 +128,16 @@ class TestSignIn(HostedCase):
         for _ in range(accounts.MAX_FAILURES):
             self.sign_in(password="guess")
         res = self.sign_in()                    # even the right one, now
+        self.assertEqual(res.status_code, 401)
+        self.assertIn(b"Too many attempts", res.data)
+
+    def test_the_lockout_counts_the_address_whatever_its_case(self):
+        # From a different machine each time, so only the address's own count can lock it.
+        for i in range(accounts.MAX_FAILURES):
+            self.client.post("/login", data={"email": "ANN@example.com", "password": "guess"},
+                             environ_base={"REMOTE_ADDR": f"10.0.0.{i + 1}"})
+        res = self.client.post("/login", data={"email": "ann@example.com", "password": PASSWORD},
+                               environ_base={"REMOTE_ADDR": "10.0.0.99"})
         self.assertEqual(res.status_code, 401)
         self.assertIn(b"Too many attempts", res.data)
 
@@ -187,6 +225,30 @@ class TestSeparation(HostedCase):
         self.client.post("/account/delete", data={"confirm": "yes"})
         self.assertIsNotNone(accounts.by_email("ann@example.com"))
         self.assertTrue(self.ann.paths.csv.exists())
+
+    def test_deleting_takes_the_address_in_any_case_with_space_around_it(self):
+        res = self.client.post("/account/delete", data={"confirm": "  ANN@Example.com \t"})
+        self.assertEqual(res.status_code, 302)
+        self.assertIsNone(accounts.by_email("ann@example.com"))
+        self.assertFalse(self.ann.root.exists())
+
+
+class TestByHandUsage(HostedCase):
+    """A bill typed in with its usage: the usage half is checked before anything is written."""
+
+    def setUp(self):
+        super().setUp()
+        self.ann = self.sign_up()
+
+    def test_a_usage_figure_in_scientific_notation_is_not_a_number_here(self):
+        # parse_money refuses "1e9" outright, so nothing - not even the bill - is written.
+        res = self.client.post("/bills/add", data={
+            "fuel": "Electric", "due": "2026-10-16", "amount": "100", "used": "1e9",
+            "unit": "kWh", "start": "2026-09-01", "end": "2026-09-30"})
+        self.assertEqual(res.status_code, 302)
+        self.assertFalse(self.ann.paths.csv.exists())
+        self.assertFalse(self.ann.paths.usage.exists())
+        self.assertIn("give the amount used", self.client.get("/connect").get_data(as_text=True))
 
 
 class TestAdopt(HostedCase):

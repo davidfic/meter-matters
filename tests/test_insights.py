@@ -344,6 +344,16 @@ class TestCarbon(unittest.TestCase):
         self.assertEqual(insights.kg_per_unit("therms"), 5.3)
         self.assertEqual(insights.kg_per_unit("ccf"), 5.48)
 
+    def test_gas_metered_in_thousands_of_cubic_feet_has_a_footprint(self):
+        # One MCF is ten CCF, so the two figures must agree to within the
+        # rounding of their published sources.
+        self.assertGreater(insights.kg_per_unit("mcf"), 0)
+        self.assertAlmostEqual(insights.kg_per_unit("mcf"), 10 * insights.kg_per_unit("ccf"), delta=0.5)
+        gas = bills(lambda s, e: 0.2, unit="mcf", account="222")
+        c = insights.build(gas, weather())["carbon"]
+        self.assertIn("Gas", c["fuels"])
+        self.assertGreater(c["fuels"]["Gas"]["kg"], 0)
+
     def test_a_month_missing_one_fuel_is_left_out_not_counted_as_a_saving(self):
         temps = weather()
         electric = bills(lambda s, e: 30.0, count=36)
@@ -428,6 +438,35 @@ class TestTempsForCompare(unittest.TestCase):
         block = insights.build(periods, temps)["fuels"]["Electric"]
         self.assertEqual(len(block["temps"]), 16)
         self.assertIn(periods[0].end.isoformat(), block["temps"])
+
+
+class TestBadPeriods(unittest.TestCase):
+    """A stored export can carry a row whose end comes before its start."""
+
+    def test_a_period_ending_before_it_starts_is_left_out_not_fatal(self):
+        temps = weather()
+        good = bills(lambda s, e: 25.0, count=20)
+        bad = Period("111", date(2026, 3, 2), date(2026, 3, 1), 10, 5)
+        self.assertLess(bad.days, 1)
+        out = insights.build(good + [bad], temps)
+        block = out["fuels"]["Electric"]
+        self.assertEqual(block["periods"], len(good))
+        self.assertNotIn(bad.end.isoformat(), block["temps"])
+        self.assertEqual(block["last"], insights.month_year(good[-1].end))
+        self.assertIsNotNone(out["carbon"])
+        # The helpers the pages call on their own must shrug it off too.
+        wx = insights.Weather(temps)
+        self.assertFalse(wx.covers(bad))
+        self.assertEqual(len(insights.compare(good + [bad], None, wx)), len(insights.compare(good, None, wx)))
+        self.assertAlmostEqual(insights.unit_price(good + [bad]), insights.unit_price(good))
+        self.assertEqual(insights.standing_charge([bad]), 0.0)
+
+    def test_a_one_day_period_is_fine(self):
+        good = bills(lambda s, e: 25.0, count=14)
+        one = Period("111", date(2026, 3, 1), date(2026, 3, 1), 30, 12)
+        self.assertEqual(one.days, 1)
+        block = insights.build(good + [one], weather())["fuels"]["Electric"]
+        self.assertEqual(block["periods"], len(good) + 1)
 
 
 if __name__ == "__main__":

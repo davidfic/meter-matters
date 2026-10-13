@@ -283,21 +283,31 @@ def route(base: accounts.Paths, notices: list) -> tuple[dict[str, list], list]:
     rather than guessed at.
     """
     homes = active(base)
-    if len(homes) == 1:
+    # A deleted home can come back for thirty days. A bill for its account is
+    # held meanwhile, never filed in whichever home is left: a restore would
+    # otherwise find it in the wrong place.
+    gone = deleted(base)
+    if len(homes) == 1 and not gone:
         return {homes[0].id: list(notices)}, []
     owners = {}
+
+    def owns(home, suffix):
+        key = (home.id, suffix)
+        if key not in owners:
+            owners[key] = _owns(paths_for(base, home), suffix)
+        return owners[key]
+
     placed: dict[str, list] = {}
     held = []
     for notice in notices:
         suffix = notice.account_suffix
-        matches = []
-        if suffix:
-            for home in homes:
-                key = (home.id, suffix)
-                if key not in owners:
-                    owners[key] = _owns(paths_for(base, home), suffix)
-                if owners[key]:
-                    matches.append(home)
+        if suffix and any(owns(home, suffix) for home in gone):
+            held.append(notice)
+            continue
+        if len(homes) == 1:
+            matches = homes                     # nothing to decide between
+        else:
+            matches = [home for home in homes if suffix and owns(home, suffix)]
         if len(matches) == 1:
             placed.setdefault(matches[0].id, []).append(notice)
         else:
@@ -316,7 +326,7 @@ def file_notices(base: accounts.Paths, notices: list) -> billmail.Filed:
         total.added += done.added
         total.skipped += done.skipped
         total.new_accounts += done.new_accounts or []
-    total.held = hold(base, [n for n in held if n.fuel != "unknown"])
+    total.held, total.waiting, total.dropped = hold(base, [n for n in held if n.fuel != "unknown"])
     total.skipped += sum(1 for n in held if n.fuel == "unknown")
     return total
 
@@ -330,7 +340,29 @@ def _pending_read(base: accounts.Paths) -> list[dict]:
         rows = json.loads(_pending_path(base).read_text(encoding="utf-8"))
     except (FileNotFoundError, json.JSONDecodeError, OSError):
         return []
-    return [r for r in rows if isinstance(r, dict)] if isinstance(rows, list) else []
+    return [r for r in rows if _sound(r)] if isinstance(rows, list) else []
+
+
+def _sound(row) -> bool:
+    """A pending row the page can show and place. Anything else in the file -
+    a hand edit, a half-written row - is left out rather than left to crash."""
+    if not isinstance(row, dict) or not isinstance(row.get("id"), str):
+        return False
+    if isinstance(row.get("amount"), bool) or not isinstance(row.get("amount"), (int, float)):
+        return False
+    if row.get("fuel") not in ("electric", "gas"):
+        return False
+    if row.get("account_suffix") is not None and not isinstance(row["account_suffix"], str):
+        return False
+    for key in ("due", "bill_date", "received"):
+        value = row.get(key)
+        if value is None:
+            continue
+        try:
+            date.fromisoformat(value)
+        except (TypeError, ValueError):
+            return False
+    return True
 
 
 def _notice_row(notice) -> dict:
@@ -347,24 +379,31 @@ def _notice_from(row: dict):
     return billmail.BillNotice(**kept, **dates)
 
 
-def hold(base: accounts.Paths, notices: list) -> int:
-    """Keep bills no home claims, until the person says where they go. Returns how many are new."""
+def hold(base: accounts.Paths, notices: list) -> tuple[int, int, int]:
+    """Keep bills no home claims, until the person says where they go.
+
+    Returns how many are new, how many were already waiting, and how many were
+    not kept because too many are waiting - told apart so the log can say.
+    """
     if not notices:
-        return 0
+        return 0, 0, 0
     rows = _pending_read(base)
     seen = {(r.get("account_suffix"), r.get("due"), r.get("amount"), r.get("fuel")) for r in rows}
-    added = 0
+    added = waiting = dropped = 0
     for notice in notices:
         row = _notice_row(notice)
         key = (row["account_suffix"], row["due"], row["amount"], row["fuel"])
-        if key in seen or len(rows) >= MAX_PENDING:
-            continue
-        seen.add(key)
-        rows.append({"id": secrets.token_hex(4), **row})
-        added += 1
+        if key in seen:
+            waiting += 1
+        elif len(rows) >= MAX_PENDING:
+            dropped += 1
+        else:
+            seen.add(key)
+            rows.append({"id": secrets.token_hex(4), **row})
+            added += 1
     if added:
         storage.atomic_write_text(_pending_path(base), json.dumps(rows, indent=2) + "\n")
-    return added
+    return added, waiting, dropped
 
 
 def pending(base: accounts.Paths) -> list[dict]:

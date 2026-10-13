@@ -349,7 +349,8 @@ def bill_add():
         if usage:
             _store_manual_usage(*usage)
     except (importers.ImportFailed, ValueError) as exc:
-        flash(str(exc).capitalize() + ".", "err")
+        from metermatters.web import app as site
+        flash(site._sentence(str(exc)), "err")
         return redirect(url_for("web.connect") + "#byhand")
     flash(("Added that bill" if added else "That bill was already on file")
           + (" and its usage." if usage else "."))

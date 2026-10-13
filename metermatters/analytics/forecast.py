@@ -49,7 +49,8 @@ def _from_bills(series: list[dict], upto: int) -> float | None:
     month = series[upto]["month"]
     same = [r for r in before if r["month"] == month]
     recent = [r["amount"] for r in before[-3:]]
-    if same:
+    # A credit last year is not a bill to scale: "about −$30" is no estimate.
+    if same and same[-1]["amount"] > 0:
         last_year = same[-1]
         idx = before.index(last_year)
         then = [r["amount"] for r in before[max(0, idx - 2):idx + 1]]
@@ -113,10 +114,12 @@ def next_bill(series: list[dict], price: float | None = None,
     if amount is None:
         return None
     spread = miss if miss is not None else 0.2
+    # Kept in order whatever the sign of the estimate.
+    low, high = sorted((amount * (1 - spread), amount * (1 + spread)))
     return {
         "amount": round(amount, 2),
-        "low": round(amount * (1 - spread), 2),
-        "high": round(amount * (1 + spread), 2),
+        "low": round(low, 2),
+        "high": round(high, 2),
         "due": due.isoformat() if due else None,
         "days": days,
         "basis": basis,

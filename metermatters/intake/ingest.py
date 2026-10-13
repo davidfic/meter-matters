@@ -181,9 +181,20 @@ def merge_csv_text(path: Path, text: str, *, dry_run: bool = False) -> MergeResu
     rows = list(reader)
     if not rows:
         raise ValueError("that CSV has no data rows")
-    if not analysis.read_entries(text):
+    # Only rows the reader will keep go in: one it would throw away is neither
+    # history nor an addition, and must not be written or counted as one.
+    rows = [r for r in rows if _readable(r)]
+    if not rows:
         raise ValueError("no usable bill or payment rows found in that CSV")
     return merge(path, rows, reader.fieldnames or [], dry_run=dry_run)
+
+
+def _readable(row: dict) -> bool:
+    """What analysis.read_entries asks of a row, so the two can't drift apart."""
+    row = _norm(row)
+    return (analysis.parse_date(row.get("Pay/Due Date", "")) is not None
+            and bool(analysis.clean_cell(row.get("Type", "")))
+            and analysis.parse_money(row.get("Amount", "")) is not None)
 
 
 def bill_row(account: str, due: str, amount: float, *,
@@ -345,8 +356,33 @@ def store_usage(usage_dir: Path, filename: str, data: bytes) -> dict:
                 # further back than the portal's window now does.
                 n += 1
                 target = usage_dir / f"{Path(name).stem}-{n}{Path(name).suffix}"
+            before = _by_start(greenbutton.load_dir(usage_dir).periods)
             os.chmod(tmp, 0o644)
             os.replace(tmp, target)
-        return {**result, "stored": True, "name": target.name}
+            notes = _kept_note(periods, before, _by_start(greenbutton.load_dir(usage_dir).periods)) \
+                if before else []
+        return {**result, "stored": True, "name": target.name, "notes": notes}
     finally:
         tmp.unlink(missing_ok=True)
+
+
+def _by_start(periods) -> dict:
+    return {(p.account, p.unit.lower(), p.start): p for p in periods}
+
+
+def _kept_note(periods, before: dict, after: dict) -> list[str]:
+    """Periods this file figures differently from the file already holding them.
+
+    The loader keeps the first figure it has for a period (see load_all), so a
+    re-export with corrected numbers changes nothing on the page. Say so, or
+    the person sees the old figures and takes it that the upload didn't land.
+    """
+    kept = 0
+    for p in periods:
+        key = (p.account, p.unit.lower(), p.start)
+        if key in before and key in after and (after[key].kwh, after[key].cost) != (p.kwh, p.cost):
+            kept += 1
+    if not kept:
+        return []
+    return [f"Figures for {kept} period{'s' if kept != 1 else ''} already on file differ in this "
+            "file; the ones already on file were kept."]

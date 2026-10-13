@@ -1,5 +1,6 @@
 """Tests for sessions ending when they must, and for saves that say what happened."""
 
+import os
 import unittest
 from unittest import mock
 
@@ -37,6 +38,45 @@ class TestSessionsEnd(HostedCase):
         res = self.client.post("/login", data={"email": "ann@example.com", "password": PASSWORD})
         self.assertEqual(res.status_code, 302)
         self.assertEqual(self.client.get("/connect").status_code, 200)
+
+
+class TestTheCookieAndWhoMaySend(HostedCase):
+    def setUp(self):
+        super().setUp()
+        self.sign_up()
+        self.client.post("/logout")
+
+    def sign_in(self):
+        return self.client.post("/login", data={"email": "ann@example.com", "password": PASSWORD})
+
+    def test_the_cookie_is_secure_when_the_site_is(self):
+        # The flag is computed from ELEC_BASE_URL when the app is imported, so
+        # the env is too late to set here: patch the config the flag ended up in.
+        from metermatters.web import app as webapp
+        with mock.patch.dict(webapp.app.config, {"SESSION_COOKIE_SECURE": True}):
+            cookie = self.sign_in().headers["Set-Cookie"]
+        self.assertIn("Secure", cookie)
+        self.assertNotIn("Secure", self.sign_in().headers["Set-Cookie"])
+
+    def test_only_our_own_pages_may_post(self):
+        self.sign_in()
+        for site, status in (("same-site", 403), ("cross-site", 403), ("none", 200), (None, 200)):
+            with self.subTest(site=site):
+                headers = {"Sec-Fetch-Site": site} if site else {}
+                res = self.client.post("/api/settings", json={"goal": 1}, headers=headers)
+                self.assertEqual(res.status_code, status)
+
+    def test_a_browser_session_is_not_a_task_token(self):
+        self.sign_in()
+        with mock.patch.dict(os.environ, {"ELEC_TASK_TOKEN": "tok-123"}):
+            self.assertEqual(self.client.post("/api/tasks/check").status_code, 403)
+            self.assertEqual(self.client.post("/api/tasks/check",
+                                              headers={"Authorization": "Bearer wrong"}).status_code, 403)
+
+    def test_signed_in_the_login_page_never_sends_you_off_site(self):
+        self.sign_in()
+        res = self.client.get("/login?next=https://evil.example")
+        self.assertEqual((res.status_code, res.headers["Location"]), (302, "/"))
 
 
 class TestSavesAreHonest(HostedCase):

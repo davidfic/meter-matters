@@ -47,21 +47,30 @@ def clean_cell(value: str) -> str:
 
 
 def parse_money(value: str) -> float | None:
-    """``"$1,248.26"`` -> ``1248.26``. Returns None for blanks and placeholders."""
+    """``"$1,248.26"`` -> ``1248.26``. Returns None for blanks and placeholders.
+
+    Tolerates what exports and people put around a number - a currency sign,
+    commas, a unit word, accounting parentheses or a trailing "CR" for a
+    credit - and nothing else. Stripping every stray character used to turn
+    "12abc34" into 1234 and "1e9" into 19, which is worse than no number.
+    """
     if value is None:
         return None
-    text = str(value).strip()
+    text = str(value).strip().replace("\u2212", "-").replace("\u2013", "-")
     if not text or text in {"-", "--", "N/A"}:
         return None
     negative = text.startswith("(") and text.endswith(")")
-    text = re.sub(r"[^0-9.\-]", "", text)
-    if not text or text in {"-", ".", "-."}:
+    if negative:
+        text = text[1:-1]
+    text = re.sub(r"[\s,$\u20ac\u00a3\u00a5]", "", text)
+    unit = re.search(r"[A-Za-z]+$", text)
+    if unit:
+        text = text[:unit.start()]
+        negative = negative or unit.group().lower() == "cr"
+    if not re.fullmatch(r"-?(\d+(\.\d*)?|\.\d+)", text):
         return None
-    try:
-        amount = float(text)
-    except ValueError:
-        return None
-    return -amount if negative else amount
+    amount = float(text)
+    return -abs(amount) if negative else amount
 
 
 def parse_date(value: str) -> date | None:
@@ -184,6 +193,20 @@ def load_entries(path) -> list[Entry]:
         return read_entries(handle.read())
 
 
+def fuel_name(account_type: str | None) -> str:
+    """The fuel a bill row names, spelled the app's way.
+
+    Exports and people write "ELECTRIC", "electric" and " Electric "; all of
+    them are the electric page, not three fuels nobody can open. Blank means
+    electric, as it always has. A name the app doesn't know is kept as given.
+    """
+    cleaned = (account_type or "").strip()
+    if not cleaned:
+        return "Electric"
+    known = fuels.BY_NAME.get(cleaned.capitalize())
+    return known.name if known else cleaned
+
+
 def _month_before(period: str) -> str:
     year, month = (int(x) for x in period.split("-"))
     return f"{year - 1}-12" if month == 1 else f"{year}-{month - 1:02d}"
@@ -205,7 +228,7 @@ def build_bills(entries: list[Entry]) -> list[Bill]:
     groups: dict[tuple[str, str], list[Entry]] = {}
     for entry in entries:
         if entry.kind == BILL_TYPE:
-            groups.setdefault((entry.account, entry.account_type or "Electric"), []).append(entry)
+            groups.setdefault((entry.account, fuel_name(entry.account_type)), []).append(entry)
 
     bills: dict[tuple[str, str, str], Bill] = {}
     for (account, fuel), group in groups.items():
@@ -839,7 +862,7 @@ def raw_rows(entries: list[Entry], bills: list[Bill]) -> list[dict]:
         row = {
             "date": entry.when.isoformat(),
             "period": entry.period,
-            "fuel": entry.account_type or "Electric",
+            "fuel": fuel_name(entry.account_type),
             "account": entry.account,
             "nickname": entry.nickname,
             "type": entry.kind,

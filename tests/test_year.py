@@ -5,6 +5,7 @@ from unittest import mock
 
 from metermatters.store import accounts
 from metermatters.analytics import benchmarks
+from metermatters.store import homes
 from metermatters.analytics import yearly
 from tests.test_importers import WebCase, daily
 
@@ -95,6 +96,39 @@ class TestSharing(WebCase):
         self.assertEqual(webapp.app.test_client().get(f"/s/{token}").status_code, 404)
 
 
+class TestSharingOneOfSeveralHomes(WebCase):
+    def setUp(self):
+        super().setUp()
+        self.client.post("/homes/add", data={"name": "Cabin"})
+        self.cabin = homes.find(self.user.paths, "cabin")
+        self.assertEqual(self.upload("export.csv", daily(), prefix="/home/cabin").status_code, 200)
+        res = self.client.post("/home/cabin/api/share/year/2024", json={})
+        self.assertEqual(res.status_code, 200, res.get_data(as_text=True))
+        self.token = res.get_json()["token"]
+
+    def test_a_deleted_homes_link_is_dark_until_the_home_is_restored(self):
+        from metermatters.web import app as webapp
+        stranger = webapp.app.test_client()
+        self.assertEqual(stranger.get(f"/s/{self.token}").status_code, 200)
+        self.client.post(f"/homes/{self.cabin.id}/delete", data={"confirm": "Cabin"})
+        self.assertEqual(stranger.get(f"/s/{self.token}").status_code, 404)
+        self.assertEqual(stranger.get(f"/s/{self.token}.svg").status_code, 404)
+        self.client.post(f"/homes/{self.cabin.id}/restore")
+        self.assertEqual(stranger.get(f"/s/{self.token}").status_code, 200)
+
+    def test_a_signed_in_stranger_sees_the_year_and_nothing_about_whose_it_is(self):
+        from metermatters.web import app as webapp
+        stranger = webapp.app.test_client()
+        self.sign_up("bea@example.com", client=stranger)
+        res = stranger.get(f"/s/{self.token}")
+        self.assertEqual(res.status_code, 200)
+        html = res.get_data(as_text=True)
+        self.assertIn("2024", html)
+        for private in ("My home", "Cabin", "home-switch", "ann@example.com", "bea@example.com",
+                        "9876543210", "Sign out"):
+            self.assertNotIn(private, html, private)
+
+
 class TestBenchmarks(WebCase):
     def homes_in(self, state, n, per_day=20.0):
         for i in range(n):
@@ -147,6 +181,39 @@ class TestBenchmarks(WebCase):
         self.upload("export.csv", daily(preamble=False))      # no address, no state
         with benchmarks.db.connect() as conn:
             self.assertEqual(conn.execute("SELECT COUNT(*) AS n FROM benchmarks").fetchone()["n"], 0)
+
+
+HEADER = "Account# or Nickname,Account Type,Pay/Due Date,Type,Amount,Status,\n"
+
+
+def statements(*rows):
+    return (HEADER + "".join(f"9876543210,Electric,{due},Current Bill,{amount},-\n"
+                             for due, amount in rows)).encode()
+
+
+class TestCreditYear(WebCase):
+    def test_a_year_holding_one_bill_renders(self):
+        self.upload("AccountHistory.csv", statements(("2023/06/16", "$100.00")))
+        res = self.client.get("/year/2023")
+        self.assertEqual(res.status_code, 200)
+        self.assertIn("2023", res.get_data(as_text=True))
+
+    def test_a_credit_only_month_renders(self):
+        self.upload("AccountHistory.csv", statements(("2025/01/16", "$100.00"), ("2025/02/16", "$110.00"),
+                                                     ("2025/03/16", "($20.00)")))
+        for path in ("/year", "/year/2025", "/", "/api/overview"):
+            with self.subTest(path):
+                self.assertEqual(self.client.get(path).status_code, 200)
+
+    def test_exactly_enough_other_homes_is_enough(self):
+        self.upload("export.csv", daily())
+        with benchmarks.db.connect() as conn:
+            for i in range(benchmarks.MIN_HOMES):
+                conn.execute("INSERT INTO benchmarks (home_key, fuel, state, per_day, unit, updated_at) "
+                             "VALUES (?, ?, ?, ?, ?, ?)",
+                             (f"other-CA-{i}", "Electric", "CA", 20.0 + i, "kWh", "2026-01-01"))
+        sim = self.client.get("/api/insights").get_json()["fuels"]["Electric"]["similar"]
+        self.assertEqual((sim["status"], sim["count"]), ("ok", benchmarks.MIN_HOMES))
 
 
 if __name__ == "__main__":

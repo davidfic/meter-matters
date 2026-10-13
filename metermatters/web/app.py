@@ -13,6 +13,7 @@ from __future__ import annotations
 import copy
 import hmac
 import json
+import math
 import os
 import re
 import sqlite3
@@ -80,7 +81,8 @@ DEFAULT_STATE = {
     # day it began - "Electric:2025-10-21": "space heater in the office".
     "notes": {},
 }
-NOTE_KEY = re.compile(r"^(Electric|Gas):\d{4}-\d{2}-\d{2}$")
+# Every fuel, not a list of them: a step-change alert can be raised for any.
+NOTE_KEY = re.compile(r"^(" + "|".join(fuels.NAMES) + r"):\d{4}-\d{2}-\d{2}$")
 MAX_NOTES, MAX_NOTE_LENGTH = 50, 200
 
 app = Flask(__name__)
@@ -283,7 +285,7 @@ def fuels_on_file() -> set[str]:
     if p is None or not p.csv.exists():
         return set()
     try:
-        return {e.account_type or "Electric" for e in analysis.load_entries(p.csv)}
+        return {analysis.fuel_name(e.account_type) for e in analysis.load_entries(p.csv)}
     except (OSError, ValueError):
         return set()
 
@@ -334,9 +336,10 @@ def load_state() -> dict:
     try:
         stored = json.loads(paths().state.read_text(encoding="utf-8"))
         if isinstance(stored, dict):
-            state.update({k: v for k, v in stored.items() if k in DEFAULT_STATE})
-            if not isinstance(state.get("notes"), dict):
-                state["notes"] = {}
+            # Checked as if it had just been posted: the file can be edited by
+            # hand, and a goal of "200" would otherwise fail every report.
+            state = coerce_settings({k: v for k, v in stored.items() if k in DEFAULT_STATE}, state)
+            state["notes"] = stored["notes"] if isinstance(stored.get("notes"), dict) else {}
     except (FileNotFoundError, json.JSONDecodeError):
         pass
     return state
@@ -356,7 +359,8 @@ def coerce_settings(payload: dict, state: dict) -> dict:
         else:
             try:
                 value = float(goal)
-                updated["goal"] = round(value, 2) if value > 0 else None
+                # "inf" passes "> 0", and json writes it as Infinity, which no browser reads.
+                updated["goal"] = round(value, 2) if math.isfinite(value) and value > 0 else None
             except (TypeError, ValueError):
                 pass
     if "target_pct" in payload:
@@ -373,7 +377,12 @@ def coerce_settings(payload: dict, state: dict) -> dict:
         value = payload["account"]
         updated["account"] = str(value)[:100] if isinstance(value, (str, int)) and value else None
     if "fuel" in payload:
-        updated["fuel"] = payload["fuel"] or "Electric"
+        # Only a utility the app knows, under its own name. Anything else kept
+        # here would be written to disk and then crash every report.
+        value = payload["fuel"]
+        known = {name.lower(): name for name in fuels.NAMES}
+        if isinstance(value, str) and value.strip().lower() in known:
+            updated["fuel"] = known[value.strip().lower()]
     if "merge_accounts" in payload:
         updated["merge_accounts"] = bool(payload["merge_accounts"])
     if "game_window_months" in payload:
@@ -1001,7 +1010,12 @@ def rates_page():
 
 @app.get("/api/rates")
 def api_rates():
-    return jsonify(build_rates(load_state()))
+    out = build_rates(load_state())
+    # Bills without usage: there is a page's worth of nothing to draw, and
+    # the one thing to say is what would fill it.
+    if not out["series"] and not out.get("error"):
+        out["error"] = "No usage on file yet - upload a usage export to see your price per kWh."
+    return jsonify(out)
 
 
 @app.post("/api/rates/supply")
@@ -1023,6 +1037,8 @@ def api_insights():
 def api_notes():
     """Say what a change in usage was - or, with no text, take the note back."""
     payload = request.get_json(silent=True) or {}
+    if not isinstance(payload, dict):
+        return jsonify({"error": "Send the note as a JSON object."}), 400
     key = str(payload.get("key") or "")
     text = " ".join(str(payload.get("text") or "").split())[:MAX_NOTE_LENGTH]
     if not NOTE_KEY.match(key):
@@ -1043,9 +1059,19 @@ def api_notes():
 @app.post("/api/settings")
 def api_settings():
     payload = request.get_json(silent=True) or {}
+    if not isinstance(payload, dict):
+        return jsonify({"error": "Send the settings as a JSON object."}), 400
     state = coerce_settings(payload, load_state())
     save_state(state)
-    return jsonify(build_report(state, fuel=payload.get("fuel")))
+    # The fuel as checked, not as sent: the report must not be built for a fuel that was refused.
+    return jsonify(build_report(state, fuel=state["fuel"] if "fuel" in payload else None))
+
+
+def _sentence(text: str) -> str:
+    """An error written in lower case, as a sentence - without str.capitalize(),
+    which would lower-case everything after the first letter ("csv or xml")."""
+    text = text.strip()
+    return (text[:1].upper() + text[1:] + ("" if text.endswith(".") else ".")) if text else "Something went wrong."
 
 
 def ingest_upload(filename: str, data: bytes, mapping: dict | None = None) -> dict:
@@ -1081,7 +1107,9 @@ def ingest_upload(filename: str, data: bytes, mapping: dict | None = None) -> di
     made = backfill.fill_missing(paths().csv, paths().usage)
     if paths().csv.exists():
         stored["renamed"] = len(ingest.reconcile_accounts(paths().csv, stored["accounts"]))
-    return {**stored, "notes": found.notes, "bills_made": made}
+    # The store's own notes (a figure already on file that this file disagrees
+    # with) come before the importer's, which are about the file itself.
+    return {**stored, "notes": list(stored.get("notes") or []) + found.notes, "bills_made": made}
 
 
 def _adopt_account(found: importers.Result) -> None:
@@ -1161,7 +1189,7 @@ def api_upload():
         try:
             outcome = ingest_upload(upload.filename, upload.read(), mapping)
         except ValueError as exc:
-            outcome = {"kind": "error", "error": str(exc).capitalize() + "."}
+            outcome = {"kind": "error", "error": _sentence(str(exc))}
         results.append({"file": upload.filename, **outcome})
 
     if all(r["kind"] == "error" for r in results):
@@ -1249,4 +1277,7 @@ app.register_blueprint(docs.bp)
 
 @app.errorhandler(413)
 def too_large(_error):
+    # The same limit guards two very different uploads; say which one was hit.
+    if request.path.endswith("/api/scan"):
+        return jsonify({"error": "That image is too large - under 5 MB, please."}), 413
     return jsonify({"error": "That file is too large to be an export."}), 413

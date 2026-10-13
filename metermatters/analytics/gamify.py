@@ -134,7 +134,11 @@ def achievements(report: dict) -> list[dict]:
     streak = summary.get("streak", 0)
     best = summary.get("best_streak", 0)
     drops = [row for row in series if row["improved"]]
+    pcts = [row["pct"] for row in series if row["pct"] is not None]
     big_drops = [row for row in series if row["pct"] is not None and row["pct"] <= -10]
+    # A credit is not a bill: the lowest statement, and the "under $X" marks,
+    # are judged over what was actually charged.
+    charged = [row for row in series if row["amount"] > 0]
     yoy_wins = [row for row in yoy if row["delta"] is not None and row["delta"] < 0]
 
     badges: list[dict] = []
@@ -161,10 +165,10 @@ def achievements(report: dict) -> list[dict]:
             "earned": bool(big_drops),
             "earned_on": big_drops[0]["label"] if big_drops else None,
             "progress": 1.0 if big_drops else 0.0,
+            # A statement after a $0.00 one has no percentage, so two
+            # statements need not mean one comparison.
             "detail": (
-                f"Biggest cut: {min(r['pct'] for r in series if r['pct'] is not None):.1f}%"
-                if len(series) > 1
-                else "Need a second statement"
+                f"Biggest cut: {min(pcts):.1f}%" if pcts else "Need a second statement"
             ),
         }
     )
@@ -179,8 +183,9 @@ def achievements(report: dict) -> list[dict]:
     # A record is set when a statement comes in below everything before it.
     # Once set it stays earned: a badge that unlocks in May and re-locks in
     # June isn't a badge, it's the weather.
-    records = [row for i, row in enumerate(series)
-               if i > 0 and row["amount"] < min(r["amount"] for r in series[:i])]
+    records = [row for i, row in enumerate(charged)
+               if i > 0 and row["amount"] < min(r["amount"] for r in charged[:i])]
+    lowest = min(charged, key=lambda r: r["amount"]) if charged else None
     badges.append(
         {
             "id": "record-low",
@@ -191,8 +196,8 @@ def achievements(report: dict) -> list[dict]:
             "earned_on": records[-1]["label"] if records else None,
             "progress": 1.0 if records else 0.0,
             "detail": (
-                f"Record: ${summary['lowest']['amount']:,.2f} in {summary['lowest']['label']}"
-                if summary.get("lowest")
+                f"Record: ${lowest['amount']:,.2f} in {lowest['label']}"
+                if lowest
                 else "No statements yet"
             ),
         }
@@ -218,12 +223,12 @@ def achievements(report: dict) -> list[dict]:
 
     # Relative to this home's own typical statement: a fixed dollar line is
     # free for a gas account and out of reach for a big electric one.
-    typical = _median([row["amount"] for row in series]) if series else 0.0
+    typical = _median([row["amount"] for row in charged]) if charged else 0.0
     for share, name in ((0.9, "Ten Off"), (0.8, "Twenty Off"), (0.7, "Thirty Off")):
         limit = _nice(typical * share)
         if not limit:
             break
-        badge = _threshold_badge(series, limit, name, "target",
+        badge = _threshold_badge(charged, limit, name, "target",
                                  f"Land a statement under ${limit:,.0f} - "
                                  f"{round((1 - share) * 100)}% below your typical.")
         if badge:

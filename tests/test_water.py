@@ -104,5 +104,22 @@ class TestWaterPages(WebCase):
         self.assertNotIn("Water", (out.get("carbon") or {}).get("fuels", {}))
 
 
+class TestFuelNamesOnThePage(WebCase):
+    HEADER = "Account# or Nickname,Account Type,Pay/Due Date,Type,Amount,Status,\n"
+
+    def test_shouted_and_padded_account_types_land_on_the_electric_page(self):
+        rows = (self.HEADER + '9876543210,ELECTRIC,2026/01/16,Current Bill,$100.00,-\n'
+                '9876543210," Electric ",2026/02/16,Current Bill,$110.00,-\n').encode()
+        res = self.upload("AccountHistory.csv", rows)
+        self.assertEqual(res.status_code, 200, res.get_data(as_text=True)[:200])
+        report = self.client.get("/api/report?fuel=Electric").get_json()
+        self.assertFalse(report.get("empty"))
+        self.assertEqual([r["amount"] for r in report["series"]], [100.0, 110.0])
+        self.assertEqual(report["fuels"], ["Electric"])
+        overview = self.client.get("/api/overview").get_json()
+        self.assertEqual([c["fuel"] for c in overview["fuels"]], ["Electric"])
+        self.assertEqual(self.client.get("/electric").status_code, 200)
+
+
 if __name__ == "__main__":
     unittest.main()

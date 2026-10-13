@@ -45,8 +45,11 @@ from metermatters import fuels
 KG_PER_KWH = 543.178 * 0.45359237 / 1000
 _GRID = contextvars.ContextVar("grid", default=KG_PER_KWH)
 # EPA Greenhouse Gas Equivalencies Calculator: 0.0053 t CO2 per therm, and
-# 0.0548 t per thousand cubic feet.
-KG_PER_UNIT = {"therms": 5.3, "therm": 5.3, "ccf": 5.48}
+# 0.0548 t per thousand cubic feet (so a tenth of that per hundred). A gas
+# meter that reads in thousands is one MCF ≈ 10.37 therms (EIA: 1,037 Btu a
+# cubic foot), and the therm figure times that is within a percent of the
+# EPA's own per-MCF number.
+KG_PER_UNIT = {"therms": 5.3, "therm": 5.3, "ccf": 5.48, "mcf": 5.3 * 10.37}
 
 
 @contextlib.contextmanager
@@ -79,6 +82,17 @@ def kg_per_unit(unit: str) -> float:
     return _GRID.get() if fuels.of_unit(key) is fuels.ELECTRIC else 0.0
 
 
+def metered(periods: list) -> list:
+    """Only the periods that have at least one day in them.
+
+    An export can carry a row whose end comes before its start. Nothing per
+    day can be read from it, and one such row used to take every page down
+    with a division by zero. The importer refuses them now, but a file stored
+    before it did is still on disk, so they are dropped here as well.
+    """
+    return [p for p in periods if p.days >= 1]
+
+
 def timeline(periods: list) -> list:
     """One continuous run of periods from whatever accounts there are.
 
@@ -88,7 +102,7 @@ def timeline(periods: list) -> list:
     out rather than added on top.
     """
     by_account: dict[str, list] = {}
-    for p in periods:
+    for p in metered(periods):
         by_account.setdefault(p.account, []).append(p)
     runs = sorted(by_account.values(), key=lambda run: max(p.end for p in run), reverse=True)
     kept: list = []
@@ -117,7 +131,8 @@ class Weather:
             day += timedelta(days=1)
 
     def covers(self, p) -> bool:
-        return bool(self.temps) and all(d in self.temps for d in self.days(p))
+        # A period with no days in it is covered by nothing: all([]) is True.
+        return bool(self.temps) and p.days >= 1 and all(d in self.temps for d in self.days(p))
 
     def _degrees(self, p, base: float, sign: int) -> float:
         key = (p.start, p.end, base, sign)
@@ -137,7 +152,7 @@ class Weather:
         return mean(self.temps[d] for d in self.days(p))
 
     def covers_dryness(self, p) -> bool:
-        return bool(self.need) and all(d in self.need for d in self.days(p))
+        return bool(self.need) and p.days >= 1 and all(d in self.need for d in self.days(p))
 
     def dryness(self, p) -> float:
         """Inches of watering need a day, averaged over the period."""
@@ -291,6 +306,7 @@ def year_before(p, periods: list):
 
 def compare(periods: list, model: Model | None, wx: Weather) -> list[dict]:
     """Each period against a year earlier, split into weather, price and you."""
+    periods = metered(periods)
     typical = mean(p.kwh_per_day for p in periods) if periods else 0.0
     rows = []
     for p in periods:
@@ -355,6 +371,9 @@ def standing_charge(periods: list) -> float:
     there is nothing to read it from, and it is taken as zero: the price per
     unit then comes out a few percent high rather than being guessed at.
     """
+    periods = metered(periods)
+    if not periods:
+        return 0.0
     typical = mean(p.kwh_per_day for p in periods)
     quiet = [p for p in periods[-24:] if p.kwh_per_day < typical * 0.10]
     return min((p.cost / p.days for p in quiet), default=0.0)
@@ -368,7 +387,8 @@ def unit_price(periods: list, over: list | None = None) -> float:
     against usage: prices change through the year, and the slope mistakes
     "cheaper in the months I use more" for a lower price.
     """
-    over = [p for p in (over if over is not None else periods[-12:])
+    periods = metered(periods)
+    over = [p for p in metered(over if over is not None else periods[-12:])
             if p.kwh and getattr(p, "priced", True)]
     used = sum(p.kwh for p in over)
     if not used:

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import csv
 import io
+import math
 import re
 import statistics
 import xml.etree.ElementTree as ET
@@ -62,6 +63,7 @@ def _water_units(unit, fuel):
 # currency.
 ESPI_UOM = {"72": "wh", "169": "therm", "42": "m3", "119": "cf"}
 ESPI_COST_SCALE = 1e-5
+BAD_READING = "that Green Button file has a reading that isn't a number or a date"
 
 
 class ImportFailed(ValueError):
@@ -132,15 +134,25 @@ def sniff(text: str) -> Table:
     parsed = list(csv.reader(io.StringIO(text), delimiter=delimiter))
     if len(parsed) > MAX_ROWS:
         raise ImportFailed("that file has more rows than can be read")
-    # The header is the first row of 3+ cells that is followed by a row of the same width.
-    for i, row in enumerate(parsed[:-1]):
+    # The header is a row of 3+ named cells followed by a row of the same width.
+    # A row of names that isn't is remembered, so the refusal can say what was
+    # wrong under it rather than that nothing was found.
+    problem = None
+    for i, row in enumerate(parsed):
         cells = [c for c in row if c.strip()]
-        if len(cells) >= 3 and len(parsed[i + 1]) == len(row) \
-                and any(re.search(r"[A-Za-z]", c) for c in cells) \
-                and not any(re.fullmatch(r"[\d.,$\-/: ]+", c.strip()) for c in cells if c.strip()):
-            body = [r for r in parsed[i + 1:] if any(c.strip() for c in r)]
-            return Table(parsed[:i], [c.strip() for c in row], body)
-    raise ImportFailed("couldn't find a row of column names in that file")
+        if not (len(cells) >= 3 and any(re.search(r"[A-Za-z]", c) for c in cells)
+                and not any(re.fullmatch(r"[\d.,$\-/: ]+", c.strip()) for c in cells if c.strip())):
+            continue
+        below = [(j, r) for j, r in enumerate(parsed[i + 1:], i + 1) if any(c.strip() for c in r)]
+        if below and len(below[0][1]) == len(row):
+            return Table(parsed[:i], [c.strip() for c in row], [r for _, r in below])
+        if not below:
+            problem = "that file has column names but no rows under them"
+        else:
+            j, first = below[0]
+            problem = (f"row {j + 1} has {len(first)} cells but the column names on row {i + 1} "
+                       f"have {len(row)}")
+    raise ImportFailed(problem or "couldn't find a row of column names in that file")
 
 
 ROLES = {
@@ -250,10 +262,24 @@ def understand(table: Table, mapping: dict | None = None) -> dict:
 
     if mapping:
         cols = {}
-        for role, name in (mapping.get("columns") or {}).items():
-            if role in ROLES and name in headers:
+        # The form sends a table of role -> column name. Anything else is no choice at all.
+        columns = mapping.get("columns")
+        for role, name in (columns.items() if isinstance(columns, dict) else ()):
+            if role in ROLES and isinstance(name, str) and name in headers:
+                twice = next((r for r, i in cols.items() if i == headers.index(name)), None)
+                if twice:
+                    raise Unsure(headers, sample_rows, {"columns": {r: headers[i] for r, i in cols.items()}},
+                                 f"{name} is picked as both {twice} and {role}. A column can only be one of them.")
                 cols[role] = headers.index(name)
     guess = {role: headers[i] for role, i in cols.items()}
+
+    if "fuel" in cols:
+        # A combined export lists electric and gas rows side by side. One fuel
+        # per upload keeps every figure on one axis; say which, as the XML reader does.
+        said = {_fuel_word(_cell(r, cols, "fuel")) for r in table.rows} - {None}
+        if len(said) > 1:
+            raise ImportFailed("that file holds more than one fuel (" + " and ".join(sorted(said))
+                               + "); export one at a time")
 
     kind = (mapping or {}).get("kind")
     if kind not in ("usage", "bills"):
@@ -290,6 +316,12 @@ def understand(table: Table, mapping: dict | None = None) -> dict:
         fuel = said or (UNIT_FUEL.get(unit[0]) if unit else None)
     unit = _water_units(unit, fuel)
     unsure = {"columns": guess, "kind": kind, "fuel": fuel, "unit": unit[0] if unit else None}
+    if mapping and kind == "usage" and mapping.get("fuel") in FUELS and unit and UNIT_FUEL[unit[0]] != fuel:
+        # "Gas" and "kWh" on one form: neither can be taken over the other, so ask.
+        measures = UNIT_FUEL[unit[0]].lower()
+        raise Unsure(headers, sample_rows, unsure,
+                     f"{unit[0]} is a{'n' if measures[0] in 'aeiou' else ''} {measures} unit, not "
+                     f"{fuel.lower()}. Pick the unit that matches the fuel.")
 
     # The columns a kind of file can't do without. With a mapping these may be
     # missing because the person left them blank, or named something that isn't there.
@@ -321,13 +353,26 @@ def _cell(row: list[str], cols: dict, role: str) -> str:
     return row[i].strip() if i is not None and i < len(row) else ""
 
 
+def _say_skipped(notes: list[str], unreadable: int, reversed_rows: int = 0) -> None:
+    """The module's promise: a row left out is a row said to be left out."""
+    if unreadable:
+        notes.append(f"{unreadable} row{'s' if unreadable != 1 else ''} with no readable date or amount "
+                     f"{'were' if unreadable != 1 else 'was'} skipped.")
+    if reversed_rows:
+        notes.append(f"{reversed_rows} row{'s' if reversed_rows != 1 else ''} that ended before "
+                     f"{'they' if reversed_rows != 1 else 'it'} started "
+                     f"{'were' if reversed_rows != 1 else 'was'} skipped.")
+
+
 def _usage_rows(table: Table, info: dict, default_account: str) -> tuple[list[Row], list[str]]:
     cols, (unit, factor) = info["cols"], info["unit"]
     notes: list[str] = []
     points: list[tuple[str, date, date | None, float, float | None]] = []
+    unreadable = reversed_rows = 0
     for r in table.rows:
         amount = _num(_cell(r, cols, "usage"))
         if amount is None:
+            unreadable += 1
             continue
         cost = _num(_cell(r, cols, "money")) if "money" in cols else None
         account = _cell(r, cols, "account") or default_account
@@ -336,12 +381,21 @@ def _usage_rows(table: Table, info: dict, default_account: str) -> tuple[list[Ro
         single = None
         if not (start and end):
             single = _day(_cell(r, cols, "date")) or _day(_cell(r, cols, "billdate"))
-        if start and end and end >= start:
+        if start and end:
+            if end < start:
+                reversed_rows += 1       # a period can't end before it starts; not a one-day reading either
+                continue
             points.append((account, start, end, amount * factor, cost))
         elif end or single:
             points.append((account, end or single, None, amount * factor, cost))
+        else:
+            unreadable += 1
     if not points:
+        if reversed_rows:
+            raise ImportFailed("every row ends before it starts - are the start and end columns "
+                               "the wrong way round?")
         raise ImportFailed("no rows with a date and an amount used could be read")
+    _say_skipped(notes, unreadable, reversed_rows)
 
     out: list[Row] = []
     for account in dict.fromkeys(p[0] for p in points):
@@ -435,11 +489,12 @@ def _bill_rows(table: Table, info: dict, default_account: str,
     from metermatters.intake import ingest
     cols = info["cols"]
     when = next((r for r in ("due", "billdate", "date", "end") if r in cols), None)
-    rows, credits = [], 0
+    rows, credits, unreadable = [], 0, 0
     for r in table.rows:
         amount = _num(_cell(r, cols, "money"))
         due = _day(_cell(r, cols, when))
         if amount is None or due is None:
+            unreadable += 1
             continue
         if amount <= 0:
             credits += 1            # a solar credit, or a month that cost nothing: kept, and marked
@@ -451,6 +506,7 @@ def _bill_rows(table: Table, info: dict, default_account: str,
                                     source="import"))
     if not rows:
         raise ImportFailed("no rows with a date and an amount could be read")
+    _say_skipped(notes, unreadable)
     if credits:
         notes.append(f"{credits} statement{'s' if credits != 1 else ''} with a credit or a zero amount "
                      "kept and marked CREDIT - a solar month that paid you back is still a month.")
@@ -508,14 +564,20 @@ def from_xml(data: bytes, default_account: str | None = None) -> Result:
             value = _first_text(reading, "value")
             if not (start and value):
                 continue
-            d = datetime.fromtimestamp(int(start), tz=timezone.utc).date()
-            amount = float(value) * kind["scale"]
+            cost = _first_text(reading, "cost")
+            try:
+                d = datetime.fromtimestamp(int(start), tz=timezone.utc).date()
+                amount = float(value) * kind["scale"]
+                paid = float(cost) * ESPI_COST_SCALE if cost else None
+            except (ValueError, OverflowError, OSError):
+                # A word where a number should be, or a date past the end of time.
+                raise ImportFailed(BAD_READING) from None
+            if not (math.isfinite(amount) and math.isfinite(paid or 0.0)):
+                raise ImportFailed(BAD_READING)
             if kind["reverse"]:
                 sent[d] = sent.get(d, 0.0) + amount
                 continue
-            cost = _first_text(reading, "cost")
-            used.append((default_account, d, None, amount,
-                         float(cost) * ESPI_COST_SCALE if cost else None))
+            used.append((default_account, d, None, amount, paid))
     if not used:
         raise ImportFailed("that Green Button file has no readings in it")
     notes: list[str] = []
@@ -555,7 +617,14 @@ def _reading_types(root) -> dict:
             raise ImportFailed(f"this Green Button file measures in an unrecognised unit (code {uom}); "
                                "send it to us and we'll add it")
         unit, factor = UNITS[ESPI_UOM[uom]]
-        exponent = int(_first_text(rt[0], "powerOfTenMultiplier") or 0)
+        try:
+            exponent = int(_first_text(rt[0], "powerOfTenMultiplier") or 0)
+        except ValueError:
+            raise ImportFailed(BAD_READING) from None
+        if abs(exponent) > 15:
+            # The standard's multipliers run from pico to tera. Past that it is
+            # a mistake, not a scale, and 10 to the power of it is no number.
+            raise ImportFailed(BAD_READING)
         # flowDirection 19 is "reverse": power the home sent out.
         reverse = (_first_text(rt[0], "flowDirection") or "1").strip() == "19"
         key = _meter_reading(entry) or f"#{i}"
@@ -623,10 +692,15 @@ def _from_zip(data: bytes, filename: str, mapping: dict | None, default_account)
     """A zip from a portal that isn't the one we know: the first readable file inside."""
     import io as _io
     import zipfile
+    from metermatters.intake import ingest
     try:
         archive = zipfile.ZipFile(_io.BytesIO(data))
     except zipfile.BadZipFile:
         raise ImportFailed("that zip can't be opened") from None
+    # The loader's own path has this cap, and the app comes here when that
+    # path says no - so without it here, the cap is only ever a suggestion.
+    if sum(i.file_size for i in archive.infolist()) > ingest.MAX_UNPACKED_BYTES:
+        raise ImportFailed("that zip unpacks to far more than an export should")
     names = [n for n in archive.namelist() if n.lower().endswith((".csv", ".xml", ".txt"))
              and not n.startswith("__MACOSX") and not n.endswith("/")]
     if not names:

@@ -184,7 +184,9 @@ def _parse_billing(lines: list[str], head: int, source: str) -> Export:
         row = {(k or "").strip(): (v or "").strip() for k, v in row.items() if k}
         start, end = _date(row.get("START DATE", "")), _date(row.get("END DATE", ""))
         kwh, cost = _num(row.get(usage_col, "")), _num(row.get("COST", ""))
-        if not (start and end) or kwh is None:
+        # A period ending before it starts has no days to divide by, and usage
+        # below zero is a mistake, not a figure - what went out is its own column.
+        if not (start and end) or end < start or kwh is None or kwh < 0:
             continue
         # A blank cost is a file that carries none, not a free month.
         periods.append(Period(account=account or "", start=start, end=end,
@@ -203,7 +205,7 @@ def _parse_usage_history(lines: list[str], head: int, source: str) -> Export:
         row = {(k or "").strip(): (v or "").strip() for k, v in row.items() if k}
         end = _date(row.get("Read Date", ""))
         kwh, cost = _num(row.get("Usage", "")), _num(row.get("Charge", ""))
-        if end is None or kwh is None or cost is None:
+        if end is None or kwh is None or kwh < 0 or cost is None:
             continue
         days = int(_num(row.get("Number of Days", "")) or 0)
         # The read date closes the period, so the start is `days` back inclusive.

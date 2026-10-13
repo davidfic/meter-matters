@@ -135,6 +135,24 @@ class TestRejections(unittest.TestCase):
         with self.assertRaises(ValueError):
             greenbutton.parse("pre\n\nTYPE,START DATE,END DATE,USAGE (kWh),COST,NOTES\n")
 
+    def test_a_period_that_ends_before_it_starts_is_skipped(self):
+        # Such a row would have zero or negative days, and the per-day figures
+        # built on it take the whole dashboard down.
+        reversed_row = "Electric billing,2026-10-15,2026-09-18,700.00,$240.00\n"
+        export = greenbutton.parse(BILLING_TEXT + reversed_row)
+        self.assertEqual(len(export.periods), 2)
+        self.assertTrue(all(p.days > 0 for p in export.periods))
+        with self.assertRaises(ValueError):
+            greenbutton.parse(BILLING_TEXT.split("TYPE,")[0] + "TYPE,START DATE,END DATE,USAGE (kWh),COST,NOTES\n"
+                              + reversed_row)
+
+    def test_negative_usage_is_skipped_in_both_layouts(self):
+        export = greenbutton.parse(BILLING_TEXT + "Electric billing,2026-09-18,2026-10-15,-700.00,$240.00\n")
+        self.assertEqual(len(export.periods), 2)
+        export = greenbutton.parse(HISTORY_TEXT + "55500020002,11/19/2023,-741.00,28,26.46,$234.96,Actual Read,58.0\n")
+        self.assertEqual(len(export.periods), 2)
+        self.assertTrue(all(p.kwh_per_day >= 0 for p in export.periods))
+
 
 class TestLoadAllSynthetic(unittest.TestCase):
     """Loading a folder of exports: zips, loose files, and duplicates."""

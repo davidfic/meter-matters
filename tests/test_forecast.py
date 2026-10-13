@@ -86,5 +86,33 @@ class TestRecordsStayEarned(unittest.TestCase):
         self.assertEqual(badge["earned_on"], rows[3]["label"])
 
 
+class TestCreditLastYear(unittest.TestCase):
+    def test_a_credit_last_year_is_not_scaled_into_the_estimate(self):
+        from statistics import mean
+        rows = series(23, usage=False)                 # ends Nov 2025; next is December
+        credit = next(r for r in rows if (r["year"], r["month"]) == (2024, 12))
+        credit["amount"] = -20.0
+        f = forecast.next_bill(rows)
+        self.assertGreater(f["amount"], 0)
+        self.assertAlmostEqual(f["amount"], mean(r["amount"] for r in rows[-3:]), places=2)
+        self.assertLessEqual(f["low"], f["amount"])
+        self.assertLessEqual(f["amount"], f["high"])
+
+
+class TestForecastEdges(unittest.TestCase):
+    def test_four_statements_give_an_estimate_but_no_backtest(self):
+        f = forecast.next_bill(series(4, usage=False))
+        self.assertIsNotNone(f)
+        self.assertFalse(f["backtested"])
+        self.assertIsNone(f["typical_miss_pct"])
+
+    def test_seven_statements_due_the_same_day_still_give_a_date(self):
+        rows = series(7, usage=False)
+        for r in rows:
+            r["due"] = "2025-06-16"
+        f = forecast.next_bill(rows)
+        self.assertEqual(f["due"], "2025-06-16")
+
+
 if __name__ == "__main__":
     unittest.main()

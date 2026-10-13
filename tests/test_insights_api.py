@@ -187,6 +187,71 @@ class TestNotes(InsightsCase):
         self.client.post("/api/settings", json={"goal": 200})
         self.assertEqual(self.insights()["fuels"]["Electric"]["shift"]["note"], "space heater")
 
+    def test_a_water_change_can_be_named_too(self):
+        # Step-change alerts are raised for water as well; a note must be able to answer one.
+        self.assertEqual(self.note("sprinkler", "Water:2025-03-01").status_code, 200)
+
+    def test_a_body_that_is_not_an_object_is_refused_not_a_crash(self):
+        for body in ([1], "abc", True):
+            with self.subTest(body=body):
+                res = self.client.post("/api/notes", json=body)
+                self.assertEqual(res.status_code, 400)
+                self.assertIn("error", res.get_json())
+
+
+
+
+class TestSettingsInput(InsightsCase):
+    """What the settings endpoint does with input that is wrong, or hostile."""
+
+    def stored(self):
+        import json
+        return json.loads(self.user.paths.state.read_text())
+
+    def test_a_body_that_is_not_an_object_is_refused_not_a_crash(self):
+        for body in ([1], "abc", True):
+            with self.subTest(body=body):
+                res = self.client.post("/api/settings", json=body)
+                self.assertEqual(res.status_code, 400)
+                self.assertIn("error", res.get_json())
+
+    def test_an_infinite_goal_is_no_goal(self):
+        # float("inf") > 0, and json.dumps writes Infinity, which no browser can parse.
+        for goal in ("inf", "nan", "-inf"):
+            with self.subTest(goal=goal):
+                res = self.client.post("/api/settings", json={"goal": goal})
+                self.assertEqual(res.status_code, 200)
+                self.assertNotIn(b"Infinity", res.data)
+                self.assertNotIn(b"NaN", res.data)
+                self.assertIsNone(self.stored()["goal"])
+
+    def test_a_fuel_that_is_not_one_is_left_as_it_was(self):
+        for fuel in ({"a": 1}, 123, "<script>", "Oil", [], ""):
+            with self.subTest(fuel=fuel):
+                res = self.client.post("/api/settings", json={"fuel": fuel})
+                self.assertEqual(res.status_code, 200, res.get_data(as_text=True)[:200])
+                self.assertEqual(self.stored()["fuel"], "Electric")
+        self.assertEqual(self.client.get("/api/report").status_code, 200)
+
+    def test_a_fuel_is_stored_under_its_own_name_whatever_the_case(self):
+        self.assertEqual(self.client.post("/api/settings", json={"fuel": "water"}).status_code, 200)
+        self.assertEqual(self.stored()["fuel"], "Water")
+        self.assertEqual(self.client.post("/api/settings", json={"fuel": "GAS"}).status_code, 200)
+        self.assertEqual(self.stored()["fuel"], "Gas")
+
+    def test_a_hand_edited_state_file_with_the_wrong_types_does_not_take_the_page_down(self):
+        import json
+        row = ("Account# or Nickname,Account Type,Pay/Due Date,Type,Amount,Status,\n"
+               "74000011111,Electric,2026/03/20,Current Bill,$300.00,-\n").encode()
+        self.upload(row, name="AccountHistory.csv")
+        path = self.user.paths.state
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"goal": "200", "baseline_months": "abc", "game_window_months": None,
+                                    "target_pct": [], "fuel": 7, "notes": "none", "supply_cents": "x"}))
+        for url in ("/api/report", "/api/insights", "/api/rates", "/api/overview"):
+            with self.subTest(url):
+                self.assertEqual(self.client.get(url).status_code, 200)
+        self.assertEqual(self.client.get("/api/report").get_json()["settings"]["goal"], 200)
 
 URL = throwaway_database_url()
 
@@ -251,6 +316,55 @@ class TestPages(InsightsCase):
         overview = self.client.get("/").get_data(as_text=True)
         for needed in ('id="carbon-section"', 'id="chart-carbon"', 'id="carbon-tiles"'):
             self.assertIn(needed, overview)
+
+
+def billing_csv(rows, account="74000011111"):
+    """A BillingData.csv as the portal writes it, with the rows given as (start, end, kwh)."""
+    lines = ["Name,SOMEONE INVENTED", 'Address,"1 EXAMPLE RD, ANYTOWN MA 01000"',
+             f"Account Number,{account}", f"Service,{account}0071079989", "",
+             "TYPE,START DATE,END DATE,USAGE (kWh),COST,NOTES"]
+    for start, end, used in rows:
+        lines.append(f"Electric billing,{start},{end},{used:.2f},${10 + 0.3 * used:.2f}")
+    return "\n".join(lines) + "\n"
+
+
+class TestRowsOnFile(InsightsCase):
+    """Files already on disk, whatever the importer would say about them now."""
+
+    def good_rows(self, n=14):
+        rows, start = [], date(2024, 1, 1)
+        for _ in range(n):
+            end = start + timedelta(days=29)
+            rows.append((start, end, 750.0))
+            start = end + timedelta(days=1)
+        return rows
+
+    def store(self, text):
+        folder = self.user.paths.usage
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "BillingData.csv").write_text(text, encoding="utf-8")
+
+    def test_a_reversed_period_on_file_does_not_take_the_pages_down(self):
+        rows = self.good_rows()
+        self.store(billing_csv(rows + [(date(2026, 3, 2), date(2026, 3, 1), 10.0)]))
+        bills = ("Account# or Nickname,Account Type,Pay/Due Date,Type,Amount,Status,\n"
+                 + "".join(f"74000011111,Electric,{end + timedelta(days=20)},Current Bill,"
+                           f"${10 + 0.3 * used:.2f},-\n" for _, end, used in rows)).encode()
+        self.upload(bills, name="AccountHistory.csv")
+        for path in ("/", "/electric", "/api/report", "/api/overview", "/api/insights", "/year"):
+            with self.subTest(path):
+                self.assertEqual(self.client.get(path).status_code, 200)
+        block = self.insights()["fuels"]["Electric"]
+        self.assertEqual(block["periods"], len(rows))
+
+    def test_a_long_period_on_file_is_kept(self):
+        rows = self.good_rows()
+        last = rows[-1][1]
+        rows.append((last + timedelta(days=1), last + timedelta(days=400), 9000.0))
+        self.store(billing_csv(rows))
+        block = self.insights()["fuels"]["Electric"]
+        self.assertEqual(block["periods"], len(rows))
+        self.assertEqual(block["latest_weather"]["days"], 400)
 
 
 if __name__ == "__main__":
