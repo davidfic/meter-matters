@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import base64
 import email
+import email.utils
 import hashlib
 import hmac
 import os
@@ -315,9 +316,30 @@ def receive(delivery: Delivery) -> tuple[str, str]:
 
     note = (f" Forwarded by {forwarded_by}." if forwarded_by
             else "" if verdict == "pass" or mode == "off" else " Signature not verified.")
+    note += transit_note(msg)
     outcome = "held" if filed.held else "imported" if filed.added else "duplicate"
     _log(user, outcome, subject,
          f"{notice.fuel.capitalize()} ${notice.amount:,.2f}, due {notice.due}."
          + (" It matches none of your homes yet - say which one it belongs to on the Add bills page."
             if filed.held else "" if filed.added else " Already on file.") + note)
     return outcome, str(notice)
+
+
+def transit_note(msg, now: float | None = None) -> str:
+    """How long the message took to get here, from its own Date header.
+
+    The app's share is well under a second; the rest is the mail path. Saying
+    it on the log line means every delivery measures itself.
+    """
+    try:
+        sent = email.utils.parsedate_to_datetime(str(msg.get("Date") or ""))
+    except (TypeError, ValueError):
+        return ""
+    if sent is None or sent.tzinfo is None:
+        return ""
+    seconds = (now if now is not None else time.time()) - sent.timestamp()
+    if seconds < 0 or seconds > 7 * 86400:
+        return ""
+    if seconds < 90:
+        return f" Took {int(round(seconds))} s to arrive."
+    return f" Took {int(round(seconds / 60))} min to arrive."

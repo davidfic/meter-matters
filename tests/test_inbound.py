@@ -50,6 +50,7 @@ def forwarded_by_hand(to: str, sender="ann@gmail.com") -> bytes:
     msg["From"] = f"Ann Example <{sender}>"
     msg["To"] = to
     msg["Subject"] = "Fwd: New Electric Bill from Eversource"
+    msg["Date"] = "Mon, 12 Oct 2026 22:43:10 -0400"
     msg.set_content("---------- Forwarded message ---------\n"
                     "From: Eversource Do Not Reply <noreply@notifications.eversource.com>\n"
                     "Date: Mon, 12 Oct 2026 09:00:00 -0400\n"
@@ -107,6 +108,17 @@ class TestDelivery(InboundCase):
         res = self.deliver(raw)
         self.assertEqual(res.get_json()["outcome"], "rejected")
         self.assertIn("Not from the utility's address", self.log()[0]["detail"])
+
+    def test_the_log_says_how_long_the_message_took_to_arrive(self):
+        import email as email_mod
+        from email import policy as email_policy
+        msg = email_mod.message_from_bytes(forwarded_by_hand(self.address), policy=email_policy.default)
+        sent = email_mod.utils.parsedate_to_datetime(msg["Date"]).timestamp()
+        self.assertEqual(inbound.transit_note(msg, now=sent + 42), " Took 42 s to arrive.")
+        self.assertEqual(inbound.transit_note(msg, now=sent + 250), " Took 4 min to arrive.")
+        self.assertEqual(inbound.transit_note(msg, now=sent - 5), "")      # a clock ahead of ours
+        del msg["Date"]
+        self.assertEqual(inbound.transit_note(msg), "")
 
     def test_a_forwarded_bill_is_filed_for_its_owner(self):
         res = self.deliver()
