@@ -536,15 +536,6 @@ function renderEnergy(r) {
   );
 }
 
-function renderFuel(r) {
-  const nav = $("fuel-nav");
-  if (!nav) return;
-  if (!r.fuels || r.fuels.length < 2) { nav.hidden = true; return; }
-  nav.hidden = false;
-  nav.innerHTML = r.fuels.map((f) =>
-    `<a href="${url("/" + f.toLowerCase())}"${f === r.fuel ? ' aria-current="page"' : ""}>${f}</a>`).join("");
-}
-
 function renderYoY(r) {
   if (!r.yoy.length) {
     const need = 13 - r.summary.count;
@@ -621,19 +612,14 @@ function renderSettings(r) {
   $("baseline-months").value = r.settings.baseline_months;
 }
 
-/* Nothing on file for this fuel: the card that says how to add some, and a
-   way across to the fuels that do have bills. The rest of the page stays
+/* Nothing on file for this fuel: the card that says how to add some, and
+   links to the fuels that do have bills. The rest of the page stays
    hidden - an empty dashboard reads as a broken one. */
 function renderEmpty(r) {
   const box = $("empty-state");
   if (!box) { flash(r.error, true); return; }
   box.hidden = false;
   const others = (r.fuels || []).filter((f) => f !== r.fuel);
-  const nav = $("fuel-nav");
-  if (nav && others.length) {
-    nav.hidden = false;
-    nav.innerHTML = others.map((f) => `<a href="${url("/" + f.toLowerCase())}">${f}</a>`).join("");
-  }
   const note = $("empty-others");
   if (note) {
     note.hidden = !others.length;
@@ -654,7 +640,7 @@ function renderAll(data) {
   // Each panel on its own: one that can't draw must not take the rest of the
   // page down with it.
   for (const panel of [renderAccounts, renderSettings, renderHero, renderTiles, renderLevel,
-                       renderBadges, renderFuel, renderAnomalies, renderCharts, renderUsage,
+                       renderBadges, renderAnomalies, renderCharts, renderUsage,
                        renderBaseload, renderEnergy, renderYoY, renderProjection, renderFullTable]) {
     try {
       panel(data);

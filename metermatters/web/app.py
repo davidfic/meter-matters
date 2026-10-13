@@ -277,6 +277,34 @@ def switcher():
                   for h in homes.active(base)]}}
 
 
+def fuels_on_file() -> set[str]:
+    """Which utilities this home has any bill for. Empty when there are none."""
+    p = g.get("paths")
+    if p is None or not p.csv.exists():
+        return set()
+    try:
+        return {e.account_type or "Electric" for e in analysis.load_entries(p.csv)}
+    except (OSError, ValueError):
+        return set()
+
+
+@app.context_processor
+def utilities():
+    """The utility switcher's options, on every page: each utility the app
+    knows, whether this home has bills for it, and which page this is."""
+    if g.get("paths") is None:
+        return {"fuels_nav": None}
+    present = fuels_on_file()
+    current = fuels.BY_SLUG.get((request.view_args or {}).get("fuel", "")) \
+        if request.endpoint == "fuel_page" else None
+    return {"fuels_nav": {
+        "overview": {"url": url_for("index"), "current": request.endpoint == "index"},
+        "placeholder": current is None and request.endpoint != "index",
+        "items": [{"name": f.name, "tagline": f.tagline, "url": url_for("fuel_page", fuel=f.slug),
+                   "has_bills": f.name in present, "current": f is current}
+                  for f in fuels.ORDER]}}
+
+
 @app.after_request
 def private(response):
     # Every page is somebody's bill. Nothing in between should keep a copy.

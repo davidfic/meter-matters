@@ -84,6 +84,18 @@ class TestWaterPages(WebCase):
         self.assertEqual((report["fuel"], report["fuels"]), ("Gas", []))
         self.assertIn("No gas bills yet", self.client.get("/gas").get_data(as_text=True))
 
+    def test_every_page_has_the_utility_switcher_with_the_right_one_chosen(self):
+        self.upload("export.csv", daily())                       # electric only
+        for path, chosen in (("/", "All utilities"), ("/electric", "⚡ Electric"), ("/water", "💧 Water · none yet")):
+            page = self.client.get(path).get_data(as_text=True)
+            self.assertIn('id="fuel-switch"', page, path)
+            self.assertRegex(page, r'<option[^>]*selected[^>]*>' + chosen, path)
+            self.assertIn("🔥 Gas · none yet", page, path)
+        for path in ("/year", "/raw", "/rates", "/connect"):
+            page = self.client.get(path).get_data(as_text=True)
+            self.assertIn('id="fuel-switch"', page, path)
+            self.assertIn("Utilities…", page, path)
+
     def test_water_says_nothing_about_the_weather(self):
         self.upload("water.csv", water_csv(rows=14))
         out = self.client.get("/api/insights").get_json()

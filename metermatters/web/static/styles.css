@@ -226,16 +226,6 @@ section { margin-bottom: 16px; }
 }
 .pip.on { background: var(--good); }
 
-.fuel-nav { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
-.fuel-nav a {
-  padding: 7px 13px; font-size: 14px; text-decoration: none;
-  color: var(--text-secondary); background: var(--surface-1);
-  border-right: 1px solid var(--border);
-}
-.fuel-nav a:last-child { border-right: none; }
-.fuel-nav a:hover { background: var(--surface-2); color: var(--text-primary); }
-.fuel-nav a[aria-current="page"] { background: var(--series-1); color: #fff; font-weight: 550; }
-
 .fuel-card { display: block; text-decoration: none; color: inherit; transition: border-color 140ms ease, transform 140ms ease; }
 .fuel-card:hover { border-color: var(--series-1); transform: translateY(-1px); }
 .fuel-card .fuel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -812,3 +802,4 @@ details.howto summary { cursor: pointer; font-size: 13px; font-weight: 600; }
 .empty-ways p { margin: 0; color: var(--text-muted); font-size: 13px; line-height: 1.5; }
 .card.empty .note.fine { margin: 16px 0 0; }
 @media (max-width: 720px) { .empty-ways { grid-template-columns: 1fr; } }
+#fuel-switch { max-width: 200px; }

@@ -21,7 +21,7 @@
       <span class="sub" id="coverage"></span>
     </div>
     <div class="top-actions">
-      <nav class="fuel-nav" id="fuel-nav"></nav>
+      {% include "_fuels.html" %}
       <select id="account" hidden aria-label="Account"></select>
       <a class="btn" href="{{ url_for('year_page') }}">Your year</a>
       {% if fuel == "Electric" %}<a class="btn" href="{{ url_for('rates_page') }}">Rates</a>{% endif %}

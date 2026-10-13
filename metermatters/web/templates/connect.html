@@ -13,8 +13,8 @@
         <span style="color:var(--text-muted);font-weight:400"> / Add bills</span></h1>
     </div>
     <div class="top-actions">
+      {% if has_bills %}{% include "_fuels.html" %}{% endif %}
       {% include "_homes.html" %}
-      {% if has_bills %}<a class="btn" href="{{ url_for('index') }}">← Dashboard</a>{% endif %}
       <form method="post" action="{{ url_for('web.logout') }}" class="inline">
         <button type="submit" title="Signed in as {{ user.email }}">Sign out</button>
       </form>

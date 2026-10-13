@@ -21,8 +21,8 @@
     </div>
     <div class="top-actions">
       {% if not shared_view %}
+      {% include "_fuels.html" %}
       {% include "_homes.html" %}
-      <a class="btn" href="{{ url_for('index') }}">← Dashboard</a>
       {% include "_account.html" %}
       {% endif %}
       <button id="theme" type="button" aria-label="Toggle colour theme">Theme</button>
