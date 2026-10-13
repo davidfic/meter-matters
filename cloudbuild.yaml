@@ -22,6 +22,9 @@ steps:
     args: [deploy/ci/test.sh]
     env:
       - ELEC_TEST_DATABASE_URL=postgresql://postgres:${_CI_DB_PASSWORD}@elec-ci-postgres:5432/postgres
+      # Labels the test report that ships with the image.
+      - COMMIT_SHA=${COMMIT_SHA}
+      - TAG=${_TAG}
 
   # Builds, then refuses the image if it holds anything that is not the app.
   - id: build

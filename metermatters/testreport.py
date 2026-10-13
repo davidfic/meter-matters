@@ -3,8 +3,9 @@
 
 The suite never runs on the server: it patches the environment and the network
 while it runs, and the image doesn't carry the tests. It runs where the code is
-written, as the last step of ``./deploy/cloudrun.sh deploy``, and the results
-travel with the code they describe, in ``test-report.json``. The ``/test-suite``
+written - the pipeline's test step (deploy/ci/test.sh) or ``./deploy/cloudrun.sh
+deploy`` - and the results travel with the code they describe, in
+``test-report.json``. The ``/test-suite``
 page only reads that file.
 
     python testreport.py                  run, write test-report.json, print a summary

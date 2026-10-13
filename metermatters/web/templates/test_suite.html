@@ -27,9 +27,9 @@
   <section>
     <div class="card">
       <h2>No results yet</h2>
-      <p class="note" style="margin-bottom:0">No test report came with this deploy. The tests are run on the
-        developer's machine, never on this server; <code>./deploy/cloudrun.sh deploy</code> runs them
-        and ships the results with the code.</p>
+      <p class="note" style="margin-bottom:0">No test report came with this deploy. The tests are never run on
+        this server: the deploy pipeline runs them and ships the results with the code, and so does
+        <code>./deploy/cloudrun.sh deploy</code>. This image was built without either.</p>
     </div>
   </section>
   {% else %}
