@@ -1,0 +1,153 @@
+{% extends "docs/_layout.html" %}
+{% from "docs/_macros.html" import shot, doc, app %}
+{% block body %}
+<h1>Running your own server</h1>
+<p class="lead">For whoever hosts the app. Every setting is an environment variable, and anything
+  left unset switches its feature off without breaking anything else. This page is what each one
+  does and, for the features that need something set up elsewhere, the steps. The repository's
+  <code>deploy/README.md</code> and <code>docs/how-it-works.md</code> have the deployment pipeline
+  and the reasoning; this page is the checklist.</p>
+
+<h2 id="modes">Two ways to run it</h2>
+<ul class="facts-list">
+  <li><strong>One person on your own machine.</strong> <code>./run.sh</code> with nothing set. No accounts,
+    no sign-in, bound to localhost, and the data lives in the checkout. The Add bills page does not
+    exist in this mode: drop files on any dashboard instead. Forwarding needs a public address, so it
+    is for the hosted mode.</li>
+  <li><strong>Hosted, with accounts.</strong> Setting <code>ELEC_SECRET_KEY</code> is what turns accounts on.
+    Everything below is about this mode.</li>
+</ul>
+
+<h2 id="required">Required when hosted</h2>
+<table class="docs-table">
+  <thead><tr><th>Variable</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td><code>ELEC_SECRET_KEY</code></td><td>Signs session cookies and turns accounts on. 32+ random characters; the app refuses to start with less. <code>python -c "import secrets; print(secrets.token_urlsafe(48))"</code></td></tr>
+    <tr><td><code>ELEC_BASE_URL</code></td><td>The address people reach the app at. An <code>https://</code> value also marks cookies Secure.</td></tr>
+    <tr><td><code>ELEC_DATABASE_URL</code> or <code>ELEC_DATA_DIR</code></td><td>Postgres (a Supabase transaction-pooler string works) for a host with no disk such as Cloud Run; or one directory on a host that has one. SQLite in that directory otherwise.</td></tr>
+    <tr><td><code>ELEC_TRUSTED_PROXIES</code></td><td>How many proxies sit in front of the app (default 1). Affects which address the sign-in lockout counts.</td></tr>
+    <tr><td><code>ELEC_ALLOW_SIGNUP</code></td><td><code>0</code> closes sign-ups once your people are in. Existing accounts keep working.</td></tr>
+  </tbody>
+</table>
+
+<h2 id="forwarding">Switching forwarding on</h2>
+<p>Forwarding needs a domain that receives mail, an inbound email service that turns each message
+  into an HTTPS request, and a shared secret so the app can tell the service's requests from
+  anyone else's. Users then get <code>bills-&lt;token&gt;@&lt;your domain&gt;</code> on their Add bills page.</p>
+<p>Set <code>ELEC_INBOUND_DOMAIN</code> to the domain, then one of the following.</p>
+
+<h3 id="cloudflare">Cloudflare Email Routing (free)</h3>
+<ol class="steps big">
+  <li>In the Cloudflare dashboard for the zone: <strong>Email</strong> → <strong>Email Routing</strong> → enable it.
+    This adds the MX records.</li>
+  <li><strong>Workers &amp; Pages</strong> → <strong>Create</strong> → start from Hello World, and replace the
+    code with the repository's <code>deploy/cloudflare-email-worker.js</code>. Name it, say,
+    <code>bills-inbound</code>, and deploy.</li>
+  <li>In the worker's <strong>Settings</strong> → <strong>Variables and Secrets</strong>: a secret
+    <code>INBOUND_SECRET</code> holding the same value as the app's <code>ELEC_INBOUND_SECRET</code>, and a
+    plain variable <code>APP_URL</code> set to the app's https address with no trailing slash. Deploy
+    again: settings only apply once deployed.</li>
+  <li><strong>Email Routing</strong> → <strong>Routing rules</strong> → <strong>Catch-all</strong>: action
+    <em>Send to a Worker</em>, pick the worker, enable it.</li>
+  <li>Set <code>ELEC_INBOUND_SECRET</code> on the app to the same secret.</li>
+</ol>
+<p>The worker posts each message unchanged to <code>/api/inbound/email</code> with the secret as a
+  bearer token and the recipient in a header. A message the app refuses is bounced with the reason,
+  so it shows in Email Routing's activity log instead of being retried for a day.</p>
+
+<h3 id="mailgun">Mailgun</h3>
+<ol class="steps big">
+  <li>Add the domain to Mailgun as a receiving domain and set its MX records as Mailgun says.</li>
+  <li><strong>Receiving</strong> → <strong>Routes</strong> → create a route: match recipient
+    <code>bills-.*@&lt;your domain&gt;</code>, action <em>forward</em> to
+    <code>https://&lt;app&gt;/api/inbound/email</code>.</li>
+  <li>Set <code>ELEC_MAILGUN_SIGNING_KEY</code> on the app to the account's HTTP webhook signing key.
+    Mailgun signs each request with it; a bad or replayed signature is refused.</li>
+</ol>
+
+<h3 id="postmark">Postmark</h3>
+<ol class="steps big">
+  <li>Create an inbound stream and point the domain's MX at Postmark as it says.</li>
+  <li>Set the stream's webhook to <code>https://any:&lt;secret&gt;@&lt;app&gt;/api/inbound/email</code>, and
+    switch <strong>Include raw email content in JSON payload</strong> on. Without it the app answers
+    with a message saying so.</li>
+  <li>Set <code>ELEC_INBOUND_SECRET</code> on the app to that secret.</li>
+</ol>
+
+<h3 id="other">Anything else</h3>
+<p>POST the raw message with <code>Content-Type: message/rfc822</code>,
+  <code>Authorization: Bearer &lt;ELEC_INBOUND_SECRET&gt;</code>, and the recipient in
+  <code>X-Envelope-To</code>. The app answers 200 for anything it accepted, including addresses it does
+  not know, so a retrying service never loops and nobody can tell which addresses exist.</p>
+
+<h3 id="dkim">Checking the utility's signature</h3>
+<p><code>ELEC_INBOUND_DKIM</code> decides what happens when the utility's DKIM signature on a forwarded
+  message does not verify. <code>warn</code> (the default) files the bill and says so on the user's log
+  line; <code>require</code> refuses it; <code>off</code> skips the check. Start on <code>warn</code>, look at
+  what real forwarded mail reports in a few users' logs, and move to <code>require</code> once it is
+  passing. A bill forwarded by hand is not checked this way, because the signature on it is the
+  forwarder's; it is accepted on the strength of the utility's address quoted inside it.</p>
+
+<h3 id="try">Try it before anyone relies on it</h3>
+<p>Sign up, copy your own bills address, and forward one real bill email to it by hand. It should
+  appear under <em>What has arrived</em> within a minute or two. If it does not: a bounce in the
+  mail service's log means the app refused the request (wrong secret, wrong URL); nothing in that
+  log means the mail never reached the service (MX records); a line in the app's log saying
+  <em>bad credentials</em> means the secrets differ.</p>
+
+<h2 id="google">Google sign-in</h2>
+<ol class="steps big">
+  <li>In Google Cloud, create an OAuth client of type Web application, with the authorised redirect URI
+    <code>&lt;ELEC_BASE_URL&gt;/auth/google/callback</code>.</li>
+  <li>Set <code>ELEC_GOOGLE_CLIENT_ID</code> and <code>ELEC_GOOGLE_CLIENT_SECRET</code>.</li>
+</ol>
+<p>That enables <em>Continue with Google</em>. The app asks for the sign-in scopes only (name and
+  email), which need no verification from Google.</p>
+
+<h2 id="scans">Reading scans and photos of bills</h2>
+<p>Set <code>ELEC_VISION_KEY</code> to a Google Cloud API key with the Cloud Vision API enabled, restricted
+  to that API. Each scan is one request; the image is sent and the text comes back, and the app
+  stores neither. Without the key the upload box simply does not offer scans.</p>
+
+<h2 id="weather">Weather</h2>
+<p>On by default, through Open-Meteo, which is free for non-commercial use and needs no key. What
+  leaves the server is a ZIP code and the rounded position of the town it names, and the
+  temperatures are fetched once and kept. <code>ELEC_WEATHER=off</code> makes no lookups at all.</p>
+
+<h2 id="jobs">The daily check</h2>
+<p>Once a day the app checks each account for a bill that should have arrived and has not, and
+  refreshes the similar-homes pool. Pick one way to run it: <code>ELEC_SCHEDULER=1</code> has the app run
+  it itself (one always-on instance), or set <code>ELEC_TASK_TOKEN</code> and have an outside scheduler
+  POST <code>/api/tasks/check</code> with that token as a bearer. The answer names nobody.</p>
+
+<h2 id="email">Email to users</h2>
+<p>Missing-bill and new-bill notices go out only once <code>ELEC_SMTP_USER</code> and
+  <code>ELEC_SMTP_PASS</code> are set. <code>ELEC_SMTP_HOST</code> defaults to Gmail's server and
+  <code>ELEC_SMTP_FROM</code> to the user; set both for any other provider. A message may name a bill
+  amount.</p>
+
+<h2 id="data">What you are holding</h2>
+<p>Each account's bills, exports and settings sit under that account alone, and the app reads and
+  writes one account's files per request. You can read the database, as with any site, so the
+  {{ doc("security", "security page") }} tells users as much. Things worth doing on their behalf:
+  back the data up, serve the app over HTTPS only, keep <code>ELEC_SECRET_KEY</code> and the inbound
+  secret in a secret store rather than a file in the checkout, and close sign-ups once your people
+  are in. <code>/health</code> says whether the app is up and can reach its data.</p>
+
+<h2 id="all">Every variable</h2>
+<table class="docs-table">
+  <thead><tr><th>Variable</th><th>Feature</th></tr></thead>
+  <tbody>
+    <tr><td><code>ELEC_SECRET_KEY</code>, <code>ELEC_BASE_URL</code></td><td>Accounts; the address served at</td></tr>
+    <tr><td><code>ELEC_DATABASE_URL</code>, <code>ELEC_DATA_DIR</code></td><td>Where data lives</td></tr>
+    <tr><td><code>ELEC_ALLOW_SIGNUP</code>, <code>ELEC_TRUSTED_PROXIES</code></td><td>Sign-ups; proxies in front</td></tr>
+    <tr><td><code>ELEC_INBOUND_DOMAIN</code>, <code>ELEC_INBOUND_SECRET</code>, <code>ELEC_MAILGUN_SIGNING_KEY</code>, <code>ELEC_INBOUND_DKIM</code></td><td>Forwarding</td></tr>
+    <tr><td><code>ELEC_GOOGLE_CLIENT_ID</code>, <code>ELEC_GOOGLE_CLIENT_SECRET</code></td><td>Google sign-in</td></tr>
+    <tr><td><code>ELEC_VISION_KEY</code></td><td>Reading scans</td></tr>
+    <tr><td><code>ELEC_WEATHER</code></td><td><code>off</code> to make no weather lookups</td></tr>
+    <tr><td><code>ELEC_SCHEDULER</code>, <code>ELEC_TASK_TOKEN</code></td><td>The daily check</td></tr>
+    <tr><td><code>ELEC_SMTP_HOST</code>, <code>ELEC_SMTP_USER</code>, <code>ELEC_SMTP_PASS</code>, <code>ELEC_SMTP_FROM</code></td><td>Email to users</td></tr>
+    <tr><td><code>PORT</code>, <code>WEB_CONCURRENCY</code></td><td>Port and worker count</td></tr>
+  </tbody>
+</table>
+{% endblock %}

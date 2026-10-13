@@ -1,0 +1,62 @@
+{% extends "docs/_layout.html" %}
+{% from "docs/_macros.html" import shot, doc, app %}
+{% block body %}
+<h1>Type a bill in, or scan it</h1>
+<p class="lead">For a bill on paper, a utility with nothing to download, or a water bill that
+  comes four times a year. A date and an amount is all it takes; add what was used and the app
+  can work out your price per unit and compare with last year.</p>
+
+<h2 id="form">1. The form</h2>
+<p>On {{ app("web.connect", "Add bills") }}, scroll to <strong>Add a bill by hand</strong>.</p>
+<ol class="steps big">
+  <li><strong>Fuel:</strong> electric, gas or water.</li>
+  <li><strong>Due date</strong> and <strong>amount</strong>, straight off the bill.</li>
+  <li>Press <strong>Add bill</strong>. It is on your dashboard at once.</li>
+</ol>
+
+{{ shot("byhand.png", "The Add a bill by hand form: fuel, due date, amount, and a fold-out for how much was used",
+        "The form. The fold-out underneath is where the usage goes.") }}
+
+<h2 id="usage">2. Also say how much was used</h2>
+<p>Open <strong>Also say how much was used</strong> under the form and give the amount used, its unit,
+  and the dates the bill covers (the service period printed on it, up to 120 days). With that, the
+  bill joins the weather comparison, the price-per-unit history and the "what changed" findings,
+  exactly as an uploaded export would.</p>
+<ul class="facts-list">
+  <li>Electric in <strong>kWh</strong>; gas in <strong>therms</strong> or <strong>ccf</strong>; water in
+    <strong>gallons</strong> or <strong>ccf</strong>. A water bill in ccf is converted to gallons on the way in.</li>
+  <li>The unit has to match the fuel. Gas in kWh is turned away with a note saying so.</li>
+</ul>
+
+<h2 id="scan">3. Scan or photograph the bill instead</h2>
+<p>When the server has it switched on, the upload box also takes <strong>a PNG, JPG or PDF of one
+  bill</strong>. The text is read off the image, and whatever was found (fuel, amount, due date,
+  usage, service dates) is put into the by-hand form for you to check. <strong>Nothing is filed
+  until you press Add bill.</strong></p>
+<ol class="steps big">
+  <li>Photograph the bill, or save the PDF your utility emailed you.</li>
+  <li>Drop it on the upload box. A large photo is shrunk in your browser first; the limit on what is
+    sent is 4 MB.</li>
+  <li>Read the line that appears above the form. It says what was found and what was not.</li>
+  <li>Check every number against the bill, fill in anything missing, and press <strong>Add bill</strong>.</li>
+</ol>
+
+{{ shot("scan-result.png", "After a scan: a line saying what was read from the file, and the by-hand form filled in with the amount, due date and usage",
+        "A scanned electric bill, read into the form. The service dates and usage were found, so the fold-out opened itself.") }}
+
+<div class="callout">
+  <strong>Where the image goes.</strong> Reading text off a picture is done by Google's Cloud Vision
+  service. The image is sent there, the text comes back, and neither is kept: the app keeps only
+  the bill you confirm, not the picture of it. If you would rather not send the image anywhere,
+  type the numbers in; the form is the same. The {{ doc("security", "security page", "scans") }} has
+  the detail.
+</div>
+
+<h2 id="later">What happens afterwards</h2>
+<p>A bill typed in is filed under its own account, named <em>Electric (by hand)</em>, <em>Gas (by
+  hand)</em> or <em>Water (by hand)</em>, so it sits beside bills from an export rather than being
+  mistaken for one. Type the same bill in twice and it is counted once. The <strong>Raw data</strong>
+  page shows every row, by account, so you can check what was filed. If you typed a figure wrong,
+  that page is where you will see it; there is no editing in the app yet, so ask whoever runs the
+  server to correct the row, or add the right bill by hand and note the wrong one.</p>
+{% endblock %}

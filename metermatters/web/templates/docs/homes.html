@@ -1,0 +1,45 @@
+{% extends "docs/_layout.html" %}
+{% from "docs/_macros.html" import shot, doc, app %}
+{% block body %}
+<h1>More than one home</h1>
+<p class="lead">A second house, a flat, a family member's place you keep an eye on. Each home
+  has its own bills, settings and history, you can look at them all together, and bills that
+  arrive by email find their own way to the right one.</p>
+
+<h2 id="add">1. Add a home</h2>
+<p>On {{ app("web.connect", "Add bills") }}, under <strong>Your homes</strong>, open <strong>Add another
+  home</strong>, give it a name and press <strong>Add home</strong>. You are taken straight to that
+  home's own Add bills page, because a home with no bills is an empty page. Up to ten homes per
+  account.</p>
+
+{{ shot("homes-card.png", "The Your homes card listing two homes, each with a Rename and Open button, and the Add another home form",
+        "Two homes. The first is the main one and cannot be deleted; any other can.") }}
+
+<h2 id="switch">2. Moving between them</h2>
+<p>Once there are two, a <strong>home switcher</strong> appears at the top of every page, next to the
+  utility switcher. <strong>All homes</strong> is a page that adds them up: total spend, and each
+  home's cards side by side. Each home's pages live under its own address
+  (<code>/home/lake-house/electric</code>, say), so a bookmark to one home stays on that home.</p>
+<p>Uploads and bills typed in go to whichever home's page you are on. The line at the top of
+  Add bills says which home that is.</p>
+
+<h2 id="email">3. Bills that arrive by email</h2>
+<p>There is one bills address per account, not per home. A forwarded bill goes to the home that
+  already has that utility account on file: the last digits of the account number in the email
+  are matched against each home's bills. With one home there is nothing to decide.</p>
+<p>A bill whose account matches no home yet, or more than one, is <strong>held</strong> rather than
+  guessed at. A box appears at the top of Add bills: <em>1 bill waiting for a home</em>. Choose the
+  home and press <strong>File it</strong>; from then on that account is known and the next bill goes
+  there by itself. <strong>Drop</strong> discards it (it will be held again if it arrives again).</p>
+
+{{ shot("held-bill.png", "The box at the top of Add bills: one bill waiting for a home, with a home to choose and a File it button",
+        "A gas bill for an account none of the homes has seen. One choice, and the next one files itself.") }}
+
+<h2 id="delete">4. Rename, delete, restore</h2>
+<ul class="facts-list">
+  <li><strong>Rename</strong> changes the name everywhere. The address its pages live at stays as it was, so bookmarks keep working.</li>
+  <li><strong>Delete</strong> hides a home and its bills. Type the home's name to confirm. It can be
+    restored for 30 days from the same card; after that it is gone for good.</li>
+  <li>The first home cannot be deleted. Deleting the account deletes every home.</li>
+</ul>
+{% endblock %}

@@ -1,0 +1,91 @@
+{% extends "docs/_layout.html" %}
+{% from "docs/_macros.html" import shot, doc, app %}
+{% block body %}
+<h1>Getting started</h1>
+<p class="lead">An account, the Add bills page, and a word about where your home is. By the end
+  you will have your first bill on file and know which of the three ways in suits you.</p>
+
+<h2 id="account">1. Create an account</h2>
+<p>Open the app and choose <strong>Create an account</strong>. It takes an email address and a
+  password of at least ten characters. A few unrelated words is a good password and easy to
+  remember. If the server offers <strong>Continue with Google</strong> you can use that instead:
+  Google tells the app your name and email address and nothing else. It does not give the app
+  any access to your mail.</p>
+
+{{ shot("register.png", "The Create an account form: name, email, password",
+        "Creating an account connects nothing. You choose how bills get in on the next page.") }}
+
+<p>Signing in keeps you signed in for thirty days on that browser. <strong>Sign out</strong> is at
+  the top right of every page. There is no password reset yet, so keep the password somewhere
+  safe; the {{ doc("security", "security page") }} says what to do if you lose it.</p>
+
+<h2 id="add-bills">2. The Add bills page</h2>
+<p>After signing up you land on <strong>Add bills</strong>. It is also behind the <strong>Add
+  bills</strong> button at the top of every page. Everything about getting data in lives here,
+  top to bottom:</p>
+
+<ul class="facts-list">
+  <li><strong>Your private bills address</strong>, when the server has forwarding switched on.
+    Have your mailbox forward your utility's bill emails to it and new bills file themselves.
+    {{ doc("forwarding", "Forward your bill emails") }}</li>
+  <li><strong>Upload them yourself.</strong> A spreadsheet or Green Button file from your utility's
+    website. This is the one that brings in usage (kWh, therms, gallons) and years of history
+    at once. {{ doc("upload", "Upload your utility's files") }}</li>
+  <li><strong>Add a bill by hand</strong>, for a bill on paper; or drop a photo of it and the numbers
+    are read off for you to check. {{ doc("by-hand", "Type a bill in, or scan it") }}</li>
+  <li><strong>About your home</strong>: state, ZIP code and utility. Covered below.</li>
+  <li><strong>Your homes</strong>, once you have more than one. {{ doc("homes", "More than one home") }}</li>
+  <li><strong>Your account</strong>, including deleting it and everything in it.</li>
+</ul>
+
+{{ shot("add-bills.png", "The whole Add bills page on a new account",
+        "The page on a brand-new account. The forwarding card appears only on a server where the operator has set inbound email up.") }}
+
+<p>The three ways can be mixed and changed at any time. A bill that arrives twice, say once in
+  an upload and once by email, is counted once.</p>
+
+<h2 id="first-bill">3. Your first bill</h2>
+<p>The quickest first bill is an upload: sign in to your utility's website, download the billing
+  history or usage export, and drop it on the upload box. The {{ doc("upload", "upload page") }}
+  says where each utility keeps the file. Thirty seconds after the drop you are looking at your
+  dashboard with every bill in the file on it.</p>
+<p>No file handy? Type the amount and due date from the bill in front of you into
+  <strong>Add a bill by hand</strong>. One bill is enough for the pages to come to life, and the
+  rest can follow later.</p>
+
+{{ shot("upload-done.png", "The notice after a drop: how many rows of statement history were added, which metered periods the usage covers, and that the dashboard is opening",
+        "What a successful drop says. A moment later the dashboard opens by itself.") }}
+
+<h2 id="home">4. About your home</h2>
+<p>Further down the Add bills page is <strong>About your home</strong>. None of it is required, but
+  each field unlocks something:</p>
+
+<ul class="facts-list">
+  <li><strong>State</strong> picks the carbon figure for your grid, and which comparisons apply.
+    Massachusetts homes also get supplier offers on the Rates page. If your usage export names a
+    state, it is read from there and shown as "Detected".</li>
+  <li><strong>ZIP code</strong> is what lets the weather be taken out of the comparison with last
+    year, so a cold winter is not mistaken for a wasteful one. Only the ZIP is ever sent to the
+    weather service, never an address. Without it the comparison is plain usage.</li>
+  <li><strong>Utility</strong> is a name for the Rates page and the tips. Type whatever bills you.</li>
+  <li>The <strong>checkbox</strong> lets this home's average daily usage count among homes in its
+    state, so you can see where you sit. It is on by default; untick it to opt out. Only the
+    state, the fuel and one average go in. The {{ doc("security", "security page", "similar") }}
+    has the detail.</li>
+</ul>
+
+{{ shot("home-card.png", "The About your home card: state, ZIP code, utility, and the similar-homes checkbox",
+        "State and ZIP are worth the ten seconds. Everything else is optional.") }}
+
+<h2 id="next">5. What you see next</h2>
+<p>With bills on file, the overview shows each utility side by side, and each utility's own page
+  shows the current statement, what the next one will probably be, and how this period compares
+  with the same weeks last year once the weather is taken out. The more history you give it the
+  better the comparison, so if your utility offers more than a year of export, take it.</p>
+
+{{ shot("overview.png", "The overview after the first upload: the electric card with the current statement, the change on the same weeks last year, and the next statement",
+        "The overview after one drop of the sample household's exports. The gas usage in the same drop feeds the carbon figures lower down; a gas card appears once a gas bill is on file.") }}
+
+<p>From here, the usual next step is {{ doc("forwarding", "forwarding") }}: a filter in your
+  mailbox so you never have to come back and upload the next bill.</p>
+{% endblock %}

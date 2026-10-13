@@ -136,7 +136,7 @@ app.config.update(
 WRITING_GETS = ("/auth/google/callback",)
 
 OPEN_PATHS = ("/health", "/api/tasks/", "/api/inbound/", "/static/",
-              "/login", "/register", "/auth/google/", "/test-suite", "/s/")
+              "/login", "/register", "/auth/google/", "/test-suite", "/s/", "/docs")
 
 
 def _same(given: str, expected: str) -> bool:
@@ -1241,9 +1241,10 @@ def test_suite():
     return response
 
 
-from metermatters.web import connect  # noqa: E402 - the routes need `app` and `paths` to exist first
+from metermatters.web import connect, docs  # noqa: E402 - the routes need `app` and `paths` to exist first
 
 app.register_blueprint(connect.bp)
+app.register_blueprint(docs.bp)
 
 
 @app.errorhandler(413)

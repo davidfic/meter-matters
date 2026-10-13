@@ -1,0 +1,17 @@
+{#- A screenshot, with what it shows underneath. `name` is a file in static/docs/. -#}
+{% macro shot(name, alt, caption=None) -%}
+<figure class="shot">
+  <img src="{{ url_for('static', filename='docs/' ~ name) }}" alt="{{ alt }}" loading="lazy">
+  {% if caption %}<figcaption>{{ caption }}</figcaption>{% endif %}
+</figure>
+{%- endmacro %}
+
+{#- A link to another documentation page. -#}
+{% macro doc(slug, text, anchor=None) -%}
+<a href="{{ url_for('docs.page', slug=slug) }}{{ '#' ~ anchor if anchor }}">{{ text }}</a>
+{%- endmacro %}
+
+{#- A link into the app for someone signed in; a plain mention otherwise. -#}
+{% macro app(endpoint, text, anchor=None) -%}
+{% if accounts_on and user %}<a href="{{ url_for(endpoint) }}{{ '#' ~ anchor if anchor }}">{{ text }}</a>{% else %}<strong>{{ text }}</strong>{% endif %}
+{%- endmacro %}

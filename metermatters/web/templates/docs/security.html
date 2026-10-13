@@ -1,0 +1,130 @@
+{% extends "docs/_layout.html" %}
+{% from "docs/_macros.html" import shot, doc, app %}
+{% block body %}
+<h1>Security and privacy</h1>
+<p class="lead">Your bills say where you live, when you are away and what you can afford. This
+  page says, way by way, what the app can see, what it keeps, what it never has, and how to take
+  any of it back. Where something is not built yet, it says so.</p>
+
+<h2 id="ways">The three ways in, side by side</h2>
+<table class="docs-table">
+  <thead><tr><th>Way</th><th>What the app can see</th><th>What it keeps</th><th>What it never has</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Upload</strong></td>
+        <td>The files you drop in</td>
+        <td>Those files, and the rows read from them</td>
+        <td>Your utility login. Nothing is fetched on your behalf, ever.</td></tr>
+    <tr><td><strong>Forwarding</strong></td>
+        <td>Only the messages your own filter forwards</td>
+        <td>The amount, the dates, the fuel, the last digits of the account, and the subject line on a log entry. Not the message.</td>
+        <td>A password or any kind of access to your mailbox. Any mail your filter did not send.</td></tr>
+    <tr><td><strong>By hand</strong></td>
+        <td>What you type</td>
+        <td>That bill</td>
+        <td>Anything else</td></tr>
+    <tr><td><strong>Scan</strong></td>
+        <td>That one image, which is sent to Google Cloud Vision to be read</td>
+        <td>The bill you confirm. Not the image, and not the text read from it.</td>
+        <td>The image, after the reading. Nothing is filed without you pressing Add bill.</td></tr>
+  </tbody>
+</table>
+
+<h2 id="forwarding">Forwarding, step by step</h2>
+<p>This is the way people are most unsure about, so here is exactly what happens to one bill.</p>
+<ol class="steps big">
+  <li><strong>Your utility emails your mailbox</strong>, as it always has. Nothing has changed here.</li>
+  <li><strong>Your mail provider's filter matches the sender</strong> and sends a copy of that one message
+    to your bills address. The filter is yours, in your mailbox, under your provider's rules. The app is
+    not involved and could not switch it on or off.</li>
+  <li><strong>The copy reaches the operator's inbound mail service</strong> (Cloudflare, Mailgun or
+    Postmark, depending on the server), which hands it to the app over an authenticated HTTPS request.
+    A request without the right credential is refused before the message is looked at.</li>
+  <li><strong>The app looks at the address it was sent to.</strong> It is <code>bills-</code> plus
+    twenty-four random characters, one of roughly 10<sup>36</sup> possibilities, so it cannot be guessed.
+    A message to an address that belongs to nobody is dropped, and the service is told it was accepted,
+    so nobody can probe for real addresses by watching what bounces.</li>
+  <li><strong>The app checks who sent it.</strong> Only the utility's own sender address is accepted
+    (or, for a message you forwarded by hand, the utility's address quoted inside it). A message from
+    anyone else is logged as <em>Not filed</em> and nothing is read out of it. So a stranger who somehow
+    learns your address cannot plant a bill.</li>
+  <li><strong>The utility's signature is checked.</strong> Utilities sign their mail (DKIM). The app
+    verifies the signature and, depending on how the server is set, either files an unverified bill
+    with a note in your log or refuses it.</li>
+  <li><strong>The amount and dates are read, and the message is discarded.</strong> What remains is a
+    row in your bill history and a line in the log: date, outcome, subject, and a sentence saying
+    what was done. The log keeps your last fifty lines.</li>
+</ol>
+<p>Two consequences worth spelling out. If you ever stop wanting this, delete the filter in your
+  mailbox and nothing more will arrive; there is nothing to revoke on the app's side because nothing
+  was granted. And if the server operator's systems were ever compromised, what an attacker could
+  find of yours is what is in the table above: bills, not mail.</p>
+
+<h2 id="account">Your account</h2>
+<ul class="facts-list">
+  <li><strong>Password.</strong> Hashed with argon2id. It is never stored and cannot be recovered, by you
+    or by the operator.</li>
+  <li><strong>Guessing.</strong> Eight wrong tries in fifteen minutes locks out that address, and that
+    client, for a quarter of an hour.</li>
+  <li><strong>Sessions.</strong> A signed cookie, HttpOnly, sent only over HTTPS on a hosted server, and
+    valid for thirty days. Signing out ends it.</li>
+  <li><strong>Other websites.</strong> A form submitted from any other site is refused outright, so another
+    tab cannot act as you.</li>
+  <li><strong>Google sign-in</strong> gives the app your name and email address. The request asks for
+    nothing else, so there is no mail access to grant or revoke.</li>
+  <li><strong>Not built yet:</strong> password reset, and confirming that a sign-up address is really yours.
+    Both need outgoing email. If you lose your password, the operator can delete the account so you can
+    sign up again; your bills go with it, so keep an export. If someone signs up with your address
+    before you do, their password is discarded the moment you sign in through Google.</li>
+</ul>
+
+<h2 id="stored">Where your data lives</h2>
+<p>Each account's bills, exports and settings are kept apart from every other account's, in the
+  database of the server you signed up on. The person who runs that server can, as with any
+  website, read its database. On the public app that person is its author; on a server a friend
+  runs for you, it is your friend. The {{ doc("operators", "operators page") }} is written for
+  them.</p>
+<p>Pages are sent with headers that tell browsers and anything in between not to cache them, not to
+  frame them, and not to pass the address on.</p>
+
+<h2 id="outside">What leaves the server, and to whom</h2>
+<table class="docs-table">
+  <thead><tr><th>Service</th><th>What is sent</th><th>When</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Open-Meteo</strong> (weather)</td><td>Your ZIP code, and the rounded position of the town it names. Never an address.</td><td>When a home has a ZIP and the weather comparison needs the temperatures. Off entirely if the operator sets it so.</td></tr>
+    <tr><td><strong>Google Cloud Vision</strong> (scans)</td><td>The one image you dropped, shrunk.</td><td>Only when you drop a scan. Only if the operator has switched scans on.</td></tr>
+    <tr><td><strong>Google</strong> (sign-in)</td><td>Nothing about your bills. Google tells the app your name and email.</td><td>Only when you press Continue with Google.</td></tr>
+    <tr><td><strong>Energy Switch MA</strong> (supplier offers)</td><td>Your ZIP code.</td><td>On the Rates page, for Massachusetts homes.</td></tr>
+  </tbody>
+</table>
+<p>Nothing is sent to the utility. The app never signs in to a utility's website.</p>
+
+<h2 id="similar">Similar homes</h2>
+<p>The checkbox under <strong>About your home</strong> lets this home's average daily usage count among
+  homes in its state, so that it and they can see where they sit. It is <strong>on by default</strong>,
+  so if you would rather not take part, untick it when you fill in the state. What goes into the
+  pool is the state, the fuel and one number: the average per day. Never an address, an account, a
+  name or a ZIP. The comparison is shown only once there are enough homes in a state to be
+  anonymous, and unticking the box removes yours from the pool at once.</p>
+
+<h2 id="share">Share links</h2>
+<p><strong>Your year</strong> has a share link. It opens a copy of the page with the numbers on it and
+  nothing that names you: no email, no address, no account number, no home name. Anyone with the
+  link can open it. There is no way yet to switch a link off once made, so treat it as public.</p>
+
+<h2 id="scans">Scans</h2>
+<p>Reading the text off a photo is done by Google's Cloud Vision service. The image, shrunk in your
+  browser to under 4 MB, is sent to Google, the text comes back, and the app keeps neither. What
+  it keeps is the bill you confirm by pressing Add bill. If you would rather the image go nowhere,
+  type the figures in; the form is the same.</p>
+
+<h2 id="leaving">Taking it back</h2>
+<ul class="facts-list">
+  <li><strong>Stop forwarding:</strong> delete the filter in your mailbox. Optionally press <em>Issue a new
+    address</em> on Add bills so the old one no longer exists.</li>
+  <li><strong>Leave the similar-homes pool:</strong> untick the box under About your home.</li>
+  <li><strong>Delete a home:</strong> from Your homes. Restorable for 30 days, then gone.</li>
+  <li><strong>Delete the account:</strong> at the foot of Add bills. Type your email address to confirm.
+    Every bill, export, setting and log line goes with it, at once, and it cannot be undone. Export
+    your data from the Raw data page first if you want to keep it.</li>
+</ul>
+{% endblock %}

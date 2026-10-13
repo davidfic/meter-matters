@@ -1,0 +1,85 @@
+{% extends "docs/_layout.html" %}
+{% from "docs/_macros.html" import shot, doc, app %}
+{% block body %}
+<h1>When something doesn't file</h1>
+<p class="lead">The app would rather tell you what went wrong than guess. Here is each message
+  it can give, what it means, and what to do.</p>
+
+<h2 id="email">A bill arrived by email but was not filed</h2>
+<p>Look at <strong>What has arrived</strong> on {{ app("web.connect", "Add bills") }}. Every message
+  that reached your address is there with its reason.</p>
+
+<table class="docs-table">
+  <thead><tr><th>The log says</th><th>What happened</th><th>What to do</th></tr></thead>
+  <tbody>
+    <tr><td><em>Not from the utility's address, so not filed. It came from …</em></td>
+        <td>The sender was not the utility's own notification address, and the message was not a hand-forward with the utility's address quoted inside.</td>
+        <td>Check the filter matches the sender exactly as it appears on a real bill email. If you forwarded by hand, make sure your mail app included the original headers ("Forwarded message", From, Subject) rather than only the body.</td></tr>
+    <tr><td><em>The subject names neither electric nor gas</em></td>
+        <td>The app tells the fuel from the subject line. Water bills by email are not read yet.</td>
+        <td>Upload a water export or type the bill in. Electric and gas bills with an unusual subject: forward one by hand and, if it still says this, send the subject line to whoever runs the server.</td></tr>
+    <tr><td><em>Couldn't read a bill out of it</em></td>
+        <td>The sender was right but the message's layout was not one the app knows. Today only Eversource's bill-ready email is read.</td>
+        <td>Upload or type the bill in. Other utilities are being added; say which one you have.</td></tr>
+    <tr><td><em>The utility's signature on this message didn't verify</em></td>
+        <td>The server is set to require a verified DKIM signature and this message's did not pass. Some forwarding paths rewrite the message on the way.</td>
+        <td>Forward one by hand (hand-forwards are checked by the quoted sender instead). If the filter path always fails, tell the operator; the default setting files the bill and notes it instead of refusing.</td></tr>
+    <tr><td><em>Already on file</em></td>
+        <td>The same bill had arrived before, or was in an upload.</td>
+        <td>Nothing. It is counted once.</td></tr>
+    <tr><td><em>It matches none of your homes yet</em></td>
+        <td>You have several homes and this account is new.</td>
+        <td>Place it from the box at the top of the page. {{ doc("homes", "More than one home") }}</td></tr>
+  </tbody>
+</table>
+
+<h3 id="nothing">Nothing has arrived at all</h3>
+<ol class="steps big">
+  <li><strong>Forward one by hand</strong> to the address on the card. If that shows up in the log within a
+    minute or two, the address works and the problem is the filter.</li>
+  <li><strong>Gmail:</strong> the address must be confirmed before any filter can use it. If the card shows
+    a confirmation waiting, do it. If Gmail's Forwarding tab does not list the address at all, add it
+    again. A filter only applies to mail that arrives after it was made.</li>
+  <li><strong>Check the sender.</strong> Utilities use different addresses for bills, payments and
+    marketing. Match the one on the "your bill is ready" email.</li>
+  <li><strong>Did you issue a new address?</strong> The old one stopped working at once; the filter has to
+    be changed to the new one.</li>
+  <li>If a hand-forward never shows up either, the server's inbound mail is down. Tell whoever runs
+    it; the {{ doc("operators", "operators page") }} says where they should look.</li>
+</ol>
+
+<h2 id="upload">An upload was turned away</h2>
+<table class="docs-table">
+  <thead><tr><th>The notice says</th><th>What to do</th></tr></thead>
+  <tbody>
+    <tr><td><em>That file is too large to be an export.</em></td><td>Files over 5 MB are refused. Export a shorter date range, or ask the utility's site for CSV rather than PDF.</td></tr>
+    <tr><td>A file holding both electric and gas is turned away</td><td>Export each fuel separately. Most sites have a fuel choice on the download page.</td></tr>
+    <tr><td>An unknown unit was refused</td><td>Green Button files say their unit in a code; one the app does not know is refused rather than guessed. Try the CSV export instead, which asks you for the unit.</td></tr>
+    <tr><td><em>Which column is which?</em></td><td>Not an error: the file could be read but the app cannot tell what the columns are. Answer the form; nothing is filed until you do. {{ doc("upload", "Upload", "columns") }}</td></tr>
+    <tr><td><em>That statement history was already on file.</em></td><td>Nothing new in it. Fine to drop a fresh export over an old one any time.</td></tr>
+    <tr><td>The file was read but the dashboard looks wrong</td><td>Open <strong>Raw data</strong> and look at the rows under each account. A bill history that lists payments as well as bills is handled, but an unusual layout may have been read as the wrong kind; the column form lets you say so, and you can reach it by dropping the file again.</td></tr>
+  </tbody>
+</table>
+
+<h2 id="scan">A scan read the wrong numbers</h2>
+<p>A photo is read by a text reader, and a dim or skewed photo reads badly. The line above the form
+  says what was found and what was not. Check every figure against the paper before pressing Add
+  bill; fix any that are wrong in the form itself. A straight-on photo in good light, or the PDF the
+  utility sent, reads best.</p>
+
+<h2 id="weather">The comparison with last year says it cannot take the weather out</h2>
+<p>It needs a ZIP code under <strong>About your home</strong>, the operator's weather lookups switched
+  on, and usage (not just dollars) for both periods. With fewer than a year of usage it falls back
+  to plain usage and says so.</p>
+
+<h2 id="signin">I can't sign in</h2>
+<ul class="facts-list">
+  <li><strong>Too many attempts:</strong> eight wrong passwords in fifteen minutes locks the address for a
+    quarter of an hour. Wait, then try again.</li>
+  <li><strong>Forgotten password:</strong> there is no reset yet. The operator can delete the account so you
+    can sign up again. Your bills go with it, so if you have access from another browser, export them
+    from Raw data first.</li>
+  <li><strong>Signed up with Google, now asked for a password:</strong> press Continue with Google again.
+    An account made through Google has no password.</li>
+</ul>
+{% endblock %}

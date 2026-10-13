@@ -1,0 +1,131 @@
+{% extends "docs/_layout.html" %}
+{% from "docs/_macros.html" import shot, doc, app %}
+{% block body %}
+<h1>Upload your utility's files</h1>
+<p class="lead">Every utility's website has a page where you can download your own history.
+  Drop that file on the Add bills page and it is read, sorted and filed. Nothing is connected
+  to your email or to the utility; you come back and drop the next file when you want to.</p>
+
+<div class="callout">
+  <strong>Why uploads matter even if you forward emails.</strong> A bill email carries the
+  amount and the dates. Only an export carries what you <em>used</em>: kWh, therms, gallons.
+  Usage is the number you control, and it is what the weather comparison, the price per unit
+  and the "what changed" findings are built on. One upload a few times a year keeps it fresh.
+</div>
+
+<h2 id="what">1. What to download</h2>
+<p>Two kinds of file are useful, and either one is a fine start:</p>
+<table class="docs-table">
+  <thead><tr><th>File</th><th>What it gives you</th><th>How to spot it</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Bill history</strong></td>
+        <td>A row per statement: due date and amount. Years of bills in one go.</td>
+        <td>Called <em>Billing history</em>, <em>Payment history</em> or <em>Account history</em>. Usually a CSV.</td></tr>
+    <tr><td><strong>Usage export</strong></td>
+        <td>How much was used over each metered period, often with the cost and sometimes the temperature.</td>
+        <td>Called <em>Green Button</em>, <em>Download my data</em> or <em>Usage history</em>. A CSV, an XML, or a .zip holding them.</td></tr>
+  </tbody>
+</table>
+<p>A PDF of a bill is not an export. The app can read a PDF or a photo of a single bill, but
+  through the scan route on the {{ doc("by-hand", "by-hand page") }}, one bill at a time.</p>
+
+<h3 id="where">Where it is, utility by utility</h3>
+<p>Menus move, so these say what to look for rather than exactly where. Once signed in, look for
+  <strong>Green Button</strong>, <strong>Download my data</strong>, <strong>Usage history</strong> or
+  <strong>Billing history</strong>.</p>
+<dl class="howto-list big">
+  <dt>Eversource (MA, CT, NH)</dt>
+  <dd>eversource.com → <em>Billing &amp; payments</em> for the payment history (a file called
+    <code>AccountHistory.csv</code>); <em>Energy usage</em> → <em>Download usage data</em> for the
+    Green Button zip. Both drop straight in, and the zip needs no unpacking.</dd>
+  <dt>National Grid</dt>
+  <dd>nationalgridus.com → <em>Energy usage</em> → <em>Download usage</em> (Green Button). If the
+    billing page only offers PDFs, add those bills by hand.</dd>
+  <dt>PG&amp;E</dt>
+  <dd>pge.com → <em>Energy usage details</em> → <em>Green Button → Download my data</em>. Pick a date
+    range and CSV or XML. Export electric and gas <em>separately</em>: a file holding both is turned
+    away with a note saying so.</dd>
+  <dt>Con Edison</dt>
+  <dd>coned.com → <em>My Energy Use</em> → <em>Download My Data</em> (Green Button). Pick a year or more.</dd>
+  <dt>Duke Energy</dt>
+  <dd>duke-energy.com → <em>Usage</em> → look for <em>Download</em> or <em>Green Button</em>. Budget-billed
+    accounts still work: usage pairs to each bill by its dates.</dd>
+  <dt>Xcel Energy, SCE, SDG&amp;E, Dominion</dt>
+  <dd>Each has <em>Green Button</em> or <em>Download usage</em> under its usage or energy pages. Any CSV
+    with dates and amounts will do.</dd>
+  <dt>Water and sewer</dt>
+  <dd>Many water utilities offer a usage or billing export too; gallons or CCF both work. Otherwise a
+    quarterly bill typed in by hand is enough.</dd>
+  <dt>Any other utility</dt>
+  <dd>Look for an export of your usage or bills. If the app cannot tell which column is which, it
+    shows you the file and asks. Nothing to export? A date and an amount typed in is all it takes.</dd>
+</dl>
+
+<h2 id="drop">2. Drop it in</h2>
+<p>On {{ app("web.connect", "Add bills") }}, drag the file onto <strong>Upload them yourself</strong>,
+  or click the box to choose it. Several files at once are fine; so is the .zip straight from the
+  portal. Files up to 5 MB are accepted, which is far larger than any export. The same box is on
+  each utility's page under <em>Add a new export</em>.</p>
+
+{{ shot("upload-card.png", "The Upload them yourself card with its drop box and the list of utilities",
+        "The drop box, and underneath it the same utility-by-utility notes as above, folded away.") }}
+
+<p>What happens depends on what is inside, not on the file's name:</p>
+<table class="docs-table">
+  <thead><tr><th>Inside</th><th>What happens</th></tr></thead>
+  <tbody>
+    <tr><td>Green Button XML</td><td>Interval readings are summed by period. Units come from the file; an unknown unit is refused, never guessed. Solar exports are kept separate from what was delivered, never netted.</td></tr>
+    <tr><td>A usage export with costs</td><td>Read and filed as usage. With no bill history yet, a statement is made from each period and marked as an estimate, so the pages fill in at once.</td></tr>
+    <tr><td>A bill history</td><td>Each row becomes a statement. Payments and placeholders are skipped.</td></tr>
+    <tr><td>Any other spreadsheet</td><td>Columns are matched by name. If it cannot tell which is which, it asks (next section).</td></tr>
+    <tr><td>A PNG, JPG or PDF</td><td>Treated as a scan of one bill: see {{ doc("by-hand", "scanning a bill", "scan") }}.</td></tr>
+  </tbody>
+</table>
+
+<h2 id="columns">3. If it asks which column is which</h2>
+<p>A spreadsheet with headings like <em>Period, Reading, Value</em> could be anything. Rather than
+  guess, the app shows the first rows and asks three things: is this usage or bills, which fuel,
+  what unit, and which column plays which role. Nothing is filed until you answer, and the answer
+  is used for that file only.</p>
+
+{{ shot("upload-mapping.png", "The Which column is which? card: a sample of the file and a form to say what each column is",
+        "The sample is the first rows of your own file, so you can see what you are naming.") }}
+
+<ul class="facts-list">
+  <li><strong>Kind:</strong> usage (how much was used per period) or bills (what you were charged).</li>
+  <li><strong>Fuel and unit:</strong> electric in kWh or MWh, gas in therms, ccf or mcf, water in gallons or ccf.
+    A unit is never assumed: a column of numbers with no unit is just numbers.</li>
+  <li><strong>Columns:</strong> a period start and end, or one date per row; the amount used; the cost;
+    and an account number if there is one.</li>
+</ul>
+
+<h2 id="after">4. What you see after</h2>
+<p>A line at the top of the page says what was done: how many statements were added, which metered
+  periods the usage covers, and anything worth knowing (a column that was ignored, a unit that was
+  converted). Then the dashboard opens by itself.</p>
+
+{{ shot("upload-done.png", "The notice after an upload: rows of statement history added, the metered periods the usage covers, opening your dashboard",
+        "The notice for the sample household's bill history and usage exports dropped together. Payments and placeholders in a bill history count as rows read, not as bills.") }}
+
+<p>Drop the same file again and it says so: nothing is duplicated, and nothing already on file is
+  overwritten. That makes it safe to download a fresh export every few months and drop the whole
+  thing in; only the new periods are added.</p>
+
+<p>Every row that was filed is on the <strong>Raw data</strong> page, filterable and exportable as CSV,
+  so you can always check what the app thinks it has.</p>
+
+<h2 id="tips">Things worth knowing</h2>
+<ul class="facts-list">
+  <li><strong>Electric and gas in one file.</strong> Some utilities put both in one export. Export them
+    separately; a mixed file is turned away with a note saying so.</li>
+  <li><strong>Which account is which.</strong> An export is per account. If a file names an account the app
+    has not seen, it files it as a new account; the account switcher on the utility page shows them all.
+    A bill history that masks the account number (<code>******0001</code>) learns the full number from a
+    usage export that has it.</li>
+  <li><strong>Bills come before usage.</strong> A statement due in October usually charges for power metered
+    in August and September. The app pairs each bill with its metered period by amount and date, so the
+    month on the statement is not the month the power was used.</li>
+  <li><strong>Years of history.</strong> The weather comparison needs the same weeks last year, and the
+    "what changed" findings need a baseline. If the utility offers 24 months, take 24.</li>
+</ul>
+{% endblock %}

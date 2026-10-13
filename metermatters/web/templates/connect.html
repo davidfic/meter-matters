@@ -15,6 +15,7 @@
     <div class="top-actions">
       {% if has_bills %}{% include "_fuels.html" %}{% endif %}
       {% include "_homes.html" %}
+      <a class="btn" href="{{ url_for('docs.index') }}">Docs</a>
       <form method="post" action="{{ url_for('web.logout') }}" class="inline">
         <button type="submit" title="Signed in as {{ user.email }}">Sign out</button>
       </form>
@@ -31,7 +32,8 @@
     <div class="card">
       <h2>{{ homes_view.pending|length }} bill{{ "s" if homes_view.pending|length != 1 }} waiting for a home</h2>
       <p class="note">These arrived by email, for an account none of your homes has seen yet.
-        Say where each belongs and it is filed there.</p>
+        Say where each belongs and it is filed there; from then on that account's bills go there by themselves
+        (<a href="{{ url_for('docs.page', slug='homes') }}#email">how bills find their home</a>).</p>
       {% for bill in homes_view.pending %}
       <div class="held-bill">
         <span><strong>{{ bill.fuel_name }}</strong> ${{ "%.2f"|format(bill.amount) }}
@@ -60,6 +62,10 @@
       <p class="note" style="margin-bottom:0">
         {% if not has_bills %}Pick whichever you're comfortable with. {% endif %}
         These can be mixed and changed at any time — a bill that arrives twice is only counted once.
+        {% if not has_bills %}New here? The <a href="{{ url_for('docs.page', slug='start') }}">step-by-step guide</a>
+        walks through each way with screenshots, and the <a href="{{ url_for('docs.page', slug='security') }}">security
+        page</a> says what each can and can't see.{% else %}The <a href="{{ url_for('docs.index') }}">docs</a> have
+        step-by-step instructions for each.{% endif %}
       </p>
     </div>
   </section>
@@ -113,7 +119,9 @@
             address. One per utility: electric, gas, water, whoever bills you.</li>
         </ol>
         <p class="note fine">Everything that arrives is listed below, filed or not. Eversource's
-          bill emails are read today; more utilities are being added.</p>
+          bill emails are read today; more utilities are being added.
+          <a href="{{ url_for('docs.page', slug='forwarding') }}">Step-by-step for Gmail, Outlook and iCloud</a>,
+          and <a href="{{ url_for('docs.page', slug='security') }}#forwarding">exactly what this can and can't see</a>.</p>
 
         <div id="arrivals" data-newest="{{ forwarding.log[0].id if forwarding.log else 0 }}"{{ "" if forwarding.log else " hidden" }}>
           <h3>What has arrived</h3>
@@ -134,7 +142,9 @@
           <p class="note fine">Do this if the address has leaked. The old one stops working at once.</p>
         </form>
       {% else %}
-        <p class="note">Not available on this server — its operator hasn't set up inbound email.</p>
+        <p class="note">Not available on this server — its operator hasn't set up inbound email
+          (<a href="{{ url_for('docs.page', slug='operators') }}#forwarding">what that involves</a>).
+          Uploading and typing bills in work as always.</p>
       {% endif %}
     </div>
 
@@ -162,7 +172,7 @@
         <summary>How to find the file on your utility's site</summary>
         <p class="note">Menus move, so these say what to look for rather than exactly where it is. Once signed in, look for
           <strong>Green Button</strong>, <strong>Download my data</strong>, <strong>Usage history</strong> or
-          <strong>Billing history</strong>. A CSV or XML is what you want; a PDF of a bill isn't readable here yet.</p>
+          <strong>Billing history</strong>. A CSV or XML is what you want{% if scans %}; a PDF of one bill goes through the scan route, one bill at a time{% else %}; a PDF of a bill isn't readable here yet{% endif %}.</p>
         <dl class="howto-list">
           <dt>Eversource (MA, CT, NH)</dt>
           <dd>eversource.com → <em>Billing &amp; payments</em> for the payment history (<code>AccountHistory.csv</code>);
@@ -189,7 +199,8 @@
             file and ask. Nothing to export? Add bills by hand below - a date and an amount is all it takes.</dd>
         </dl>
       </details>
-      <p class="note fine">You come back and upload each new bill.</p>
+      <p class="note fine">You come back and upload each new bill.
+        <a href="{{ url_for('docs.page', slug='upload') }}">The upload guide</a> has the steps with screenshots.</p>
     </div>
 
   </section>
@@ -208,7 +219,8 @@
       <h2>Add a bill by hand</h2>
       <p class="note" id="byhand-note">No file to upload? Type one in. It takes a date and an amount.
         {% if scans %}Or drop a scan or photo of the bill on the upload box above and the numbers are
-        read off it into this form for you to check.{% endif %}</p>
+        read off it into this form for you to check.{% endif %}
+        <a href="{{ url_for('docs.page', slug='by-hand') }}">More</a>.</p>
       <div class="callout" id="scan-result" hidden></div>
       <form method="post" action="{{ url_for('web.bill_add') }}" class="controls">
         <div class="field"><label for="bh-fuel">Fuel</label>
@@ -239,7 +251,8 @@
     <div class="card">
       <h2>About {{ "this home" if homes_view.several else "your home" }}</h2>
       <p class="note">Where it is and who bills it. None of it is required; it picks the right
-        carbon figure for your area and which comparisons apply.
+        carbon figure for your area and which comparisons apply, and the ZIP code is what lets the
+        weather be taken out (<a href="{{ url_for('docs.page', slug='start') }}#home">what each field does</a>).
         {% if place.detected and not place.state %}We read <strong>{{ place.detected }}</strong>
         from your usage file.{% endif %}</p>
       <form method="post" action="{{ url_for('web.home_place') }}" class="controls">
@@ -302,7 +315,8 @@
       <details {{ "open" if homes_view.several else "" }}{{ " class=add-home" }}>
         <summary>Add another home</summary>
         <p class="note">A second house, a flat, a family member's place — each gets its own bills,
-          settings and history, and you can look at them all together.</p>
+          settings and history, and you can look at them all together
+          (<a href="{{ url_for('docs.page', slug='homes') }}">how homes work</a>).</p>
         <form method="post" action="{{ url_for('web.home_add') }}" class="controls">
           <div class="field">
             <label for="home-name">What do you call it?</label>
@@ -319,7 +333,8 @@
     <div class="card">
       <h2>Your account</h2>
       <p class="note">Signed in as <strong>{{ user.email }}</strong>
-        {%- if user.has_google and not user.has_password %}, through Google{% endif %}.</p>
+        {%- if user.has_google and not user.has_password %}, through Google{% endif %}.
+        <a href="{{ url_for('docs.page', slug='security') }}">What is kept, and how to take it back</a>.</p>
       <details>
         <summary>Delete this account</summary>
         <p class="note">Deletes every bill, export and setting.

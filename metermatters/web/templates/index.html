@@ -39,7 +39,8 @@
   <section id="empty-state" hidden>
     <div class="card empty">
       <h2>No {{ fuel|lower }} bills yet</h2>
-      <p class="note">Three ways to add them, all on the <a href="{{ url_for('web.connect') }}">Add bills</a> page. One is enough.</p>
+      <p class="note">Three ways to add them, all on the <a href="{{ url_for('web.connect') }}">Add bills</a> page. One is enough.
+        The <a href="{{ url_for('docs.page', slug='start') }}">step-by-step guide</a> walks through each, with screenshots.</p>
       <div class="empty-ways">
         <div>
           <h3>Upload a file</h3>
@@ -428,8 +429,9 @@
         Drop exports here, or click to choose files
       </div>
       <input type="file" id="file" accept=".csv,.zip,.xml,text/csv,application/zip,text/xml" multiple hidden>
-      {% if accounts_on %}<p class="note fine" style="margin-top:12px">Or have bills arrive on their own:
-        <a href="{{ url_for('web.connect') }}">forwarding and Gmail</a>.</p>{% endif %}
+      {% if accounts_on %}<p class="note fine" style="margin-top:12px">Or have bills arrive on their own by
+        <a href="{{ url_for('web.connect') }}">forwarding</a> the utility's emails
+        (<a href="{{ url_for('docs.page', slug='forwarding') }}">how, and what it can see</a>).</p>{% endif %}
     </div>
   </section>
 

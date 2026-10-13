@@ -1,6 +1,7 @@
 # How Meter Matters works
 
-> The long-form reference. The [README](../README.md) is the short version;
+> The long-form reference. The [README](../README.md) is the short version,
+> and the app's own `/docs` pages are the user-facing setup guide with screenshots;
 > this is where the reasoning lives: how the weather is taken out, how a step
 > change is found, how bills pair with metered periods, what each way of getting
 > bills in can and cannot see, and the single-machine tooling (IMAP polling,

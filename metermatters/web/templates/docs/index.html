@@ -1,0 +1,45 @@
+{% extends "docs/_layout.html" %}
+{% from "docs/_macros.html" import shot, doc %}
+{% block body %}
+<h1>Documentation</h1>
+<p class="lead">Meter Matters turns the files and emails your electric, gas and water companies
+  already send you into something you can act on. These pages are the setup, step by step, with
+  a screenshot at every point where you have to do something, and a plain account of what each
+  way of getting bills in can and cannot see.</p>
+
+<div class="docs-path">
+  <h2>The short version</h2>
+  <ol class="steps big">
+    <li><strong>Create an account.</strong> An email address and a password, or Google. Nothing is
+      connected to anything yet. {{ doc("start", "Getting started") }}</li>
+    <li><strong>Pick how bills get in.</strong> Download an export from your utility and drop it
+      in, which gives you years of history in one go. Then, if you like, have your mailbox
+      forward each new bill email to your private bills address so you never do it again.
+      {{ doc("upload", "Upload") }} · {{ doc("forwarding", "Forwarding") }}</li>
+    <li><strong>Say where the home is.</strong> A state and a ZIP code. That is what lets the
+      weather be taken out of the comparison with last year. {{ doc("start", "About your home", "home") }}</li>
+  </ol>
+</div>
+
+{{ shot("add-bills.png", "The Add bills page: a private forwarding address, an upload box, a form for typing a bill in, and the About your home card",
+        "Everything on this list happens on one page, Add bills. The screenshot is the invented Pat Sample household; so is every other one here.") }}
+
+{% for part in parts %}
+<h2>{{ part }}</h2>
+<div class="docs-cards">
+  {% for p in pages if p.part == part %}
+  <a class="docs-card" href="{{ url_for('docs.page', slug=p.slug) }}">
+    <strong>{{ p.title }}</strong>
+    <span>{{ p.blurb }}</span>
+  </a>
+  {% endfor %}
+</div>
+{% endfor %}
+
+<h2>If you only read one page</h2>
+<p>Read {{ doc("security", "Security and privacy") }}. It says exactly what the app sees when
+  you forward email, what it keeps, and what it never has. Forwarding is the way most people
+  are unsure about, and the answer is short: your mailbox sends the app the bill emails your
+  own filter picks out, and nothing else. The app has no password to your mail and cannot
+  read it.</p>
+{% endblock %}

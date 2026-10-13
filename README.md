@@ -108,6 +108,7 @@ It follows the system light or dark setting, with a manual override.
 | `/home/<name>/…` | Any page, for another home |
 | `/connect` | Add bills: upload, forward, by hand; about this home; manage homes |
 | `/raw` | Every record, filterable, exportable as CSV |
+| `/docs` | The setup guide, with screenshots: each way of getting bills in, what each can see, and the operator's checklist. Open to anyone |
 | `/test-suite` | The results of the test run that shipped with the running code |
 
 ## Run it locally
@@ -126,6 +127,10 @@ Python 3.13 (what the image runs; 3.12 works too). Dependencies are in
 small SVG chart library).
 
 ## Getting bills in
+
+The app's own `/docs` pages walk through each of these with screenshots
+(`metermatters/web/templates/docs/`; the screenshots are taken by
+`scripts/docs_screenshots.py` on the synthetic household). The short version:
 
 From the **Add bills** page, or by dropping files on any dashboard:
 
