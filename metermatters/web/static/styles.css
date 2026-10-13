@@ -831,12 +831,19 @@ details.howto summary { cursor: pointer; font-size: 13px; font-weight: 600; }
 .docs-body .howto-list.big { font-size: 13.5px; }
 .docs-body .callout { font-size: 13.5px; margin: 16px 0; }
 .docs-body code { background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
-.docs-table { width: 100%; border-collapse: collapse; margin: 10px 0 16px; font-size: 13px; }
-.docs-table th, .docs-table td { text-align: left; vertical-align: top; padding: 7px 10px 7px 0; border-top: 1px solid var(--gridline); }
+/* The app's own tables are for numbers: right-aligned, never wrapping. These
+   are prose, so every cell wraps and reads left to right. */
+.docs-table { width: 100%; border-collapse: collapse; margin: 10px 0 16px; font-size: 13px; table-layout: auto; }
+.docs-table th, .docs-table td {
+  text-align: left; vertical-align: top; white-space: normal; font-variant-numeric: normal;
+  padding: 7px 12px 7px 0; border-top: 1px solid var(--gridline); border-bottom: 0;
+}
 .docs-table thead th { border-top: 0; color: var(--text-muted); font-weight: 600; font-size: 12px; }
-.docs-table td:first-child { white-space: normal; }
+.docs-table th:first-child, .docs-table td:first-child { min-width: 9em; }
+.docs-table code { white-space: nowrap; overflow-wrap: normal; }
 figure.shot { margin: 16px 0 20px; }
 figure.shot img { display: block; max-width: 100%; height: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow); }
+figure.shot.narrow img { max-width: min(440px, 100%); }
 figure.shot figcaption { margin-top: 6px; font-size: 12.5px; color: var(--text-muted); }
 .docs-foot { display: flex; justify-content: space-between; gap: 12px; margin-top: 30px; padding-top: 14px; border-top: 1px solid var(--gridline); font-size: 13px; }
 .docs-foot a { text-decoration: none; }
@@ -854,4 +861,6 @@ figure.shot figcaption { margin-top: 6px; font-size: 12.5px; color: var(--text-m
   .docs-part { display: none; }
   .docs-body { padding: 18px 16px; }
   .docs-cards { grid-template-columns: 1fr; }
+  .docs-table th:first-child, .docs-table td:first-child { min-width: 6em; }
+  .docs-table code { white-space: normal; overflow-wrap: anywhere; }
 }

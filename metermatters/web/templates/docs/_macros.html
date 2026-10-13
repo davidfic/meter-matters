@@ -1,6 +1,6 @@
 {#- A screenshot, with what it shows underneath. `name` is a file in static/docs/. -#}
-{% macro shot(name, alt, caption=None) -%}
-<figure class="shot">
+{% macro shot(name, alt, caption=None, narrow=False) -%}
+<figure class="shot{{ ' narrow' if narrow }}">
   <img src="{{ url_for('static', filename='docs/' ~ name) }}" alt="{{ alt }}" loading="lazy">
   {% if caption %}<figcaption>{{ caption }}</figcaption>{% endif %}
 </figure>
