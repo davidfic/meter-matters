@@ -7,13 +7,10 @@ from pathlib import Path
 from metermatters.analytics import analysis
 from metermatters.analytics import gamify
 
-# A frozen copy of the export as first downloaded. Regression fixtures must not
-# move when the live file legitimately grows (backfill, a new statement), so
-# these tests never read AccountHistory.csv.
-FIXTURE_13 = Path(__file__).resolve().parent / "fixtures" / "account_history_13.csv"
-# That export is personal, so it is never committed. This one has the same shape
-# and invented contents, and is what a clean checkout is tested against - see
-# fixtures/synthetic/generate.py for where every number in it comes from.
+# A frozen 13-statement export with the real thing's shape and invented
+# contents - see fixtures/synthetic/generate.py for where every number in it
+# comes from. Regression fixtures must not move when a live file grows, so
+# these tests never read a checkout's own AccountHistory.csv.
 SYNTHETIC_13 = (Path(__file__).resolve().parent / "fixtures" / "synthetic"
                 / "account_history_13.csv")
 
@@ -133,53 +130,6 @@ class TestSyntheticExport(unittest.TestCase):
     def test_scoreboard_is_consistent(self):
         board = gamify.scoreboard(self.report)
         self.assertEqual(board["level"]["level"], 2)                   # $50 banked, not yet $150
-        self.assertEqual(board["total_count"], len(board["badges"]))
-        self.assertTrue(any(b["id"] == "record-low" and b["earned"] for b in board["badges"]))
-        self.assertTrue(any(b["id"] == "streak-3" and b["earned"] for b in board["badges"]))
-        self.assertFalse(any(b["id"] == "streak-5" and b["earned"] for b in board["badges"]))
-
-
-@unittest.skipUnless(FIXTURE_13.exists(), "the personal export is not in this checkout")
-class TestRealExport(unittest.TestCase):
-    """The original 13-statement export, frozen - these are its known values."""
-
-    @classmethod
-    def setUpClass(cls):
-        bills = analysis.build_bills(analysis.load_entries(FIXTURE_13))
-        cls.report = analysis.analyse(bills, {"baseline_months": 6, "target_pct": 5, "goal": None})
-
-    def test_thirteen_statements_parsed(self):
-        self.assertEqual(len(self.report["series"]), 13)
-        self.assertEqual(self.report["series"][0]["period"], "2025-10")
-        self.assertEqual(self.report["series"][-1]["period"], "2026-10")
-
-    def test_latest_statement_is_open_and_a_record_low(self):
-        latest = self.report["summary"]["latest"]
-        self.assertAlmostEqual(latest["amount"], 248.26)
-        self.assertFalse(latest["paid"])
-        self.assertTrue(self.report["summary"]["is_record_low"])
-
-    def test_four_month_down_streak(self):
-        self.assertEqual(self.report["summary"]["streak"], 4)
-
-    def test_baseline_and_banked_savings(self):
-        self.assertAlmostEqual(self.report["baseline"], 324.07, places=2)
-        self.assertAlmostEqual(self.report["banked"], 231.63, places=2)
-
-    def test_rolling_comparison_suppressed_until_a_full_prior_year(self):
-        # 13 statements is not enough to compare against a prior twelve.
-        self.assertIsNone(self.report["summary"]["avg_prior_12"])
-        self.assertIsNone(self.report["summary"]["rolling_delta"])
-
-    def test_year_over_year_pairs_only_october(self):
-        yoy = self.report["yoy"]
-        self.assertEqual(len(yoy), 1)
-        self.assertEqual(yoy[0]["period"], "2026-10")
-        self.assertAlmostEqual(yoy[0]["delta"], -12.21, places=2)
-
-    def test_scoreboard_is_consistent(self):
-        board = gamify.scoreboard(self.report)
-        self.assertEqual(board["level"]["level"], 3)
         self.assertEqual(board["total_count"], len(board["badges"]))
         self.assertTrue(any(b["id"] == "record-low" and b["earned"] for b in board["badges"]))
         self.assertTrue(any(b["id"] == "streak-3" and b["earned"] for b in board["badges"]))

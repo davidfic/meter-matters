@@ -13,13 +13,8 @@ from metermatters.intake import greenbutton
 from metermatters.intake import ingest
 
 HERE = Path(__file__).resolve().parent
-SAMPLE = HERE / "fixtures" / "bill_ready.eml"
-FIXTURE_13 = HERE / "fixtures" / "account_history_13.csv"
-USAGE_DIR = HERE.parent / "usage"          # your own exports, in the checkout
-
-# Everything above is personal and never committed. These have the same shape
-# and invented contents, and are what a clean checkout is tested against - see
-# fixtures/synthetic/generate.py for where every number in them comes from.
+# Invented fixtures with the real files' shape - see fixtures/synthetic/generate.py
+# for where every number in them comes from.
 SYNTHETIC = HERE / "fixtures" / "synthetic"
 SYNTHETIC_SAMPLE = SYNTHETIC / "bill_ready.eml"
 SYNTHETIC_13 = SYNTHETIC / "account_history_13.csv"
@@ -47,14 +42,6 @@ class TestParsing(unittest.TestCase):
         self.assertEqual(notice.due, date(2026, 10, 16))
         self.assertEqual(notice.bill_date, date(2026, 9, 21))
         self.assertEqual(notice.account_suffix, "0001")
-
-    @unittest.skipIf(not SAMPLE.exists(), "sample email not present")
-    def test_the_real_email(self):
-        notice = billmail.parse_file(SAMPLE)
-        self.assertAlmostEqual(notice.amount, 248.26)
-        self.assertEqual(notice.due, date(2026, 10, 16))
-        self.assertRegex(notice.account_suffix, r"^\d{4}$")
-        self.assertEqual(notice.received, date(2026, 9, 22))
 
     def test_a_whole_message_as_it_arrives(self):
         # Two parts, quoted-printable, Latin-1 markup, nested tables: what a
@@ -172,63 +159,6 @@ class TestBackfillSynthetic(unittest.TestCase):
         report = analysis.analyse(bills, {"baseline_months": 6, "target_pct": 5}, periods)
         self.assertEqual(len(report["yoy"]), 14)                       # 26 months, less 12
         self.assertEqual(report["usage_matched"], 26)
-
-
-@unittest.skipUnless(FIXTURE_13.exists(), "the personal export is not in this checkout")
-class TestBackfill(unittest.TestCase):
-    def setUp(self):
-        self.dir = Path(tempfile.mkdtemp())
-        self.csv = self.dir / "AccountHistory.csv"
-        shutil.copy(FIXTURE_13, self.csv)
-        self.addCleanup(shutil.rmtree, self.dir)
-
-    def run_backfill(self, *extra):
-        return backfill.main(["--csv", str(self.csv),
-                              "--usage-dir", str(USAGE_DIR), *extra])
-
-    @unittest.skipIf(not USAGE_DIR.exists(), "usage exports not present")
-    def test_dry_run_changes_nothing(self):
-        before = self.csv.read_text(encoding="utf-8")
-        self.run_backfill("--dry-run")
-        self.assertEqual(self.csv.read_text(encoding="utf-8"), before)
-
-    @unittest.skipIf(not USAGE_DIR.exists(), "usage exports not present")
-    def test_backfill_extends_history_and_is_idempotent(self):
-        self.assertEqual(self.run_backfill(), 0)
-        bills = analysis.build_bills(analysis.load_entries(self.csv))
-        self.assertEqual(len(bills), 28)
-        # Running again must find nothing left to do.
-        self.assertEqual(self.run_backfill(), 2)
-        self.assertEqual(len(analysis.build_bills(analysis.load_entries(self.csv))), 28)
-
-    @unittest.skipIf(not USAGE_DIR.exists(), "usage exports not present")
-    def test_synthesised_rows_are_labelled(self):
-        self.run_backfill()
-        rows, _ = ingest.read_rows(self.csv)
-        marked = [r for r in rows if r.get("Status") == backfill.BACKFILL_STATUS]
-        # Both the statement and its payment are marked, so a later import
-        # carrying the real due date can tell them apart from real rows.
-        self.assertEqual(len(marked), 30)
-        kinds = {r["Type"] for r in marked}
-        self.assertEqual(kinds, {"Current Bill", "Payment"})
-
-    @unittest.skipIf(not USAGE_DIR.exists(), "usage exports not present")
-    def test_real_statements_are_left_untouched(self):
-        original = analysis.build_bills(analysis.load_entries(FIXTURE_13))
-        self.run_backfill()
-        after = {b.period: b for b in analysis.build_bills(analysis.load_entries(self.csv))}
-        for bill in original:
-            self.assertAlmostEqual(after[bill.period].amount, bill.amount, places=2)
-            self.assertEqual(after[bill.period].due, bill.due)
-
-    @unittest.skipIf(not USAGE_DIR.exists(), "usage exports not present")
-    def test_backfill_unlocks_year_over_year(self):
-        self.run_backfill()
-        bills = analysis.build_bills(analysis.load_entries(self.csv))
-        periods = greenbutton.load_dir(USAGE_DIR).periods
-        report = analysis.analyse(bills, {"baseline_months": 6, "target_pct": 5}, periods)
-        self.assertEqual(len(report["yoy"]), 16)
-        self.assertEqual(report["usage_matched"], 28)
 
 
 if __name__ == "__main__":

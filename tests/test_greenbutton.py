@@ -8,14 +8,8 @@ from metermatters.analytics import analysis
 from metermatters.intake import greenbutton
 
 HERE = Path(__file__).resolve().parent
-USAGE_DIR = HERE.parent / "usage"          # your own exports, in the checkout
-BILLING = next(USAGE_DIR.glob("ever_*.csv"), None) or next(USAGE_DIR.glob("*.zip"), None)
-FIXTURE_13 = HERE / "fixtures" / "account_history_13.csv"
-HISTORY = USAGE_DIR / "Green_Button.csv"
-
-# Everything above is personal and never committed. These have the same shape
-# and invented contents, and are what a clean checkout is tested against - see
-# fixtures/synthetic/generate.py for where every number in them comes from.
+# Invented exports with the real files' shape - see fixtures/synthetic/generate.py
+# for where every number in them comes from.
 SYNTHETIC = HERE / "fixtures" / "synthetic"
 SYNTHETIC_USAGE = SYNTHETIC / "usage"
 SYNTHETIC_13 = SYNTHETIC / "account_history_13.csv"
@@ -142,51 +136,14 @@ class TestRejections(unittest.TestCase):
             greenbutton.parse("pre\n\nTYPE,START DATE,END DATE,USAGE (kWh),COST,NOTES\n")
 
 
-class TestLoadAll(unittest.TestCase):
-    def test_a_zip_is_read_without_unpacking_it(self):
-        archive = next(USAGE_DIR.glob("*.zip"), None)
-        if archive is None:
-            self.skipTest("no zip export present")
-        exports = greenbutton.load_zip(archive)
-        self.assertTrue(exports and exports[0].periods)
-        # The source names both the archive and the member, so a row can be
-        # traced back to the exact file inside the download.
-        self.assertIn(":", exports[0].periods[0].source)
-
-    def test_a_zip_and_its_extracted_csv_do_not_double_count(self):
-        archive = next(USAGE_DIR.glob("*.zip"), None)
-        if archive is None:
-            self.skipTest("no zip export present")
-        from_zip = greenbutton.load_all([archive])
-        both = greenbutton.load_all([archive, archive])
-        self.assertEqual(len(from_zip.periods), len(both.periods))
+class TestLoadAllSynthetic(unittest.TestCase):
+    """Loading a folder of exports: zips, loose files, and duplicates."""
 
     def test_a_corrupt_zip_is_skipped_not_fatal(self):
         import tempfile
         with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as fh:
             fh.write(b"not a zip at all")
         self.assertEqual(greenbutton.load_zip(fh.name), [])
-
-    @unittest.skipIf(BILLING is None, "billing export not present")
-    def test_every_account_loads_and_stays_separate(self):
-        export = greenbutton.load_dir(USAGE_DIR)
-        # Two electric accounts (renumbered) plus the gas one.
-        units = {p.account: p.unit for p in export.periods}
-        electric = [a for a, u in units.items() if u == "kWh"]
-        self.assertEqual(len(electric), 2)
-        self.assertTrue(set(electric) <= export.accounts)
-        gas = [a for a, u in units.items() if u == "therms"]
-        self.assertTrue(gas, "the gas export should be metered in therms")
-
-    @unittest.skipIf(BILLING is None, "billing export not present")
-    def test_periods_are_deduplicated_across_files(self):
-        once = greenbutton.load_all([BILLING])
-        twice = greenbutton.load_all([BILLING, BILLING])
-        self.assertEqual(len(once.periods), len(twice.periods))
-
-
-class TestLoadAllSynthetic(unittest.TestCase):
-    """The same loading, against exports that are always here."""
 
     def test_a_zip_is_read_without_unpacking_it(self):
         exports = greenbutton.load_zip(SYNTHETIC_ELECTRIC)
@@ -351,80 +308,6 @@ class TestSyntheticJoin(unittest.TestCase):
 
     def test_no_usage_means_no_crash(self):
         bills = analysis.build_bills(analysis.load_entries(SYNTHETIC_13))
-        report = analysis.analyse(bills, {"baseline_months": 6, "target_pct": 5}, [])
-        self.assertEqual(report["usage_matched"], 0)
-        self.assertIsNone(report["series"][-1]["kwh"])
-        self.assertEqual(report["summary"]["usage_streak"], 0)
-
-
-@unittest.skipIf(BILLING is None, "billing export not present")
-class TestRealExports(unittest.TestCase):
-    """The files actually downloaded from Eversource, as format fixtures."""
-
-    @classmethod
-    def setUpClass(cls):
-        # Which account is which is read off the exports, not written here:
-        # the one still being billed is the current one.
-        electric = [p for p in greenbutton.load_dir(USAGE_DIR).periods if p.unit == "kWh"]
-        newest = max(electric, key=lambda p: p.end).account
-        cls.current = [p for p in electric if p.account == newest]
-        cls.old = [p for p in electric if p.account != newest]
-
-    def test_current_account_span(self):
-        self.assertEqual(len(self.current), 28)
-        self.assertEqual(self.current[0].start, date(2024, 5, 21))
-        self.assertEqual(self.current[-1].end, date(2026, 9, 17))
-
-    def test_the_two_accounts_are_contiguous_not_overlapping(self):
-        # The old account closes the day before the current one opens.
-        self.assertEqual(self.old[-1].end, date(2024, 5, 20))
-        self.assertEqual(self.current[0].start, date(2024, 5, 21))
-
-    def test_old_account_has_temperatures_and_a_weak_weather_fit(self):
-        fit = greenbutton.weather_fit(self.old)
-        self.assertIsNotNone(fit)
-        self.assertEqual(fit["n"], 9)
-        self.assertLess(fit["r2"], 0.2)
-
-
-@unittest.skipIf(BILLING is None, "billing export not present")
-class TestJoin(unittest.TestCase):
-    """Bills must line up with the service periods they charge for."""
-
-    @classmethod
-    def setUpClass(cls):
-        bills = analysis.build_bills(analysis.load_entries(FIXTURE_13))
-        periods = greenbutton.load_dir(USAGE_DIR).periods
-        cls.matched = analysis.attach_usage(bills, periods)
-        cls.report = analysis.analyse(
-            analysis.build_bills(analysis.load_entries(FIXTURE_13)),
-            {"baseline_months": 6, "target_pct": 5}, periods)
-
-    def test_every_bill_finds_its_service_period(self):
-        self.assertEqual(self.matched, 13)
-        self.assertEqual(self.report["usage_matched"], 13)
-
-    def test_bills_are_a_month_in_arrears(self):
-        # The statement due 2026-10-16 charges for usage metered in Aug/Sep.
-        latest = self.report["series"][-1]
-        self.assertEqual(latest["due"], "2026-10-16")
-        self.assertEqual(latest["service_label"], "2026-08-21..2026-09-17")
-        self.assertAlmostEqual(latest["kwh"], 714.0)
-
-    def test_the_split_is_exact(self):
-        # usage effect + rate effect must reconstruct the bill change exactly.
-        for row in self.report["series"]:
-            if row["usage_effect"] is None:
-                continue
-            self.assertAlmostEqual(
-                row["usage_effect"] + row["rate_effect"], row["delta"], places=2,
-                msg=f"split does not reconcile for {row['label']}")
-
-    def test_usage_streak_is_reported(self):
-        self.assertEqual(self.report["summary"]["usage_streak"], 4)
-
-    def test_no_usage_means_no_crash(self):
-        bills = analysis.build_bills(analysis.load_entries(FIXTURE_13))
         report = analysis.analyse(bills, {"baseline_months": 6, "target_pct": 5}, [])
         self.assertEqual(report["usage_matched"], 0)
         self.assertIsNone(report["series"][-1]["kwh"])

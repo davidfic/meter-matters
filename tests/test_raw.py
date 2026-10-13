@@ -8,11 +8,7 @@ from metermatters.intake import greenbutton
 from metermatters.intake import ingest
 
 HERE = Path(__file__).resolve().parent
-CSV = HERE.parent / "AccountHistory.csv"   # your own history, in the checkout
-USAGE = HERE.parent / "usage"
-
-# Those are your own bills, and are never committed. These have the same shape
-# and invented contents, and are what a clean checkout is tested against - see
+# Invented history and exports with the real files' shape - see
 # fixtures/synthetic/generate.py for where every number in them comes from.
 SYNTHETIC = HERE / "fixtures" / "synthetic"
 
@@ -61,15 +57,8 @@ class RawRowsChecks:
         self.assertEqual({r["fuel"] for r in self.rows}, {"Electric", "Gas"})
 
 
-@unittest.skipIf(not CSV.exists(), "no data file")
-class TestRawRows(RawRowsChecks, unittest.TestCase):
-    """Your own history, when it is here."""
-
-    csv, usage = CSV, USAGE
-
-
 class TestRawRowsSynthetic(RawRowsChecks, unittest.TestCase):
-    """The invented history, which always is - and whose contents are known."""
+    """The invented history, whose contents are known."""
 
     csv, usage = SYNTHETIC / "account_history_full.csv", SYNTHETIC / "usage"
 
@@ -122,13 +111,6 @@ class UsageRowsChecks:
 
     def test_each_row_names_its_file(self):
         self.assertTrue(all(r["source"].endswith(".csv") for r in self.rows))
-
-
-@unittest.skipIf(not USAGE.exists(), "no usage exports")
-class TestUsageRows(UsageRowsChecks, unittest.TestCase):
-    """Your own exports, when they are here."""
-
-    usage = USAGE
 
 
 class TestUsageRowsSynthetic(UsageRowsChecks, unittest.TestCase):
