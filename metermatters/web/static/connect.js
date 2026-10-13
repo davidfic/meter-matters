@@ -2,6 +2,7 @@
 
 import { url } from "./base.js";
 import { $, esc, flash } from "./ui.js";
+import { shrinkPng } from "./pngshrink.js";
 
 function describe(u) {
   const many = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
@@ -85,16 +86,27 @@ function isScan(file) {
 
 /* A smaller JPEG of an image, made in the browser: the text reader needs
    nothing larger, and a 400 MB scan would never upload. PDFs pass as they are. */
-async function shrink(file) {
+async function shrink(file, say) {
   if (file.type === "application/pdf" || /\.pdf$/i.test(file.name)) return file;
-  let bitmap;
-  try { bitmap = await createImageBitmap(file); } catch { return file; }
-  const scale = Math.min(1, SCAN_SIDE / Math.max(bitmap.width, bitmap.height));
-  if (scale === 1 && file.size <= SCAN_LIMIT) return file;
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.round(bitmap.width * scale);
-  canvas.height = Math.round(bitmap.height * scale);
-  canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  let canvas;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, SCAN_SIDE / Math.max(bitmap.width, bitmap.height));
+    if (scale === 1 && file.size <= SCAN_LIMIT) return file;
+    canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+  } catch {
+    // Too big for the browser to open at all - a high-dpi flatbed scan. A
+    // PNG can still be read a few rows at a time and averaged down.
+    if (!(file.type === "image/png" || /\.png$/i.test(file.name))) {
+      throw new Error(`${file.name} is too large for the browser to open. Scan at 300 dpi and try again.`);
+    }
+    say(`Shrinking ${file.name}…`);
+    canvas = await shrinkPng(file, SCAN_SIDE, (done) => say(`Shrinking ${file.name}… ${Math.round(done * 100)}%`));
+  }
   const blob = await new Promise((ok) => canvas.toBlob(ok, "image/jpeg", 0.85));
   return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" });
 }
@@ -126,11 +138,20 @@ function showScan(r) {
 
 async function sendScan(file) {
   const zone = $("dropzone");
+  const was = zone.textContent;
+  const say = (text) => { zone.textContent = text; };
   zone.setAttribute("aria-busy", "true");
   let res, data;
   try {
-    const small = await shrink(file);
-    if (small.size > SCAN_LIMIT) { flash(`${file.name} is too big to send - under 4 MB, please.`, true); return; }
+    let small;
+    try {
+      small = await shrink(file, say);
+    } catch (err) {
+      flash(err.message || `Couldn't open ${file.name}.`, true);
+      return;
+    }
+    if (small.size > SCAN_LIMIT) { flash(`${file.name} is too big to send even shrunk - under 4 MB, please.`, true); return; }
+    say(`Reading ${file.name}…`);
     const form = new FormData();
     form.append("file", small, small.name);
     res = await fetch(url("/api/scan"), { method: "POST", body: form });
@@ -140,9 +161,10 @@ async function sendScan(file) {
     return;
   } finally {
     zone.removeAttribute("aria-busy");
+    zone.textContent = was;
   }
   if (!res.ok) { flash(data.error || "Couldn't read that scan.", true); return; }
-  showScan(data);
+  showScan({ ...data, file: file.name });
 }
 
 async function upload(files, mapping = null) {
