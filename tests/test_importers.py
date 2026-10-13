@@ -2,6 +2,7 @@
 
 import io
 import json
+import os
 import unittest
 import unittest.mock
 from datetime import date, datetime, timedelta, timezone
@@ -362,13 +363,19 @@ class TestWhereAHomeIs(WebCase):
         page = self.client.get("/connect").get_data(as_text=True)
         self.assertIn("We read <strong>CA</strong>", page)
 
-    def test_the_email_reader_is_labelled_for_what_it_reads(self):
-        self.client.post("/place", data={"provider": "National Grid"})
-        self.assertIn("Eversource bills only", self.client.get("/connect").get_data(as_text=True))
-        self.client.post("/place", data={"provider": "Eversource"})
-        self.assertNotIn("Eversource bills only", self.client.get("/connect").get_data(as_text=True))
-        self.client.post("/place", data={"provider": ""})
-        self.assertNotIn("Eversource bills only", self.client.get("/connect").get_data(as_text=True))
+    def test_the_bills_address_instructions_fit_any_utility(self):
+        with unittest.mock.patch.dict(os.environ, {"ELEC_INBOUND_DOMAIN": "in.example.com",
+                                                   "ELEC_INBOUND_SECRET": "x"}):
+            self._address_card_names_no_utility()
+
+    def _address_card_names_no_utility(self):
+        for provider in ("National Grid", "Eversource", ""):
+            self.client.post("/place", data={"provider": provider})
+            page = self.client.get("/connect").get_data(as_text=True)
+            steps = page[page.index('<ol class="steps">'):page.index("</ol>")]
+            self.assertNotIn("Eversource", steps, provider)
+            self.assertIn("whoever bills you", steps, provider)
+            self.assertIn("Eversource's\n          bill emails are read today", page, provider)
 
     def test_the_pages_say_nothing_about_a_utility_they_were_not_told_of(self):
         for page in ("/", "/electric", "/rates", "/raw"):

@@ -69,14 +69,11 @@
     <!-- --------------------------------------------------- forwarding -->
     <div class="card way featured">
       <div class="way-head"><h2>Your private bills address</h2>
-        <span class="tag good">Nothing connected, nothing granted</span>
-        {% if not bill_emails %}<span class="tag">Eversource bills only</span>{% endif %}</div>
-      {% if not bill_emails %}<p class="note">This reads Eversource's bill emails, and nothing
-        else yet. For other utilities, upload a file or add bills by hand.</p>{% endif %}
+        <span class="tag good">Nothing connected, nothing granted</span></div>
       {% if forwarding %}
-        <p class="note">An email address that is yours alone. Add one filter in your mailbox that
-          forwards your utility's bill emails to it, and new bills file themselves. We never see
-          any other mail, and hold no password. Works from Gmail, Outlook, iCloud, anything.</p>
+        <p class="note">An email address that is yours alone. Have your mailbox forward your
+          utilities' bill emails to it, and new bills file themselves. We never see any other
+          mail, and hold no password. Works from Gmail, Outlook, iCloud, anything.</p>
 
         <div class="field">
           <span class="label" id="address-label">Your forwarding address</span>
@@ -102,15 +99,15 @@
         {% endif %}
 
         <ol class="steps">
-          <li>In Gmail, open <em>Settings → Forwarding and POP/IMAP → Add a forwarding address</em>
-            and paste the address above.</li>
-          <li>Gmail sends a confirmation here. Reload this page and the link appears above.</li>
-          <li>Create a filter for mail from your utility's bill notices
-            (Eversource: <code>noreply@notifications.eversource.com</code>)
-            and choose <em>Forward it to</em> this address.</li>
+          <li>Find a "your bill is ready" email from your utility and note who sent it.</li>
+          <li>Add the address above as a forwarding address in your mail. In Gmail that is
+            <em>Settings → Forwarding and POP/IMAP → Add a forwarding address</em>; Gmail then
+            sends a confirmation here, and after a reload its link appears above.</li>
+          <li>Make a filter, or a rule, for mail from that sender: <em>forward it to</em> this
+            address. One per utility: electric, gas, water, whoever bills you.</li>
         </ol>
-        <p class="note fine">Other mail providers work the same way: a rule that forwards the
-          utility's notices to the address above.</p>
+        <p class="note fine">Everything that arrives is listed below, filed or not. Eversource's
+          bill emails are read today; more utilities are being added.</p>
 
         {% if forwarding.log %}
         <h3>What has arrived</h3>

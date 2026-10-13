@@ -439,8 +439,7 @@ def connect():
         p.suffix.lower() in (".zip", ".csv") for p in paths().usage.iterdir())
     return render_template("connect.html", forwarding=forwarding, gmail=gmail,
                            has_bills=paths().csv.exists(), has_usage=has_usage,
-                           homes_view=_homes_view(), place=_place_view(),
-                           bill_emails=_bill_emails())
+                           homes_view=_homes_view(), place=_place_view())
 
 
 def _place_view() -> dict:
@@ -453,21 +452,6 @@ def _place_view() -> dict:
             "provider": state.get("provider") or "",
             "share_benchmark": bool(state.get("share_benchmark", True)),
             "states": sorted(region.STATES.items(), key=lambda kv: kv[1])}
-
-
-def _bill_emails() -> bool:
-    """Does the email reader apply? It only knows Eversource's notices.
-
-    True when any of the person's homes is with Eversource - or hasn't said who
-    it is with, in which case nothing is ruled out.
-    """
-    from metermatters.web import app as site
-    for home in homes.active(g.base_paths):
-        with site.in_home(home):
-            provider = (site.load_state().get("provider") or "").lower()
-        if not provider or "eversource" in provider:
-            return True
-    return False
 
 
 def _homes_view() -> dict:
