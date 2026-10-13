@@ -7,30 +7,52 @@
 //
 // Set up, in the Cloudflare dashboard:
 //   1. Email > Email Routing > enable it on the zone (adds the MX records).
-//   2. Workers & Pages > Create > paste this file. Name it, say, bills-inbound.
-//   3. The worker's Settings > Variables: add a secret  INBOUND_SECRET  with the
-//      value of elec-inbound-secret from Secret Manager, and a variable
-//      APP_URL = https://metermatters.app
+//   2. Workers & Pages > Create > Start with Hello World > replace the code
+//      with this file. Name it, say, bills-inbound. Deploy.
+//   3. The worker's Settings > Variables and Secrets: add a secret
+//      INBOUND_SECRET with the value of elec-inbound-secret from Secret
+//      Manager, and a plain variable APP_URL = https://metermatters.app
+//      (no trailing slash). Click Deploy again: settings only apply once
+//      deployed.
 //   4. Email Routing > Routing rules > Catch-all: action "Send to a Worker",
 //      pick the worker, and enable it.
 //
 // A message the app refuses (bad secret, not for us) is bounced; the app
 // answers 200 for anything it accepted, including addresses it does not know,
-// so nobody can probe for real ones by watching bounces.
+// so nobody can probe for real ones by watching bounces. Anything that goes
+// wrong in here is bounced with the reason, so it shows in the Email Routing
+// activity log instead of being retried for a day.
 
 export default {
   async email(message, env) {
-    const raw = await new Response(message.raw).arrayBuffer();
-    const res = await fetch(`${env.APP_URL}/api/inbound/email`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "message/rfc822",
-        "Authorization": `Bearer ${env.INBOUND_SECRET}`,
-        "X-Envelope-To": message.to,
-        "X-Envelope-From": message.from,
-      },
-      body: raw,
-    });
+    const base = (env.APP_URL || "").replace(/\/+$/, "");
+    if (!base.startsWith("https://")) {
+      message.setReject("Worker setting APP_URL is missing or not an https URL");
+      return;
+    }
+    if (!env.INBOUND_SECRET) {
+      message.setReject("Worker secret INBOUND_SECRET is missing");
+      return;
+    }
+
+    let res;
+    try {
+      const raw = await new Response(message.raw).arrayBuffer();
+      res = await fetch(`${base}/api/inbound/email`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "message/rfc822",
+          "Authorization": `Bearer ${env.INBOUND_SECRET}`,
+          "X-Envelope-To": message.to,
+          "X-Envelope-From": message.from,
+        },
+        body: raw,
+      });
+    } catch (err) {
+      message.setReject(`Worker could not reach the app: ${err.message}`);
+      return;
+    }
+
     if (!res.ok) {
       message.setReject(`Not accepted (${res.status})`);
     }
