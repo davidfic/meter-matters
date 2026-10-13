@@ -25,8 +25,9 @@ The electric page answers to ⚡ *Watt's the Damage*, the gas page to
   Eversource's own exports and bill emails are read directly.
 - **Weather taken out.** Each home's own heating balance point and
   degrees-to-fuel slope are fitted from its history, so a cold winter is not
-  mistaken for a wasteful one. Temperatures come from Open-Meteo, by ZIP code
-  only.
+  mistaken for a wasteful one. Water follows the dry instead: gallons per inch
+  of what the garden needed and didn't get as rain, so a dry summer is not
+  mistaken for a leak. Weather comes from Open-Meteo, by ZIP code only.
 - **Was it you, the weather, or the rate?** Every change in a bill is split
   exactly into those three parts, and they add up to the change as billed.
 - **Something changed.** Steps in usage that the weather does not explain are

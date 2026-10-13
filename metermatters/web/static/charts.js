@@ -574,13 +574,19 @@ export class Scatter extends Chart {
     this.yScale = (v) => this.ih - (v / yMax) * this.ih;
     const fmt = this.opts.format || ((v) => String(v));
     const n = (v) => Number(v).toLocaleString("en-US", { maximumFractionDigits: v % 1 ? 1 : 0 });
+    // Ticks on a small axis (inches of watering need) need the decimals that would
+    // otherwise round two neighbours to the same label.
+    const xTicks = niceTicks(0, xMax, 5);
+    const xStep = xTicks.length > 1 ? xTicks[1] - xTicks[0] : 1;
+    const xDigits = xStep >= 1 ? 0 : Math.min(3, Math.ceil(-Math.log10(xStep)));
+    const nx = (v) => Number(v).toLocaleString("en-US", { maximumFractionDigits: xDigits });
 
     this.grid(niceTicks(0, yMax, 4), n);
     el("line", { x1: 0, x2: this.iw, y1: this.ih, y2: this.ih, stroke: "var(--axis)",
                  "stroke-width": 1, "shape-rendering": "crispEdges" }, this.g);
-    for (const t of niceTicks(0, xMax, 5)) {
+    for (const t of xTicks) {
       if (xs(t) > this.iw + 1) continue;
-      el("text", { x: xs(t), y: this.ih + 20, class: "tick x" }, this.g).textContent = n(t);
+      el("text", { x: xs(t), y: this.ih + 20, class: "tick x" }, this.g).textContent = nx(t);
     }
     el("text", { x: this.iw / 2, y: this.ih + 40, class: "axis-title", "text-anchor": "middle" }, this.g)
       .textContent = this.opts.xTitle || "";

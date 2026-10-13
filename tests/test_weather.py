@@ -32,9 +32,12 @@ class FakeService:
         first = date.fromisoformat(params["start_date"])
         last = date.fromisoformat(params["end_date"])
         days = [first + timedelta(n) for n in range((last - first).days + 1)]
+        known = lambda value: [value(d) if d <= self.through else None for d in days]  # noqa: E731
         return {"daily": {"time": [d.isoformat() for d in days],
-                          "temperature_2m_mean": [50.0 + d.day if d <= self.through else None
-                                                  for d in days]}}
+                          "temperature_2m_mean": known(lambda d: 50.0 + d.day),
+                          # Millimetres, as the service sends them: 2.54 mm is a tenth of an inch.
+                          "precipitation_sum": known(lambda d: 2.54 * (d.day % 3)),
+                          "et0_fao_evapotranspiration": known(lambda d: 2.54 * 1.5)}}
 
     def asked_for(self):
         return [(c[1]["start_date"], c[1]["end_date"]) for c in self.calls
@@ -64,7 +67,7 @@ class TestPlaces(WeatherCase):
         sent = self.service.calls[-1][1]
         self.assertEqual((sent["latitude"], sent["longitude"]), (42.12, -72.57))
         self.assertEqual(set(sent), {"latitude", "longitude", "start_date", "end_date", "daily",
-                                     "temperature_unit", "timezone"})
+                                     "temperature_unit", "precipitation_unit", "timezone"})
 
     def test_what_is_not_a_zip_code_is_never_sent(self):
         for value in ("", "0100", "010005", "abcde", "01000; DROP", None):
@@ -146,7 +149,25 @@ class TestTemperatures(WeatherCase):
         self.get(date(2026, 1, 1), date(2026, 1, 31))
         with db.connect() as conn:
             columns = [r["name"] for r in conn.execute("PRAGMA table_info(weather_days)").fetchall()]
-        self.assertEqual(columns, ["place", "day", "temp"])
+        self.assertEqual(columns, ["place", "day", "temp", "rain", "et0"])
+
+    def test_rain_and_what_the_garden_needed_are_kept_in_inches(self):
+        place = weather.locate("01000")
+        self.get(date(2026, 1, 1), date(2026, 1, 31))
+        temps, rain, need = weather.held_all(place, date(2026, 1, 1), date(2026, 1, 31))
+        self.assertEqual(len(temps), 31)
+        self.assertAlmostEqual(rain[date(2026, 1, 2)], 0.2)        # day 2: 2 × 2.54 mm
+        self.assertAlmostEqual(need[date(2026, 1, 2)], 0.0)        # rain beat evaporation
+        self.assertAlmostEqual(need[date(2026, 1, 3)], 0.15)       # day 3: no rain, 0.15 in lost
+
+    def test_days_held_from_before_rain_was_kept_are_filled_in(self):
+        place = weather.locate("01000")
+        with db.connect() as conn:
+            conn.execute("INSERT INTO weather_days (place, day, temp) VALUES (?, ?, ?)",
+                         (place.key, "2026-01-10", 40.0))
+        self.get(date(2026, 1, 10), date(2026, 1, 10))
+        _, rain, _ = weather.held_all(place, date(2026, 1, 10), date(2026, 1, 10))
+        self.assertIn(date(2026, 1, 10), rain)
 
 
 URL = os.environ.get("ELEC_TEST_DATABASE_URL", "")

@@ -277,6 +277,10 @@ def _create(conn: Conn) -> None:
 # an existing table as it was, so each is added here if it is missing.
 ADDED_COLUMNS = (
     ("users", "session_epoch", "INTEGER NOT NULL DEFAULT 0"),
+    # Rain and reference evapotranspiration, inches: what a garden needed and
+    # didn't get. Added for water on 2026-10-13; older rows are refetched.
+    ("weather_days", "rain", "DOUBLE PRECISION"),
+    ("weather_days", "et0", "DOUBLE PRECISION"),
 )
 
 

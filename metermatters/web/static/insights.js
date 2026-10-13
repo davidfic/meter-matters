@@ -73,7 +73,9 @@ function renderBox(block) {
 
   const lower = block.compare.filter((r) => r.you < 0).length;
   const bits = [`Lower than last year on ${lower} of the last ${block.compare.length} bills`];
-  if (row.temp_now != null && row.temp_then != null) {
+  if (block.weather_kind === "dryness" && row.rain_now != null && row.rain_then != null) {
+    bits.push(`${num(row.rain_now, 1)} in of rain, against ${num(row.rain_then, 1)} in`);
+  } else if (row.temp_now != null && row.temp_then != null) {
     bits.push(`${num(row.temp_now)}°F outside, against ${num(row.temp_then)}°F`);
   }
   $("compare-weather").textContent = bits.join(" · ");
@@ -90,7 +92,10 @@ function lede(block, data) {
     return `${billed}. The weather explains ${num(w.r2 * 100)}% of your ${what} use, `
       + `so there is nothing to take out: the change is yours.`;
   }
-  const colder = t.weather > 0 ? "it called for more" : "it called for less";
+  const dry = w.kind === "dryness";
+  const colder = dry
+    ? (t.weather > 0 ? "it was drier, so the garden called for more" : "it was wetter, so the garden called for less")
+    : (t.weather > 0 ? "it called for more" : "it called for less");
   return `As billed, you used ${num(Math.abs(t.raw_pct), 1)}% ${more(t.raw)} ${what} than ${span}. `
     + `But the weather was different, and ${colder}: that alone accounts for ${pct(t.weather_pct)}. `
     + `Take the weather out and you used ${num(Math.abs(t.you_pct), 1)}% ${more(t.you)}.`;
@@ -240,20 +245,26 @@ function renderScatter(block) {
   const show = Boolean(w && w.matters && block.points.length);
   $("scatter-section").hidden = !show;
   if (!show) return;
-  const u = block.unit;
-  $("scatter-title").textContent = `${thing(block.fuel).replace(/^./, (ch) => ch.toUpperCase())} follows the cold`;
-  $("scatter-note").textContent =
-    `Each dot is one bill. The weather explains ${num(w.r2 * 100)}% of the difference between them; `
-    + `this home starts heating when the day averages below about ${w.heat}°F.`;
+  const u = block.unit, dry = w.kind === "dryness";
+  const what = thing(block.fuel).replace(/^./, (ch) => ch.toUpperCase());
+  $("scatter-title").textContent = dry ? `${what} follows the dry` : `${what} follows the cold`;
+  $("scatter-note").textContent = dry
+    ? `Each dot is one bill. The weather explains ${num(w.r2 * 100)}% of the difference between them; `
+      + `this home puts about ${num(w.per_inch)} ${u} on the garden for every inch of watering the weather calls for.`
+    : `Each dot is one bill. The weather explains ${num(w.r2 * 100)}% of the difference between them; `
+      + `this home starts heating when the day averages below about ${w.heat}°F.`;
   draw("scatter", Scatter, $("chart-scatter"), {
     data: block.points, line: [w.base, w.per_heating_degree], height: 320,
     format: (v) => `${num(v, 2)} ${u}/day`,
-    xTitle: `Degrees below ${w.heat}°F, average per day`, yTitle: `${u} per day`,
+    xTitle: dry ? "Inches of watering need, average per day" : `Degrees below ${w.heat}°F, average per day`,
+    yTitle: `${u} per day`,
   });
   $("scatter-table").innerHTML = table([
     { head: "Bill", cell: (r) => r.label },
-    { head: "Outside", cell: (r) => `${num(r.temp)}°F` },
-    { head: `Below ${w.heat}°F`, cell: (r) => num(r.x, 1) },
+    dry ? { head: "Rain", cell: (r) => (r.rain == null ? "—" : `${num(r.rain, 1)} in`) }
+        : { head: "Outside", cell: (r) => `${num(r.temp)}°F` },
+    dry ? { head: "Need, in/day", cell: (r) => num(r.x, 2) }
+        : { head: `Below ${w.heat}°F`, cell: (r) => num(r.x, 1) },
     { head: "Used", cell: (r) => num(r.y, 2) },
     { head: "Predicted", cell: (r) => num(r.fit, 2) },
   ], [...block.points].reverse());

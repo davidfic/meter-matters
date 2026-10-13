@@ -105,6 +105,72 @@ class TestWeatherModel(unittest.TestCase):
         self.assertIsNone(insights.build(few, temps)["fuels"]["Gas"]["weather"])
 
 
+def dryness(days=1300):
+    """Daily watering need, inches: nothing in winter, up to a fifth of an inch a day in July,
+    with a dry spell every third summer."""
+    need, rain = {}, {}
+    for n in range(days):
+        day = START + timedelta(n)
+        summer = max(0.0, -math.cos(2 * math.pi * (day.timetuple().tm_yday - 15) / 365.25))
+        drought = 1.6 if day.year % 3 == 0 else 1.0
+        need[day] = 0.2 * summer * drought
+        rain[day] = 0.1 * (1 - summer) + 0.03 / drought
+    return need, rain
+
+
+def garden(need, per_inch, indoor):
+    def per_day(start, end):
+        days = [start + timedelta(n) for n in range((end - start).days + 1)]
+        return indoor + per_inch * sum(need[d] for d in days) / len(days)
+    return per_day
+
+
+class TestWaterModel(unittest.TestCase):
+    def test_it_finds_how_much_the_garden_gets_per_inch(self):
+        need, rain = dryness()
+        wx = insights.Weather({}, rain, need)
+        periods = bills(garden(need, per_inch=900.0, indoor=150.0), unit="gal", price=0.01)
+        model = insights.Model.learn(wx, periods, "Water")
+        self.assertEqual(model.kind, "dryness")
+        self.assertTrue(model.matters)
+        self.assertAlmostEqual(model.beta[1], 900.0, delta=5)
+        self.assertAlmostEqual(model.beta[0], 150.0, delta=2)
+        self.assertIsNone(model.heat)
+
+    def test_a_home_that_does_not_water_is_said_to_be_one(self):
+        need, rain = dryness()
+        wx = insights.Weather({}, rain, need)
+        periods = bills(lambda s, e: 150.0 + (e.day % 5), unit="gal", price=0.01)
+        model = insights.Model.learn(wx, periods, "Water")
+        self.assertFalse(model.matters)
+
+    def test_a_dry_summer_is_not_blamed_on_the_household(self):
+        need, rain = dryness()
+        wx = insights.Weather({}, rain, need)
+        periods = bills(garden(need, per_inch=900.0, indoor=150.0), unit="gal", price=0.01)
+        model = insights.Model.learn(wx, periods, "Water")
+        rows = insights.compare(periods, model, wx)
+        # The same garden, watered to the same rule: once the dryness is taken
+        # out, nothing is left for the household to answer for.
+        for row in rows:
+            self.assertLess(abs(row["you"]), 3.0, row["label"])
+        self.assertIsNotNone(rows[-1]["rain_now"])
+
+    def test_the_watering_tip_prices_one_in_four(self):
+        need, rain = dryness()
+        wx = insights.Weather({}, rain, need)
+        periods = bills(garden(need, per_inch=900.0, indoor=150.0), unit="gal", price=0.01)
+        model = insights.Model.learn(wx, periods, "Water")
+        tip = insights.watering_tip(periods, model, wx)
+        self.assertEqual(tip["id"], "watering")
+        self.assertIn("900 gal for every inch", tip["body"])
+        self.assertIsNone(insights.thermostat_tip(periods, model, wx))
+
+    def test_without_rain_on_file_water_says_nothing_about_the_weather(self):
+        periods = bills(lambda s, e: 150.0, unit="gal", price=0.01)
+        self.assertIsNone(insights.Model.learn(insights.Weather(weather()), periods, "Water"))
+
+
 class TestComparedWithLastYear(unittest.TestCase):
     def setUp(self):
         # The third winter is eight degrees colder than the ones before it.

@@ -11,9 +11,9 @@ utility is a row in a table rather than a hunt through the code.
               must come out on one axis
     units     every spelling that means this fuel, lower-cased
     tagline   the page's own name
-    weather   whether the weather explains the usage (degree days). Water
-              has no balance point, so no model is fitted and nothing is
-              said about the weather
+    weather   whether the weather explains the usage. Electric and gas follow
+              the cold (degree days); water follows the dry, what a garden
+              lost to sun and air and didn't get back as rain
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ GAS = Fuel("Gas", "gas", "gas", "therms", frozenset({"therms", "therm", "ccf", "
                    "Thermostat Tactician", "Flame Tamer", "Therm Terminator",
                    "Efficiency Engineer", "Insulation Nation", "Furnace Whisperer"))
 WATER = Fuel("Water", "water", "water", "gal", frozenset({"gal", "gallons", "gallon", "kgal"}),
-             "💧 Tapped Out", weather=False, noun="water",
+             "💧 Tapped Out", noun="water",
              titles=("Meter Reader", "Drip Stopper", "Short Showerer", "Leak Seeker",
                      "Low-Flow Pro", "Rain Barrel Baron", "Gallon Guardian",
                      "Efficiency Engineer", "Drought Proof", "Reservoir Whisperer"))

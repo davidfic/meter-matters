@@ -1,8 +1,11 @@
-"""Daily temperatures for a place: fetched once, then kept.
+"""Daily weather for a place: fetched once, then kept.
 
 A gas bill is mostly a record of how cold it was. Comparing this January with
 last January says little until the weather is taken out, and taking it out
-needs the temperature of every day in both.
+needs the temperature of every day in both. A water bill in summer is partly
+a record of how dry it was: each day's rain and reference evapotranspiration
+(what a lawn loses to sun and air) are kept too, and their difference is what
+the garden needed and didn't get.
 
 The source is Open-Meteo's historical archive. It needs no key, and what it
 gives is licensed CC BY 4.0, so pages that use it must say so
@@ -132,12 +135,34 @@ def _days(first: date, last: date):
         day += timedelta(days=1)
 
 
-def _cached(place: Place, first: date, last: date) -> dict[date, float]:
+MM_PER_INCH = 25.4
+
+
+def _rows(place: Place, first: date, last: date) -> dict[date, dict]:
     with db.connect() as conn:
         rows = conn.execute(
-            "SELECT day, temp FROM weather_days WHERE place = ? AND day >= ? AND day <= ?",
+            "SELECT day, temp, rain, et0 FROM weather_days WHERE place = ? AND day >= ? AND day <= ?",
             (place.key, first.isoformat(), last.isoformat())).fetchall()
-    return {date.fromisoformat(r["day"]): float(r["temp"]) for r in rows}
+    return {date.fromisoformat(r["day"]): dict(r) for r in rows}
+
+
+def _cached(place: Place, first: date, last: date) -> dict[date, float]:
+    return {d: float(r["temp"]) for d, r in _rows(place, first, last).items()}
+
+
+def _complete(r: dict) -> bool:
+    return r.get("rain") is not None and r.get("et0") is not None
+
+
+def held_all(place: Place, first: date, last: date) -> tuple[dict, dict, dict]:
+    """(temperatures, rain, watering need) already on file, by day. Rain and
+    need are in inches; need is evapotranspiration less rain, never below
+    zero. Never goes to the network."""
+    rows = _rows(place, first, last)
+    temps = {d: float(r["temp"]) for d, r in rows.items()}
+    rain = {d: float(r["rain"]) for d, r in rows.items() if _complete(r)}
+    need = {d: max(0.0, float(r["et0"]) - float(r["rain"])) for d, r in rows.items() if _complete(r)}
+    return temps, rain, need
 
 
 def _worth_asking(place: Place, first: date, last: date, now: datetime) -> bool:
@@ -155,16 +180,24 @@ def _worth_asking(place: Place, first: date, last: date, now: datetime) -> bool:
         return True
 
 
-def _fetch(place: Place, first: date, last: date) -> dict[date, float]:
+def _fetch(place: Place, first: date, last: date) -> dict[date, tuple]:
+    """Each day's (temperature °F, rain in, reference evapotranspiration in)."""
     answer = _get(ARCHIVE_URL, {
         "latitude": place.lat, "longitude": place.lon,
         "start_date": first.isoformat(), "end_date": last.isoformat(),
-        "daily": "temperature_2m_mean", "temperature_unit": "fahrenheit",
+        "daily": "temperature_2m_mean,precipitation_sum,et0_fao_evapotranspiration",
+        "temperature_unit": "fahrenheit", "precipitation_unit": "mm",
         "timezone": place.tz})
     try:
-        days, temps = answer["daily"]["time"], answer["daily"]["temperature_2m_mean"]
+        daily = answer["daily"]
+        days, temps = daily["time"], daily["temperature_2m_mean"]
+        rains = daily.get("precipitation_sum") or [None] * len(days)
+        et0s = daily.get("et0_fao_evapotranspiration") or [None] * len(days)
         # The newest days come back empty until the archive catches up.
-        return {date.fromisoformat(d): float(t) for d, t in zip(days, temps) if t is not None}
+        return {date.fromisoformat(d): (float(t),
+                                        None if r is None else float(r) / MM_PER_INCH,
+                                        None if e is None else float(e) / MM_PER_INCH)
+                for d, t, r, e in zip(days, temps, rains, et0s) if t is not None}
     except (KeyError, TypeError, ValueError):
         raise Unavailable("the weather service sent something unreadable") from None
 
@@ -181,8 +214,10 @@ def temperatures(place: Place, first: date, last: date,
     last = min(last, now.date() - timedelta(days=1))     # today isn't over yet
     if last < first:
         return {}
-    held = _cached(place, first, last)
-    missing = [d for d in _days(first, last) if d not in held]
+    rows = _rows(place, first, last)
+    held = {d: float(r["temp"]) for d, r in rows.items()}
+    # A day held from before rain was kept counts as missing, so it is filled in.
+    missing = [d for d in _days(first, last) if d not in rows or not _complete(rows[d])]
     if not missing or not _worth_asking(place, missing[0], missing[-1], now):
         return held
 
@@ -195,9 +230,10 @@ def temperatures(place: Place, first: date, last: date,
     with db.connect() as conn:
         if fetched:
             conn.executemany(
-                "INSERT INTO weather_days (place, day, temp) VALUES (?, ?, ?) "
-                "ON CONFLICT (place, day) DO UPDATE SET temp = excluded.temp",
-                [(place.key, d.isoformat(), t) for d, t in fetched.items()])
+                "INSERT INTO weather_days (place, day, temp, rain, et0) VALUES (?, ?, ?, ?, ?) "
+                "ON CONFLICT (place, day) DO UPDATE SET temp = excluded.temp, "
+                "rain = excluded.rain, et0 = excluded.et0",
+                [(place.key, d.isoformat(), t, r, e) for d, (t, r, e) in fetched.items()])
         conn.execute(
             "INSERT INTO weather_checks (place, checked_at, first_day, last_day) "
             "VALUES (?, ?, ?, ?) ON CONFLICT (place) DO UPDATE SET "
@@ -205,7 +241,7 @@ def temperatures(place: Place, first: date, last: date,
             "last_day = excluded.last_day",
             (place.key, now.isoformat(timespec="seconds"),
              missing[0].isoformat(), missing[-1].isoformat()))
-    held.update(fetched)
+    held.update({d: t for d, (t, _r, _e) in fetched.items()})
     if failure is not None and not held:
         raise failure
     return held

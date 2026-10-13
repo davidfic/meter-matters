@@ -536,10 +536,11 @@ def _take_the_weather_out(report: dict, fuel: str, periods: list, state: dict) -
     if place is None:
         return
     try:
-        temps = weather.held(place, min(p.start for p in periods), max(p.end for p in periods))
+        temps, rain, need = weather.held_all(place, min(p.start for p in periods),
+                                             max(p.end for p in periods))
     except (sqlite3.Error, OSError):
         return
-    wx = insights.Weather(temps)
+    wx = insights.Weather(temps, rain, need)
     model = insights.Model.learn(wx, periods, fuel)
     if model is None or not model.matters:
         return
@@ -797,7 +798,7 @@ def build_insights(state: dict) -> dict:
     periods = export.periods if export else []
     zipcode = state.get("zip") or (weather.zip_in(export.address) if export else None)
 
-    temps, place, status = None, None, "ok"
+    temps, rain, need, place, status = None, None, None, None, "ok"
     if not periods:
         status = "no-usage"
     elif not weather.enabled():
@@ -807,8 +808,9 @@ def build_insights(state: dict) -> dict:
     else:
         try:
             where = weather.locate(zipcode)
-            temps = weather.temperatures(where, min(p.start for p in periods),
-                                         max(p.end for p in periods))
+            first, last = min(p.start for p in periods), max(p.end for p in periods)
+            temps = weather.temperatures(where, first, last)
+            _, rain, need = weather.held_all(where, first, last)
             place = where.name
         except (weather.Unavailable, sqlite3.Error, OSError) as exc:
             app.logger.warning("weather unavailable: %s", exc)
@@ -818,8 +820,8 @@ def build_insights(state: dict) -> dict:
     where = region.resolve(state.get("state"), export.address if export else None, place)
     here = region.grid(where)
     with insights.grid(here.kg_per_kwh):
-        out = insights.build(periods, temps, notes=state.get("notes"), place=place,
-                             weather_status=status)
+        out = insights.build(periods, temps, rain=rain, need=need, notes=state.get("notes"),
+                             place=place, weather_status=status)
     out["zip"] = zipcode
     out["state"] = where
     out["grid"] = here.label

@@ -21,6 +21,12 @@ degree below that. Both are found by fitting the home's own history, not
 assumed. What the home "should" have used in any period's weather follows from
 that, and the difference between two periods' expectations is the weather's
 share of the change between them. The rest is the household's.
+
+**Water** follows the dry rather than the cold. Each day a lawn loses water to
+sun and air (reference evapotranspiration) and gets some back as rain; what it
+needed and didn't get is the day's watering need, in inches. A home that
+waters uses so many gallons for every inch of it, and that slope is fitted the
+same way. A home that doesn't water shows no slope, and the page says so.
 """
 
 from __future__ import annotations
@@ -95,8 +101,11 @@ def timeline(periods: list) -> list:
 # ----------------------------------------------------------------- weather
 
 class Weather:
-    def __init__(self, temps: dict):
+    def __init__(self, temps: dict, rain: dict | None = None, need: dict | None = None):
         self.temps = temps or {}
+        # Inches per day: what fell, and what a garden lost and didn't get back.
+        self.rain = rain or {}
+        self.need = need or {}
         # Finding a balance point asks for the same sums hundreds of times over.
         self._kept: dict = {}
 
@@ -126,6 +135,20 @@ class Weather:
 
     def average(self, p) -> float:
         return mean(self.temps[d] for d in self.days(p))
+
+    def covers_dryness(self, p) -> bool:
+        return bool(self.need) and all(d in self.need for d in self.days(p))
+
+    def dryness(self, p) -> float:
+        """Inches of watering need a day, averaged over the period."""
+        key = (p.start, p.end, "need")
+        if key not in self._kept:
+            self._kept[key] = sum(self.need[d] for d in self.days(p)) / p.days
+        return self._kept[key]
+
+    def rainfall(self, p) -> float:
+        """Inches of rain over the whole period."""
+        return sum(self.rain[d] for d in self.days(p))
 
 
 def _solve(a, b):
@@ -162,13 +185,23 @@ def fit(xs: list[tuple], ys: list[float]) -> dict | None:
 
 
 class Model:
-    """How one fuel in one home responds to the weather."""
+    """How one fuel in one home responds to the weather.
 
-    def __init__(self, wx: Weather, heat: int, cool: int | None, beta: list, r2: float):
+    For electric and gas the feature is degrees of cold (and, for electric,
+    of heat) a day; `heat` and `cool` are the balance points. For water the
+    one feature is inches of watering need a day, `heat` and `cool` are None,
+    and `beta[1]` is gallons per inch.
+    """
+
+    def __init__(self, wx: Weather, heat: int | None, cool: int | None, beta: list, r2: float,
+                 kind: str = "degrees"):
         self.wx, self.heat, self.cool, self.beta, self.r2 = wx, heat, cool, beta, r2
+        self.kind = kind
 
     @classmethod
     def learn(cls, wx: Weather, periods: list, fuel: str) -> "Model | None":
+        if fuel == "Water":
+            return cls.learn_dryness(wx, periods)
         covered = [p for p in periods if wx.covers(p)]
         if len(covered) < MIN_TO_MODEL:
             return None
@@ -197,11 +230,28 @@ class Model:
         found, heat, cool = best
         return cls(wx, heat, cool, found["beta"], found["r2"])
 
+    @classmethod
+    def learn_dryness(cls, wx: Weather, periods: list) -> "Model | None":
+        covered = [p for p in periods if wx.covers_dryness(p)]
+        if len(covered) < MIN_TO_MODEL:
+            return None
+        ys = [p.kwh_per_day for p in covered]
+        found = fit([(wx.dryness(p),) for p in covered], ys)
+        # Less water when it is drier is not a garden; it is noise.
+        if found is None or found["beta"][1] < 0:
+            return cls(wx, None, None, [mean(ys), 0.0], 0.0, kind="dryness")
+        return cls(wx, None, None, found["beta"], found["r2"], kind="dryness")
+
     @property
     def matters(self) -> bool:
         return self.r2 >= WEATHER_MATTERS
 
+    def covers(self, p) -> bool:
+        return self.wx.covers_dryness(p) if self.kind == "dryness" else self.wx.covers(p)
+
     def features(self, p) -> tuple:
+        if self.kind == "dryness":
+            return (self.wx.dryness(p),)
         if self.cool is None:
             return (self.wx.heating(p, self.heat),)
         return (self.wx.heating(p, self.heat), self.wx.cooling(p, self.cool))
@@ -248,7 +298,7 @@ def compare(periods: list, model: Model | None, wx: Weather) -> list[dict]:
         if q is None:
             continue
         raw = p.kwh_per_day - q.kwh_per_day
-        known = model is not None and wx.covers(p) and wx.covers(q)
+        known = model is not None and model.covers(p) and model.covers(q)
         weather = model.expect(p) - model.expect(q) if known else 0.0
         you = raw - weather
         rate_now = p.cost / p.kwh if p.kwh else 0.0
@@ -259,6 +309,8 @@ def compare(periods: list, model: Model | None, wx: Weather) -> list[dict]:
             "raw": raw, "weather": weather, "you": you, "weather_known": known,
             "temp_now": wx.average(p) if wx.covers(p) else None,
             "temp_then": wx.average(q) if wx.covers(q) else None,
+            "rain_now": wx.rainfall(p) if wx.covers_dryness(p) else None,
+            "rain_then": wx.rainfall(q) if wx.covers_dryness(q) else None,
             # A percentage of next to nothing is noise: gas going from 0.01 to
             # 0.03 therms a day in July is "+200%" and means nothing.
             "pct_ok": q.kwh_per_day >= typical * 0.10,
@@ -340,7 +392,7 @@ def level_shift(periods: list, model: Model | None, wx: Weather) -> dict | None:
     variation and is big enough to matter.
     """
     if model is not None and model.matters:
-        periods = [p for p in periods if wx.covers(p)]
+        periods = [p for p in periods if model.covers(p)]
         values = [p.kwh_per_day - model.expect(p) for p in periods]
         basis = "against the weather"
     else:
@@ -469,7 +521,7 @@ def thermostat_tip(periods: list, model: Model, wx: Weather) -> dict | None:
     degree, near enough - so the saving is the fuel burnt per degree, times
     the degrees that disappear.
     """
-    if not model.matters or model.beta[1] <= 0:
+    if model.kind != "degrees" or not model.matters or model.beta[1] <= 0:
         return None
     recent = [p for p in periods[-12:] if wx.covers(p)]
     if len(recent) < 6:
@@ -491,6 +543,37 @@ def thermostat_tip(periods: list, model: Model, wx: Weather) -> dict | None:
         "worth": [{"value": _money(saved * unit_price(periods)), "label": "a year"},
                   {"value": f"{saved:,.0f} {unit}", "label": f"{saved / used * 100:.0f}% of what you used"},
                   {"value": _kg(saved * kg_per_unit(unit)), "label": "of carbon"}],
+    }
+
+
+def watering_tip(periods: list, model: Model, wx: Weather) -> dict | None:
+    """What one watering in four, skipped, would have saved over the last year.
+
+    The slope says how many gallons this home puts on the garden for every
+    inch the weather called for. Over a year's weather that is the outdoor
+    water; a quarter of it is one watering in four.
+    """
+    if model.kind != "dryness" or not model.matters or model.beta[1] <= 0:
+        return None
+    recent = [p for p in periods[-12:] if wx.covers_dryness(p)]
+    if len(recent) < 4:
+        return None
+    inches = sum(wx.dryness(p) * p.days for p in recent)
+    outdoor = model.beta[1] * inches
+    used = sum(p.kwh for p in recent)
+    unit = recent[-1].unit
+    if outdoor <= 0 or not used:
+        return None
+    saved = outdoor / 4
+    return {
+        "id": "watering", "fuel": "Water",
+        "title": "Skip one watering in four",
+        "body": f"This home uses about {model.beta[1]:,.0f} {unit} for every inch of watering the "
+                f"weather calls for. Over the last year that came to {inches:.1f} inches, about "
+                f"{outdoor:,.0f} {unit} on the garden. Skipping one watering in four, or watering "
+                f"only when the soil is dry, comes to:",
+        "worth": [{"value": _money(saved * unit_price(periods)), "label": "a year"},
+                  {"value": f"{saved:,.0f} {unit}", "label": f"{saved / used * 100:.0f}% of what you used"}],
     }
 
 
@@ -538,13 +621,13 @@ def fuel_block(fuel: str, periods: list, wx: Weather, notes: dict) -> dict:
     periods = timeline(periods)
     unit = periods[-1].unit if periods else fuels.by_name(fuel).unit
     block = {"fuel": fuel, "unit": unit, "periods": len(periods), "status": "ok",
-             # Water has no balance point: nothing about it is "the weather's part".
-             "weather_relevant": fuels.by_name(fuel).weather}
+             "weather_relevant": fuels.by_name(fuel).weather,
+             # What the weather means for this fuel: the cold, or the dry.
+             "weather_kind": "dryness" if fuel == "Water" else "degrees"}
     if not periods:
         return {**block, "status": "no-usage",
                 "need": "Upload a usage export to see how you compare with last year."}
 
-    # No balance point for water: nothing about it follows the cold.
     model = Model.learn(wx, periods, fuel) if fuels.by_name(fuel).weather else None
     rows = compare(periods, model, wx)
     shift = level_shift(periods, model, wx)
@@ -557,14 +640,18 @@ def fuel_block(fuel: str, periods: list, wx: Weather, notes: dict) -> dict:
         "first": month_year(periods[0].start), "last": month_year(periods[-1].end),
         "average": mean(p.kwh_per_day for p in periods),
         "weather": None if model is None else {
-            "r2": model.r2, "matters": model.matters, "heat": model.heat, "cool": model.cool,
+            "r2": model.r2, "matters": model.matters, "kind": model.kind,
+            "heat": model.heat, "cool": model.cool,
             "base": model.beta[0], "per_heating_degree": model.beta[1],
             "per_cooling_degree": model.beta[2] if model.cool is not None else None,
+            "per_inch": model.beta[1] if model.kind == "dryness" else None,
         },
-        "points": [{"label": span(p), "x": wx.heating(p, model.heat), "y": p.kwh_per_day,
-                    "fit": model.expect(p), "temp": wx.average(p),
+        "points": [{"label": span(p), "x": model.features(p)[0], "y": p.kwh_per_day,
+                    "fit": model.expect(p),
+                    "temp": wx.average(p) if wx.covers(p) else None,
+                    "rain": wx.rainfall(p) if wx.covers_dryness(p) else None,
                     "recent": p in periods[-COMPARE_LAST:]}
-                   for p in periods if wx.covers(p)] if model is not None and model.matters else [],
+                   for p in periods if model.covers(p)] if model is not None and model.matters else [],
         "compare": rows[-COMPARE_LAST:],
         "totals": totals(rows[-COMPARE_LAST:]),
         "latest": rows[-1] if rows else None,
@@ -580,19 +667,21 @@ def fuel_block(fuel: str, periods: list, wx: Weather, notes: dict) -> dict:
     tips = [shift_tip(shift, unit, shift["note"] if shift else None)]
     if model is not None:
         tips.append(thermostat_tip(periods, model, wx))
+        tips.append(watering_tip(periods, model, wx))
     tips.append(always_on_tip(periods, model))
     block["tips"] = [t for t in tips if t]
     return block
 
 
-def build(periods: list, temps: dict | None, *, notes: dict | None = None,
+def build(periods: list, temps: dict | None, *, rain: dict | None = None,
+          need: dict | None = None, notes: dict | None = None,
           place: str | None = None, weather_status: str = "ok") -> dict:
     """Everything the pages need, JSON-ready.
 
     `weather_status` says why there are no temperatures when there are none:
     "off", "no-location" or "unavailable".
     """
-    wx = Weather(temps or {})
+    wx = Weather(temps or {}, rain, need)
     by_fuel: dict[str, list] = {}
     for p in periods:
         by_fuel.setdefault(fuel_of(p), []).append(p)

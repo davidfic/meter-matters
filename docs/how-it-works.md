@@ -136,8 +136,8 @@ reaching back more than a year.
 | **Was it you, or was it the weather?** | Every bill's change, split into the two. The bars add up to the change as billed |
 | **Where the change in the bill came from** | The same in dollars, over twelve bills, with the rate as a third part. They sum exactly |
 | **Something changed** | A stretch where usage stepped up or down, how big, and what it cost. Give it a name and it stops being flagged |
-| **Usage follows the cold** | Each bill against how cold it was - shown only when the weather actually drives the usage |
-| **What specific changes would be worth** | One degree on the thermostat; 100 watts switched off; whatever came on and stayed on |
+| **Usage follows the cold** (water: **follows the dry**) | Each bill against how cold, or how dry, it was - shown only when the weather actually drives the usage |
+| **What specific changes would be worth** | One degree on the thermostat; 100 watts switched off; one watering in four skipped; whatever came on and stayed on |
 
 **How the weather is taken out.** Every home has a temperature below which
 the heating comes on, and an amount of fuel it burns for each degree below
@@ -147,6 +147,14 @@ periods' expectations is the weather's share of the change between them. The
 rest is yours. Where the weather explains little - here it explains 98% of the
 gas and 3% of the electricity - the page says so instead of drawing a
 relationship that isn't there.
+
+Water follows the dry rather than the cold. Each day a lawn loses water to sun
+and air (Open-Meteo's reference evapotranspiration) and gets some back as rain;
+what it needed and didn't get is that day's watering need, in inches. A home
+that waters uses so many gallons for every inch of it, fitted the same way,
+and a dry summer is then the weather's share rather than the household's. A
+home that doesn't water shows no slope, and the page says so. The number shown
+beside each bill is plain rainfall, which is what people recognise.
 
 **What counts as a change.** A step is looked for in what the weather does
 *not* explain, so winter is never "a step up". Three stories are tried - it
