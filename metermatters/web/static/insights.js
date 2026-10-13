@@ -48,7 +48,7 @@ function ownWeather(block) {
   if (!w) return "";
   if (block.weather_kind === "dryness") {
     if (w.rain == null) return "";
-    return `${w.span}: ${num(w.rain, 1)} in of rain fell, and the garden called for about ${num(w.need, 1)} in of watering.`;
+    return `${w.span}: ${num(w.rain, 1)} in of rain fell; a lawn here would have needed about ${num(w.need, 1)} in of watering on top.`;
   }
   return w.temp == null ? "" : `${w.span}: averaged ${num(w.temp)}°F outside.`;
 }
