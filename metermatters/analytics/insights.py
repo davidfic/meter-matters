@@ -655,6 +655,13 @@ def fuel_block(fuel: str, periods: list, wx: Weather, notes: dict) -> dict:
         "compare": rows[-COMPARE_LAST:],
         "totals": totals(rows[-COMPARE_LAST:]),
         "latest": rows[-1] if rows else None,
+        # The newest bill's own weather, for a page with nothing to compare yet.
+        "latest_weather": {
+            "span": span(periods[-1]), "days": periods[-1].days,
+            "temp": wx.average(periods[-1]) if wx.covers(periods[-1]) else None,
+            "rain": wx.rainfall(periods[-1]) if wx.covers_dryness(periods[-1]) else None,
+            "need": wx.dryness(periods[-1]) * periods[-1].days if wx.covers_dryness(periods[-1]) else None,
+        },
         "shift": shift,
         "carbon": {"kg": sum(m["kg"] for m in carbon_months(periods)[-12:]),
                    "months": len(carbon_months(periods)[-12:])},

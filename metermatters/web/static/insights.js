@@ -41,6 +41,18 @@ function weatherGap(data) {
   }[data.weather_status] || "";
 }
 
+/* What the weather did during the newest bill, on its own: the one thing
+   that can be said before there is anything to compare with. */
+function ownWeather(block) {
+  const w = block.latest_weather;
+  if (!w) return "";
+  if (block.weather_kind === "dryness") {
+    if (w.rain == null) return "";
+    return `${w.span}: ${num(w.rain, 1)} in of rain fell, and the garden called for about ${num(w.need, 1)} in of watering.`;
+  }
+  return w.temp == null ? "" : `${w.span}: averaged ${num(w.temp)}°F outside.`;
+}
+
 /* ------------------------------------------------------- the hero's box */
 
 function renderBox(block) {
@@ -50,7 +62,7 @@ function renderBox(block) {
     $("compare-figure").textContent = "—";
     $("compare-copy").textContent = block.need || "Nothing to compare with yet.";
     $("compare-pips").innerHTML = "";
-    $("compare-weather").textContent = "";
+    $("compare-weather").textContent = ownWeather(block);
     return;
   }
   const adjusted = Boolean(w && w.matters && row.weather_known);

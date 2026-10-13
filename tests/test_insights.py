@@ -166,6 +166,16 @@ class TestWaterModel(unittest.TestCase):
         self.assertIn("900 gal for every inch", tip["body"])
         self.assertIsNone(insights.thermostat_tip(periods, model, wx))
 
+    def test_one_bill_still_says_what_the_weather_did(self):
+        need, rain = dryness()
+        periods = bills(garden(need, per_inch=900.0, indoor=150.0), count=1, unit="gal", price=0.01)
+        block = insights.build(periods, {}, rain=rain, need=need)["fuels"]["Water"]
+        own = block["latest_weather"]
+        self.assertAlmostEqual(own["rain"], sum(rain[d] for d in insights.Weather.days(periods[0])))
+        self.assertAlmostEqual(own["need"], sum(need[d] for d in insights.Weather.days(periods[0])))
+        self.assertIsNone(own["temp"])
+        self.assertIsNone(block["latest"])
+
     def test_without_rain_on_file_water_says_nothing_about_the_weather(self):
         periods = bills(lambda s, e: 150.0, unit="gal", price=0.01)
         self.assertIsNone(insights.Model.learn(insights.Weather(weather()), periods, "Water"))
