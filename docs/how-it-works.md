@@ -96,7 +96,7 @@ the state is otherwise read off the address in a usage file):
   Rates page says it isn't available and still shows your price, its split
   (once you enter your supply price) and its history. Another state is one
   reader and one line in `rates.COVERED`.
-- *Bill emails* (forwarding and Gmail) read Eversource's notices only, and say
+- *Bill emails* (forwarded) read Eversource's notices only, and say
   so. Other utilities: upload a file or type bills in.
 
 ## More than one home
@@ -114,7 +114,7 @@ you add afterwards, from **Add bills → Add another home**.
   combined page. That page adds up spend, usage and carbon; what changed since
   last year stays on each home's own pages, because weather and step changes
   are about one house in one place.
-- **Bills that arrive by email** (forwarding or Gmail) go to the home that
+- **Bills that arrive by email** go to the home that
   already holds that utility account. One that matches none - or matches
   several - is held on the Add bills page until you say where it goes. Uploads
   go to the home you are on.
@@ -419,7 +419,7 @@ period ending and its statement falling due.
 ### The recurring check
 
 `tasks/jobs.py` is what keeps everything current. Each run, for every user, it
-imports new bills from Gmail if they chose to stay connected, warns if a usage
+warns if a usage
 export is about to age out of the portal's rolling window, and checks that no
 expected bill has gone missing. Forwarded bills need no polling; they arrive on
 their own.
@@ -678,7 +678,7 @@ writes that user's folder only - `/data/users/<id>/`.
 | **Guessing** | Eight wrong tries in fifteen minutes locks out that address, and that client |
 | **Sessions** | A signed cookie: `HttpOnly`, `SameSite=Lax`, `Secure` over https, 30 days |
 | **Other sites** | Cross-site writes are refused outright |
-| **Leaving** | *Delete this account* removes every bill, export and setting, and hands back any Gmail grant |
+| **Leaving** | *Delete this account* removes every bill, export and setting |
 
 Signing in with Google tells the app a name and an email address. It grants
 no access to mail and nothing of Google's is stored.
@@ -707,8 +707,6 @@ arrives twice is counted once.
 |---|---|---|---|
 | **Upload** | The files you give it | Those files | Each bill, by hand |
 | **Forwarding** | Only mail your own filter forwards | Nothing but the bills | Set up once |
-| **Gmail, once** | The whole mailbox, read-only, for one request | Nothing - access is handed straight back | One click, repeat when you like |
-| **Gmail, connected** | The whole mailbox, read-only | An encrypted key, until you disconnect | One click |
 
 Upload always exists. The others appear when the operator has configured
 them. Usage data - kWh and therms - only ever arrives by upload.
@@ -775,7 +773,7 @@ Anything left unset switches its feature off; nothing else breaks.
 | `ELEC_ALLOW_SIGNUP` | `0` to close sign-ups |
 | `ELEC_TRUSTED_PROXIES` | proxies in front of the app (default 1) |
 | `ELEC_INBOUND_DOMAIN`, `ELEC_INBOUND_SECRET`, `ELEC_MAILGUN_SIGNING_KEY`, `ELEC_INBOUND_DKIM` | forwarding |
-| `ELEC_GOOGLE_CLIENT_ID`, `ELEC_GOOGLE_CLIENT_SECRET`, `ELEC_TOKEN_KEY` | Google sign-in and Gmail |
+| `ELEC_GOOGLE_CLIENT_ID`, `ELEC_GOOGLE_CLIENT_SECRET` | Google sign-in |
 | `ELEC_SCHEDULER`, `ELEC_TASK_TOKEN` | the recurring check |
 | `ELEC_SMTP_*` | email to users |
 | `ELEC_WEATHER` | `off` to make no weather lookups (default: on, via Open-Meteo) |

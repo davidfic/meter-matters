@@ -41,8 +41,6 @@ from metermatters.analytics import analysis
 from metermatters.intake import billmail
 from metermatters import config
 from metermatters.store import db
-from metermatters.intake import gmail_sync
-from metermatters.web import google_oauth
 from metermatters.intake import greenbutton
 from metermatters.store import homes
 from metermatters.tasks import notify
@@ -97,7 +95,8 @@ def targets() -> list[Target]:
 
 def step_import(target: Target) -> dict:
     if target.user is not None:
-        return _import_gmail(target)
+        # Hosted: bills arrive at the forwarding address on their own.
+        return {"status": "off", "detail": "bills arrive by forwarding"}
     if not os.environ.get("ELEC_IMAP_USER"):
         return {"status": "off", "detail": "ELEC_IMAP_USER is not set"}
     code, output = _captured(billmail.main, ["--imap", "--import", "--fuel", "any"])
@@ -108,27 +107,6 @@ def step_import(target: Target) -> dict:
         return {"status": "nothing-new", "detail": output}
     target.tell("Bill import failed", _last_line(output), "critical")
     return {"status": "failed", "detail": output}
-
-
-def _import_gmail(target: Target) -> dict:
-    """Forwarded bills arrive on their own; only a connected mailbox is polled."""
-    try:
-        result = gmail_sync.sync(target.user, target.paths)
-    except google_oauth.Revoked:
-        target.tell("Gmail was disconnected",
-                    "Access to your mailbox was withdrawn, so bills are no longer imported "
-                    "from it. Reconnect it, or switch to forwarding or uploads.", "critical")
-        return {"status": "revoked", "detail": "grant withdrawn; link removed"}
-    except Exception as exc:
-        # Not the user's problem yet - Google may simply be down. The watchdog
-        # is what tells them if a bill actually goes missing.
-        return {"status": "failed", "detail": f"{type(exc).__name__}: {exc}"}
-    if result is None:
-        return {"status": "off", "detail": "no mailbox connected"}
-    if result.added:
-        target.tell("New bill imported", result.summary)
-        return {"status": "imported", "detail": result.summary}
-    return {"status": "nothing-new", "detail": result.summary}
 
 
 def step_staleness(target: Target) -> dict:

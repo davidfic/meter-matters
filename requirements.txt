@@ -1,7 +1,6 @@
 flask>=3.0
 gunicorn>=22.0
 argon2-cffi>=23.1      # password hashing
-cryptography>=42.0     # encrypts a kept Gmail token
 dkimpy>=1.1            # checks the utility's signature on forwarded mail
 dnspython>=2.6         # ...which needs a DNS lookup
 psycopg[binary,pool]>=3.2   # Postgres (Supabase), when ELEC_DATABASE_URL is set

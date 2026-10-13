@@ -64,7 +64,7 @@
     </div>
   </section>
 
-  <section class="grid cols-3 ways">
+  <section class="grid cols-2 ways">
 
     <!-- --------------------------------------------------- forwarding -->
     <div class="card way featured">
@@ -190,48 +190,6 @@
       <p class="note fine">You come back and upload each new bill.</p>
     </div>
 
-    <!-- -------------------------------------------------------- gmail -->
-    <div class="card way">
-      <div class="way-head"><h2>Connect Gmail</h2>
-        <span class="tag warn">Reads your whole mailbox</span></div>
-      {% if gmail %}
-        {% if gmail.link %}
-          <p class="note">Connected to <strong>{{ gmail.link.email }}</strong>.
-            New bills are picked up daily.
-            {% if gmail.link.checked_at %}Last checked {{ gmail.link.checked_at[:10] }}.{% endif %}</p>
-          {% if gmail.link.last_error %}
-          <div class="callout err">The last check failed: {{ gmail.link.last_error }}.</div>
-          {% endif %}
-          <div class="row">
-            <form method="post" action="{{ url_for('web.gmail_check') }}" class="inline">
-              <button type="submit">Check now</button></form>
-            <form method="post" action="{{ url_for('web.gmail_disconnect') }}" class="inline">
-              <button type="submit">Disconnect</button></form>
-          </div>
-          <p class="note fine">Disconnecting hands access back to Google and deletes what we
-            held. Bills already imported stay.</p>
-        {% else %}
-          <p class="note">The most access: Google offers no way to let an app read only your
-            bills, so this grants read access to <strong>all</strong> your mail. We only ever
-            ask it for messages from the utility's bill notices (today, Eversource's). The
-            private address above does the same job without granting anything.</p>
-          <div class="stack">
-            <a class="btn wide" href="{{ url_for('web.google_start', purpose='gmail-once') }}">
-              Import once, keep nothing</a>
-            <p class="note fine">Brings in every bill in the mailbox now, then hands access
-              straight back. Come back and do it again when you like.</p>
-            {% if gmail.can_keep %}
-            <a class="btn wide" href="{{ url_for('web.google_start', purpose='gmail-keep') }}">
-              Stay connected</a>
-            <p class="note fine">New bills arrive on their own. We keep an encrypted key to
-              your mailbox until you disconnect.</p>
-            {% endif %}
-          </div>
-        {% endif %}
-      {% else %}
-        <p class="note">Not available on this server — its operator hasn't set up Google access.</p>
-      {% endif %}
-    </div>
   </section>
 
   <section id="mapping" hidden>
@@ -359,7 +317,7 @@
         {%- if user.has_google and not user.has_password %}, through Google{% endif %}.</p>
       <details>
         <summary>Delete this account</summary>
-        <p class="note">Deletes every bill, export and setting, and disconnects Gmail.
+        <p class="note">Deletes every bill, export and setting.
           It cannot be undone.</p>
         <form method="post" action="{{ url_for('web.delete_account') }}" class="controls">
           <div class="field">

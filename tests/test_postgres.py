@@ -18,7 +18,6 @@ from unittest import mock
 
 from metermatters.store import accounts
 from metermatters.store import db
-from metermatters.intake import gmail_sync
 from metermatters.intake import inbound
 from metermatters.intake import ingest
 from metermatters.tasks import jobs
@@ -61,8 +60,7 @@ class PostgresCase(HostedCase):
     def setUp(self):
         super().setUp()
         with db.connect() as conn:
-            for table in ("files", "meta", "inbound_log", "gmail_links", "login_attempts",
-                          "users"):
+            for table in ("files", "meta", "inbound_log", "login_attempts", "users"):
                 conn.execute(f"DELETE FROM {table}")
 
     def register(self, email):
@@ -202,18 +200,6 @@ class TestWaysIn(PostgresCase):
         self.assertEqual(len(self.client.get("/api/report").get_json()["series"]), 1)
         self.assertIn("Filed", self.client.get("/connect").get_data(as_text=True))
 
-    def test_a_kept_gmail_key_round_trips_through_bytea(self):
-        from cryptography.fernet import Fernet
-        os.environ["ELEC_TOKEN_KEY"] = Fernet.generate_key().decode()
-        ann = self.sign_up()
-        gmail_sync.link(ann, "ann@gmail.com", "refresh-abc")
-        self.assertEqual(gmail_sync.status(ann)["email"], "ann@gmail.com")
-        with db.connect() as conn:
-            sealed = conn.execute("SELECT refresh_token FROM gmail_links").fetchone()
-        self.assertNotIn(b"refresh-abc", bytes(sealed["refresh_token"]))
-        from metermatters.store import secrets_box
-        self.assertEqual(secrets_box.open_(sealed["refresh_token"]), "refresh-abc")
-
     def test_the_scheduled_check_runs_for_everyone(self):
         ann = self.sign_up("ann@example.com")
         self.sign_up("bob@example.com", self.client.application.test_client())
@@ -239,7 +225,7 @@ class TestSupabaseSafety(PostgresCase):
         with db.connect() as conn:
             rows = conn.execute(
                 "SELECT table_schema, table_name FROM information_schema.tables "
-                "WHERE table_name IN ('users', 'files', 'gmail_links')").fetchall()
+                "WHERE table_name IN ('users', 'files', 'inbound_log')").fetchall()
         self.assertEqual({r["table_schema"] for r in rows}, {"elec"})
 
     def test_row_level_security_is_on_everywhere(self):

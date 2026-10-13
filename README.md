@@ -104,7 +104,7 @@ It follows the system light or dark setting, with a manual override.
 | `/rates` | Price per unit over time, split into supply and delivery, and offers nearby |
 | `/homes` | Every home added up (appears once there are two) |
 | `/home/<name>/…` | Any page, for another home |
-| `/connect` | Add bills: upload, forward, Gmail, by hand; about this home; manage homes |
+| `/connect` | Add bills: upload, forward, by hand; about this home; manage homes |
 | `/raw` | Every record, filterable, exportable as CSV |
 | `/test-suite` | The results of the test run that shipped with the running code |
 
@@ -140,8 +140,6 @@ Bills can also arrive on their own, when the operator has configured it:
 - **Forwarding.** Each user gets a private `bills-<token>@…` address; a filter
   in their mailbox forwards the utility's notices there. Mailgun, Postmark and
   raw webhooks are supported, and the utility's DKIM signature is checked.
-- **Gmail.** *Import once* (access handed straight back) or *stay connected*
-  (an encrypted refresh token, until disconnected).
 
 Usage data (kWh, therms, gallons) only ever arrives by upload: no utility
 offers an individual a feed for it.
@@ -169,7 +167,6 @@ metermatters/              the app, one package
     ingest.py              merge and de-duplicate, shared by upload and CLI
     billmail.py            the bill-ready email (.eml or IMAP)
     inbound.py             bills arriving by forwarded email
-    gmail_sync.py          importing from a connected mailbox
     backfill.py            extend bill history backwards from usage
     import_bill.py         CLI: python -m metermatters.intake.import_bill
   store/                   where things are kept
@@ -178,11 +175,10 @@ metermatters/              the app, one package
     accounts.py            users, argon2id passwords, sessions
     homes.py               more than one home: names, routing, delete / restore
     storage.py             atomic writes and the merge lock
-    secrets_box.py         encryption for a kept Gmail token
   web/                     the Flask app
     app.py                 dashboard routes, the report every page is built from
     connect.py             sign-in, Add bills, Google and inbound-email routes
-    google_oauth.py        Google sign-in and the Gmail API
+    google_oauth.py        Google sign-in
     static/                ES modules per page; charts.js is the SVG chart library
     templates/             Jinja pages
   tasks/                   jobs.py (the daily check), watchdog.py, notify.py
@@ -248,7 +244,7 @@ comments. Anything unset switches its feature off.
 | `ELEC_DATABASE_URL` | Postgres connection string. Required on Cloud Run |
 | `ELEC_DATA_DIR` | where data lives when there is no database |
 | `ELEC_ALLOW_SIGNUP` | `0` to close sign-ups |
-| `ELEC_GOOGLE_CLIENT_ID`, `ELEC_GOOGLE_CLIENT_SECRET`, `ELEC_TOKEN_KEY` | Google sign-in and Gmail |
+| `ELEC_GOOGLE_CLIENT_ID`, `ELEC_GOOGLE_CLIENT_SECRET` | Google sign-in |
 | `ELEC_INBOUND_DOMAIN`, `ELEC_INBOUND_SECRET`, `ELEC_MAILGUN_SIGNING_KEY`, `ELEC_INBOUND_DKIM` | forwarding |
 | `ELEC_TASK_TOKEN` or `ELEC_SCHEDULER=1` | who runs the daily check |
 | `ELEC_WEATHER=off` | no weather lookups |
@@ -265,9 +261,9 @@ comments. Anything unset switches its feature off.
   Switch MA when you ask for offers, and your mail to Google only when you
   connect it. Never an address.
 - Passwords are argon2id hashes. Sessions are signed, `HttpOnly`, `SameSite`
-  cookies. A kept Gmail token is encrypted with a key held outside the database.
+  cookies.
 - *Delete this account* removes every bill, export, share link and benchmark
-  row, and hands back any Gmail grant.
+  row.
 
 ## Status and limits
 

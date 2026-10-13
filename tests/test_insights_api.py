@@ -200,8 +200,7 @@ class TestOnPostgres(InsightsCase):
         from metermatters.store import db
         HostedCase.setUp(self)
         with db.connect() as conn:
-            for table in ("files", "meta", "inbound_log", "gmail_links", "login_attempts",
-                          "users"):
+            for table in ("files", "meta", "inbound_log", "login_attempts", "users"):
                 conn.execute(f"DELETE FROM {table}")
         super().setUp()
 

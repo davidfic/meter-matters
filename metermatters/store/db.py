@@ -51,14 +51,6 @@ TABLES = {
     """,
     # A standing grant to read a mailbox. Absent unless the user asked to stay
     # connected; a one-time import never writes a row here.
-    "gmail_links": """
-        user_id       BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-        email         TEXT NOT NULL,
-        refresh_token {blob} NOT NULL,          -- encrypted, see secrets_box.py
-        connected_at  TEXT NOT NULL,
-        checked_at    TEXT,
-        last_error    TEXT
-    """,
     # What arrived at a user's forwarding address, and what became of it.
     "inbound_log": """
         id           {id},
@@ -274,6 +266,8 @@ def _create(conn: Conn) -> None:
         conn.raw.execute(f"CREATE TABLE IF NOT EXISTS {name} ({columns.format(**kinds)})")
         if conn.postgres:
             conn.raw.execute(f"ALTER TABLE {name} ENABLE ROW LEVEL SECURITY")
+    # Gmail connections were removed on 2026-10-13; a database from before has the table.
+    conn.raw.execute("DROP TABLE IF EXISTS gmail_links")
     for index in INDEXES:
         conn.raw.execute(index)
     _migrate(conn)

@@ -3,7 +3,6 @@
     upload       they drop the files in. Nothing is connected to anything.
     forwarding   their mailbox forwards the utility's notices to a private
                  address. We hold no credential and see no other mail.
-    gmail        they let us read the mailbox - once, or until they say stop.
 
 Which of these exist depends on what the operator configured; a way that isn't
 configured isn't offered.
@@ -21,19 +20,16 @@ from flask import (Blueprint, flash, g, jsonify, redirect, render_template, requ
 from metermatters.store import accounts
 from metermatters import config
 from metermatters import fuels
-from metermatters.intake import gmail_sync
 from metermatters.web import google_oauth
 from metermatters.store import homes
 from metermatters.intake import importers
 from metermatters.intake import inbound
 from metermatters.intake import ingest
 from metermatters import region
-from metermatters.store import secrets_box
 from metermatters.analytics import weather
 
 bp = Blueprint("web", __name__)
 
-GMAIL_PURPOSES = ("gmail-once", "gmail-keep")
 
 
 def signups_open() -> bool:
@@ -128,10 +124,6 @@ def delete_account():
     if request.form.get("confirm", "").strip().lower() != g.user.email.lower():
         flash("Type your email address exactly to delete the account.", "err")
         return redirect(url_for("web.connect") + "#account")
-    try:
-        gmail_sync.unlink(g.user)
-    except Exception:
-        pass        # a Google outage must not keep someone's data here
     accounts.delete(g.user)
     session.clear()
     return redirect(url_for("web.login"))
@@ -145,25 +137,12 @@ def delete_account():
 def google_start():
     if not config.multi_user() or not google_oauth.enabled():
         return redirect(url_for("index"))
-    purpose = request.args.get("purpose", "signin")
-    if purpose in GMAIL_PURPOSES:
-        if not g.user:
-            return redirect(url_for("web.login", next=url_for("web.connect")))
-        if purpose == "gmail-keep" and not secrets_box.available():
-            flash("Staying connected isn't available on this server. "
-                  "A one-time import is.", "err")
-            return redirect(url_for("web.connect"))
-    elif purpose != "signin" or (not signups_open() and not g.user):
-        purpose = "signin"
-
     # Proves the redirect back is the answer to a question this browser asked.
     state = secrets.token_urlsafe(24)
-    session["oauth"] = {"state": state, "purpose": purpose,
-                        "next": _safe_next(request.args.get("next"))}
+    session["oauth"] = {"state": state, "next": _safe_next(request.args.get("next"))}
     try:
         return redirect(google_oauth.authorize_url(
-            state, gmail=purpose in GMAIL_PURPOSES,
-            login_hint=g.user.email if g.user else ""))
+            state, login_hint=g.user.email if g.user else ""))
     except google_oauth.GoogleError as exc:
         flash(f"Google sign-in isn't set up correctly: {exc}.", "err")
         return redirect(url_for("web.login"))
@@ -178,7 +157,7 @@ def google_callback():
         flash("That sign-in link had expired. Try again.", "err")
         return redirect(back)
     if request.args.get("error") or not request.args.get("code"):
-        flash("Nothing was connected - Google access was declined.", "err")
+        flash("Nothing happened - Google sign-in was declined.", "err")
         return redirect(back)
 
     try:
@@ -188,71 +167,12 @@ def google_callback():
         flash(f"Google sign-in failed: {exc}.", "err")
         return redirect(back)
 
-    if asked["purpose"] == "signin":
-        existing = accounts.by_email(who["email"])
-        if existing is None and not signups_open():
-            flash("New sign-ups are closed on this server.", "err")
-            return redirect(url_for("web.login"))
-        _sign_in(accounts.from_google(who["sub"], who["email"], who["name"]))
-        return redirect(asked["next"] if existing else url_for("web.connect"))
-
-    return _gmail_granted(asked["purpose"], tokens, who)
-
-
-def _gmail_granted(purpose: str, tokens: dict, who: dict):
-    refresh = tokens.get("refresh_token")
-    done = redirect(url_for("web.connect"))
-    if not g.user:
+    existing = accounts.by_email(who["email"])
+    if existing is None and not signups_open():
+        flash("New sign-ups are closed on this server.", "err")
         return redirect(url_for("web.login"))
-    if not google_oauth.granted_gmail(tokens):
-        if refresh:
-            google_oauth.revoke(refresh)
-        flash("Nothing was imported - the box allowing mail to be read wasn't ticked.", "err")
-        return done
-
-    keep = purpose == "gmail-keep"
-    try:
-        # Everything, the first time: this is how a history gets in at all.
-        result = gmail_sync.import_with(g.base_paths, tokens["access_token"], days=None)
-    except (google_oauth.GoogleError, ValueError) as exc:
-        if refresh:
-            google_oauth.revoke(refresh)
-        flash(f"Couldn't read the mailbox: {exc}.", "err")
-        return done
-
-    if keep and refresh:
-        try:
-            gmail_sync.link(g.user, who["email"], refresh)
-            flash(f"{result.summary} Gmail stays connected; new bills will arrive on their own.")
-            return done
-        except secrets_box.Unavailable:
-            keep = False
-    # One-time, or nothing to keep it with: hand the grant straight back.
-    google_oauth.revoke(refresh or tokens["access_token"])
-    flash(f"{result.summary} Nothing was kept - access to the mailbox has been handed back.")
-    return done
-
-
-@bp.post("/connect/gmail/disconnect")
-def gmail_disconnect():
-    if g.user and g.user is not accounts.LOCAL:
-        gmail_sync.unlink(g.user)
-        flash("Gmail disconnected. Bills already imported stay where they are.")
-    return redirect(url_for("web.connect"))
-
-
-@bp.post("/connect/gmail/check")
-def gmail_check():
-    if not g.user or g.user is accounts.LOCAL:
-        return redirect(url_for("index"))
-    try:
-        result = gmail_sync.sync(g.user, g.base_paths)
-        flash(result.summary if result else "Gmail isn't connected.")
-    except google_oauth.Revoked:
-        flash("Access to that mailbox was withdrawn, so it has been disconnected.", "err")
-    except Exception as exc:
-        flash(f"Couldn't check the mailbox: {exc}.", "err")
-    return redirect(url_for("web.connect"))
+    _sign_in(accounts.from_google(who["sub"], who["email"], who["name"]))
+    return redirect(asked["next"] if existing else url_for("web.connect"))
 
 
 # --------------------------------------------------------------------------
@@ -449,12 +369,9 @@ def connect():
         forwarding = {"address": inbound.address_for(g.user),
                       "confirm": inbound.pending_confirmation(g.user),
                       "log": inbound.log_for(g.user)}
-    gmail = None
-    if google_oauth.enabled():
-        gmail = {"link": gmail_sync.status(g.user), "can_keep": secrets_box.available()}
     has_usage = paths().usage.exists() and any(
         p.suffix.lower() in (".zip", ".csv") for p in paths().usage.iterdir())
-    return render_template("connect.html", forwarding=forwarding, gmail=gmail,
+    return render_template("connect.html", forwarding=forwarding,
                            has_bills=paths().csv.exists(), has_usage=has_usage,
                            homes_view=_homes_view(), place=_place_view())
 
