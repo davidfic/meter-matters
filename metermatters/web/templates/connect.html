@@ -85,19 +85,21 @@
 
         {% if forwarding.confirm %}
         <div class="callout">
-          <strong>Gmail is waiting for you to confirm.</strong>
-          {% if forwarding.confirm.confirm_url %}
-            <a href="{{ forwarding.confirm.confirm_url }}" target="_blank" rel="noopener noreferrer">
-              Open Gmail's confirmation link</a>{% if forwarding.confirm.confirm_code %},
-            or enter code <code>{{ forwarding.confirm.confirm_code }}</code> in Gmail{% endif %}.
-          {% elif forwarding.confirm.confirm_code %}
-            Enter code <code>{{ forwarding.confirm.confirm_code }}</code> in Gmail.
-          {% else %}
-            The message arrived but held no link we recognise. Send it again from Gmail.
-          {% endif %}
+          <strong>Gmail's confirmation has arrived. Two steps:</strong>
+          <ol class="steps">
+            {% if forwarding.confirm.confirm_url %}
+            <li><a href="{{ forwarding.confirm.confirm_url }}" target="_blank" rel="noopener noreferrer">
+              Open Gmail's confirmation link</a> and press Confirm on Google's page{% if forwarding.confirm.confirm_code %},
+              or enter code <code>{{ forwarding.confirm.confirm_code }}</code> in Gmail's forwarding settings{% endif %}.</li>
+            {% elif forwarding.confirm.confirm_code %}
+            <li>Enter code <code>{{ forwarding.confirm.confirm_code }}</code> in Gmail's forwarding settings.</li>
+            {% else %}
+            <li>The message held no link we recognise. In Gmail, remove the forwarding address and add it again.</li>
+            {% endif %}
+            <li>Come back here and press Done. Google doesn't tell this page when you've confirmed.</li>
+          </ol>
           <form method="post" action="{{ url_for('web.forwarding_confirmed') }}" class="quiet">
-            <button type="submit">Done, I've confirmed it</button>
-            <span class="note fine">Google's page doesn't tell us when you click, so say so here.</span>
+            <button type="submit">Done</button>
           </form>
         </div>
         {% endif %}
