@@ -715,6 +715,7 @@ arrives twice is counted once.
 |---|---|---|---|
 | **Upload** | The files you give it | Those files | Each bill, by hand |
 | **Forwarding** | Only mail your own filter forwards | Nothing but the bills | Set up once |
+| **A scan or photo** | That one image, sent to Google's Cloud Vision to read the text | Nothing - the bill you confirm, and not the image | Each bill, with a check |
 
 Upload always exists. The others appear when the operator has configured
 them. Usage data - kWh and therms - only ever arrives by upload.
@@ -782,6 +783,7 @@ Anything left unset switches its feature off; nothing else breaks.
 | `ELEC_TRUSTED_PROXIES` | proxies in front of the app (default 1) |
 | `ELEC_INBOUND_DOMAIN`, `ELEC_INBOUND_SECRET`, `ELEC_MAILGUN_SIGNING_KEY`, `ELEC_INBOUND_DKIM` | forwarding |
 | `ELEC_GOOGLE_CLIENT_ID`, `ELEC_GOOGLE_CLIENT_SECRET` | Google sign-in |
+| `ELEC_VISION_KEY` | reading scans and photos of bills (Cloud Vision) |
 | `ELEC_SCHEDULER`, `ELEC_TASK_TOKEN` | the recurring check |
 | `ELEC_SMTP_*` | email to users |
 | `ELEC_WEATHER` | `off` to make no weather lookups (default: on, via Open-Meteo) |

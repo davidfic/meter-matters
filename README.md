@@ -21,8 +21,9 @@ The electric page answers to ⚡ *Watt's the Damage*, the gas page to
 ## What it does
 
 - **Any utility, any US state.** Green Button XML, any CSV (columns are matched
-  by name and you are asked when it cannot tell), or bills typed in by hand.
-  Eversource's own exports and bill emails are read directly.
+  by name and you are asked when it cannot tell), bills typed in by hand, or
+  a scan or photo of a bill, read by Cloud Vision into the by-hand form for
+  you to check. Eversource's own exports and bill emails are read directly.
 - **Weather taken out.** Each home's own heating balance point and
   degrees-to-fuel slope are fitted from its history, so a cold winter is not
   mistaken for a wasteful one. Water follows the dry instead: gallons per inch
@@ -246,6 +247,7 @@ comments. Anything unset switches its feature off.
 | `ELEC_DATA_DIR` | where data lives when there is no database |
 | `ELEC_ALLOW_SIGNUP` | `0` to close sign-ups |
 | `ELEC_GOOGLE_CLIENT_ID`, `ELEC_GOOGLE_CLIENT_SECRET` | Google sign-in |
+| `ELEC_VISION_KEY` | reading scans and photos of bills (a Cloud Vision API key) |
 | `ELEC_INBOUND_DOMAIN`, `ELEC_INBOUND_SECRET`, `ELEC_MAILGUN_SIGNING_KEY`, `ELEC_INBOUND_DKIM` | forwarding |
 | `ELEC_TASK_TOKEN` or `ELEC_SCHEDULER=1` | who runs the daily check |
 | `ELEC_WEATHER=off` | no weather lookups |

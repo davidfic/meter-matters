@@ -71,7 +71,85 @@ async function sendMapping(e) {
   await upload([file], mapping);
 }
 
+/* ------------------------------------------------------ scans and photos */
+
+const SCAN_TYPES = /\.(png|jpe?g|webp|gif|tiff?|pdf)$/i;
+// Bigger than this and the server won't take it; a phone photo or a flatbed
+// scan is shrunk in the browser first, which also keeps the upload quick.
+const SCAN_LIMIT = 4 * 1024 * 1024;
+const SCAN_SIDE = 2500;
+
+function isScan(file) {
+  return SCAN_TYPES.test(file.name) || /^image\//.test(file.type) || file.type === "application/pdf";
+}
+
+/* A smaller JPEG of an image, made in the browser: the text reader needs
+   nothing larger, and a 400 MB scan would never upload. PDFs pass as they are. */
+async function shrink(file) {
+  if (file.type === "application/pdf" || /\.pdf$/i.test(file.name)) return file;
+  let bitmap;
+  try { bitmap = await createImageBitmap(file); } catch { return file; }
+  const scale = Math.min(1, SCAN_SIDE / Math.max(bitmap.width, bitmap.height));
+  if (scale === 1 && file.size <= SCAN_LIMIT) return file;
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  const blob = await new Promise((ok) => canvas.toBlob(ok, "image/jpeg", 0.85));
+  return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" });
+}
+
+function money(v) { return `$${Number(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
+
+/* Put what was read into the by-hand form and say what was and wasn't found. */
+function showScan(r) {
+  const box = $("scan-result");
+  const set = (id, value) => { const el = $(id); if (el && value != null && value !== "") el.value = value; };
+  set("bh-fuel", r.fuel); set("bh-due", r.due); set("bh-amount", r.amount);
+  set("bh-used", r.used); set("bh-unit", r.unit); set("bh-start", r.start); set("bh-end", r.end);
+  if (r.used != null || r.start || r.end) {
+    const details = document.querySelector("#byhand details");
+    if (details) details.open = true;
+  }
+  const got = [];
+  if (r.fuel) got.push(r.fuel.toLowerCase());
+  if (r.amount != null) got.push(`${money(r.amount)}${r.due ? ` due ${r.due}` : ""}`);
+  if (r.used != null) got.push(`${Number(r.used).toLocaleString("en-US")} ${r.unit}${r.start && r.end ? ` from ${r.start} to ${r.end}` : ""}`);
+  const missing = [["amount", r.amount == null], ["due date", !r.due], ["usage", r.used == null],
+                   ["service dates", !(r.start && r.end)]].filter(([, m]) => m).map(([n]) => n);
+  box.hidden = false;
+  box.innerHTML = `<strong>Read from ${esc(r.file)}:</strong> ${esc(got.join(", ") || "nothing it recognised")}. `
+    + (missing.length ? `Couldn't find the ${esc(missing.join(", the "))}: fill ${missing.length === 1 ? "it" : "them"} in. ` : "")
+    + "Check each number against the bill, then press <strong>Add bill</strong>.";
+  document.getElementById("byhand").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function sendScan(file) {
+  const zone = $("dropzone");
+  zone.setAttribute("aria-busy", "true");
+  let res, data;
+  try {
+    const small = await shrink(file);
+    if (small.size > SCAN_LIMIT) { flash(`${file.name} is too big to send - under 4 MB, please.`, true); return; }
+    const form = new FormData();
+    form.append("file", small, small.name);
+    res = await fetch(url("/api/scan"), { method: "POST", body: form });
+    data = await res.json();
+  } catch {
+    flash("Couldn't send the scan - the server didn't answer.", true);
+    return;
+  } finally {
+    zone.removeAttribute("aria-busy");
+  }
+  if (!res.ok) { flash(data.error || "Couldn't read that scan.", true); return; }
+  showScan(data);
+}
+
 async function upload(files, mapping = null) {
+  const scans = files.filter(isScan);
+  files = files.filter((f) => !isScan(f));
+  for (const scan of scans) await sendScan(scan);
+  if (!files.length) return;
   const form = new FormData();
   for (const file of files) form.append("file", file);
   if (mapping) form.append("mapping", JSON.stringify(mapping));

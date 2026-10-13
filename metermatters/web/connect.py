@@ -25,6 +25,7 @@ from metermatters.store import homes
 from metermatters.intake import importers
 from metermatters.intake import inbound
 from metermatters.intake import ingest
+from metermatters.intake import scan
 from metermatters import region
 from metermatters.analytics import weather
 
@@ -196,6 +197,31 @@ def forwarding_arrivals():
     return jsonify({"rows": [{"id": r["id"], "received_at": r["received_at"][:10],
                               "outcome": r["outcome"], "detail": r["detail"]}
                              for r in inbound.log_for(g.user)]})
+
+
+@bp.post("/api/scan")
+def scan_bill():
+    """Read a scanned or photographed bill and say what it seems to say.
+
+    Nothing is filed here. The page puts the guesses into the by-hand form
+    for the person to check, and pressing Add there is what files it.
+    """
+    if not scan.enabled():
+        return jsonify({"error": "Reading scans isn't set up on this server."}), 404
+    upload = request.files.get("file")
+    if upload is None or not upload.filename:
+        return jsonify({"error": "No file was attached."}), 400
+    mime = scan.mime_of(upload.filename)
+    if mime is None:
+        return jsonify({"error": "That isn't an image or a PDF."}), 400
+    try:
+        text = scan.read_text(upload.read(), mime)
+    except scan.Unreadable as exc:
+        return jsonify({"error": f"Couldn't read it: {exc}."}), 400
+    found = scan.guess(text)
+    if found["used"] is not None:
+        found["used"] = round(found["used"])
+    return jsonify({"file": upload.filename, **found})
 
 
 @bp.post("/connect/forwarding/confirmed")
@@ -371,7 +397,7 @@ def connect():
                       "log": inbound.log_for(g.user)}
     has_usage = paths().usage.exists() and any(
         p.suffix.lower() in (".zip", ".csv") for p in paths().usage.iterdir())
-    return render_template("connect.html", forwarding=forwarding,
+    return render_template("connect.html", forwarding=forwarding, scans=scan.enabled(),
                            has_bills=paths().csv.exists(), has_usage=has_usage,
                            homes_view=_homes_view(), place=_place_view())
 

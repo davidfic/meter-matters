@@ -146,15 +146,17 @@
         here. Most utilities offer a spreadsheet (CSV) or a Green Button file. Nothing is linked
         to your email or any other account.</p>
       <div class="dropzone" id="dropzone" tabindex="0" role="button">
-        Drop exports here, or click to choose files
+        Drop exports{% if scans %}, scans or photos of bills{% endif %} here, or click to choose files
       </div>
-      <input type="file" id="file" accept=".csv,.zip,.xml,text/csv,application/zip,text/xml" multiple hidden>
+      <input type="file" id="file" accept=".csv,.zip,.xml,.pdf,.png,.jpg,.jpeg,.webp,.gif,.tif,.tiff,text/csv,application/zip,text/xml,application/pdf,image/*" multiple hidden>
       <ul class="facts-list">
         <li><strong>Bill history</strong> — a list of your bills, for what you were billed.</li>
         <li><strong>Usage</strong> — a usage file, ideally with costs, for kWh, therms or gallons.
           Green Button (CSV or XML) works; so does any spreadsheet with dates and amounts —
           if we can't tell which column is which, we'll ask.
           {% if not has_usage %}Only an upload can bring these in.{% endif %}</li>
+        {% if scans %}<li><strong>A scan or photo</strong> of one bill (PNG, JPG or PDF). The numbers are read
+          off it into the form below, for you to check before it is added.</li>{% endif %}
       </ul>
       <details class="howto">
         <summary>How to find the file on your utility's site</summary>
@@ -204,7 +206,10 @@
   <section id="byhand">
     <div class="card">
       <h2>Add a bill by hand</h2>
-      <p class="note">No file to upload? Type one in. It takes a date and an amount.</p>
+      <p class="note" id="byhand-note">No file to upload? Type one in. It takes a date and an amount.
+        {% if scans %}Or drop a scan or photo of the bill on the upload box above and the numbers are
+        read off it into this form for you to check.{% endif %}</p>
+      <div class="callout" id="scan-result" hidden></div>
       <form method="post" action="{{ url_for('web.bill_add') }}" class="controls">
         <div class="field"><label for="bh-fuel">Fuel</label>
           <select id="bh-fuel" name="fuel"><option>Electric</option><option>Gas</option><option>Water</option></select></div>
