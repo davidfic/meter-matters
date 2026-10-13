@@ -95,6 +95,10 @@
           {% else %}
             The message arrived but held no link we recognise. Send it again from Gmail.
           {% endif %}
+          <form method="post" action="{{ url_for('web.forwarding_confirmed') }}" class="quiet">
+            <button type="submit">Done, I've confirmed it</button>
+            <span class="note fine">Google's page doesn't tell us when you click, so say so here.</span>
+          </form>
         </div>
         {% endif %}
 
@@ -116,7 +120,7 @@
           <li class="{{ row.outcome }}">
             <span class="when">{{ row.received_at[:10] }}</span>
             <span class="what">{{ {"imported": "Filed", "duplicate": "Already had it",
-                                   "confirm": "Confirmation", "rejected": "Not filed", "held": "Needs a home"}[row.outcome] }}</span>
+                                   "confirm": "Confirmation", "confirmed": "Confirmed", "rejected": "Not filed", "held": "Needs a home"}[row.outcome] }}</span>
             <span class="why">{{ row.detail }}</span>
           </li>
           {% endfor %}

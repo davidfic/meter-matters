@@ -176,6 +176,14 @@ class TestGmailConfirmation(InboundCase):
         self.deliver(confirmation(self.address))
         self.assertNotIn("evil.example", self.client.get("/connect").get_data(as_text=True))
 
+    def test_saying_you_confirmed_it_clears_the_box(self):
+        self.deliver(confirmation(self.address))
+        self.assertIn("waiting for you to confirm", self.client.get("/connect").get_data(as_text=True))
+        self.client.post("/connect/forwarding/confirmed")
+        page = self.client.get("/connect").get_data(as_text=True)
+        self.assertNotIn("waiting for you to confirm", page)
+        self.assertIn("Forwarding confirmed in Gmail.", page)
+
     def test_it_stops_being_offered_once_mail_is_flowing(self):
         self.deliver(confirmation(self.address))
         self.deliver()

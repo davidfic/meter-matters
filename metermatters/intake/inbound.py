@@ -195,11 +195,24 @@ def pending_confirmation(user) -> dict | None:
     address is plainly confirmed and the link is of no further use.
     """
     for row in log_for(user, KEEP_LOG):
-        if row["outcome"] in ("imported", "duplicate", "held"):
+        if row["outcome"] in ("imported", "duplicate", "held", "confirmed"):
             return None
         if row["outcome"] == "confirm":
             return row
     return None
+
+
+def mark_confirmed(user) -> bool:
+    """The person says they clicked Google's link. The app cannot see that
+    click, so this is how the box goes away before the first bill arrives."""
+    with db.connect() as conn:
+        row = conn.execute("SELECT id FROM inbound_log WHERE user_id = ? AND outcome = 'confirm' "
+                           "ORDER BY id DESC LIMIT 1", (user.id,)).fetchone()
+        if row is None:
+            return False
+        conn.execute("UPDATE inbound_log SET outcome = 'confirmed', "
+                     "detail = 'Forwarding confirmed in Gmail.' WHERE id = ?", (row["id"],))
+    return True
 
 
 def _confirmation(msg) -> tuple[str | None, str | None]:

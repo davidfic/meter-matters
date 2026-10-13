@@ -268,6 +268,13 @@ def forwarding_rotate():
     return redirect(url_for("web.connect"))
 
 
+@bp.post("/connect/forwarding/confirmed")
+def forwarding_confirmed():
+    if g.user and g.user is not accounts.LOCAL:
+        inbound.mark_confirmed(g.user)
+    return redirect(url_for("web.connect"))
+
+
 @bp.post("/api/inbound/email")
 def inbound_email():
     """Where the inbound email service delivers. Not for browsers."""
