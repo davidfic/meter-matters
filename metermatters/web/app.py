@@ -673,9 +673,12 @@ def build_overview(state: dict) -> dict:
                       f"the bill asked ${row['billed']:,.2f} ({row['diff']:+.2f}).",
         })
 
+    energy = any_report.get("energy", [])
     return {
         "fuels": cards,
-        "energy": any_report.get("energy", []),
+        "energy": energy,
+        "headline": analysis.overview_headline(energy, {c["fuel"]: c["forecast"] for c in cards}),
+        "season": analysis.season_rows(energy),
         "alerts": alerts,
         "accounts": any_report.get("accounts", []),
         "merged_accounts": any_report.get("merged_accounts", False),

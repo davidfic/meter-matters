@@ -559,6 +559,68 @@ def combined_energy(bills: list[Bill]) -> list[dict]:
     return out
 
 
+def overview_headline(energy: list[dict], forecasts: dict | None = None) -> dict | None:
+    """What the last twelve months of bills add up to, across every utility.
+
+    Each utility is summed over the months it has. A home whose water bills
+    start partway through, or that has only one utility at all, still gets a
+    headline - asking for every utility on every month, as this once did,
+    blanked the panel for anyone whose files had a ragged edge.
+    """
+    present = [f.key for f in fuels.ORDER if any(r.get(f.key) for r in energy)]
+    rows = [r for r in energy if any(r.get(k) for k in present)]
+    if not rows:
+        return None
+    last12, prior = rows[-12:], rows[-24:-12]
+    sums = {k: _round(sum(r.get(k, 0.0) for r in last12)) for k in present}
+    total = _round(sum(sums.values()))
+    # The priciest and cheapest months are judged among months that have every
+    # utility the month before them had: the latest month, with only the water
+    # bill in so far, would otherwise be "cheapest" on a technicality.
+    complete = [r for i, r in enumerate(last12)
+                if i == 0 or all(r.get(k) for k in present if last12[i - 1].get(k))]
+    judged = complete or last12
+    peak = max(judged, key=lambda r: r["total"])
+    low = min(judged, key=lambda r: r["total"])
+    due = [(f, v) for f, v in (forecasts or {}).items() if v and v.get("amount")]
+    return {
+        "months": len(last12),
+        "total_12": total,
+        "prior_12": _round(sum(r["total"] for r in prior)) if len(prior) == 12 else None,
+        "avg_month": _round(total / len(last12)),
+        "by_fuel": [{"key": k, "amount": sums[k],
+                     "pct": int(round(sums[k] / total * 100)) if total else 0} for k in present],
+        "peak": {"label": peak["label"], "total": peak["total"]},
+        "low": {"label": low["label"], "total": low["total"]},
+        "next_bills": _round(sum(v["amount"] for _, v in due)) if due else None,
+        "next_count": len(due),
+    }
+
+
+def season_rows(energy: list[dict]) -> list[dict]:
+    """A typical bill for each calendar month: every utility averaged over the
+    years it has for that month, then added up. Keyed by month number."""
+    present = [f.key for f in fuels.ORDER if any(r.get(f.key) for r in energy)]
+    buckets: dict[int, dict[str, list]] = {}
+    for r in energy:
+        month = int(r["period"].split("-")[1])
+        bucket = buckets.setdefault(month, {k: [] for k in present})
+        for k in present:
+            if r.get(k):
+                bucket[k].append(r[k])
+    out = []
+    for month in sorted(buckets):
+        row = {"label": MONTH_NAMES[month - 1], "month": month, "total": 0.0, "n": 0}
+        for k in present:
+            values = buckets[month][k]
+            row[k] = _round(mean(values)) if values else 0.0
+            row["total"] += row[k]
+            row["n"] = max(row["n"], len(values))
+        row["total"] = _round(row["total"])
+        out.append(row)
+    return out
+
+
 def baseload(series: list[dict], settings: dict) -> dict | None:
     """Estimate the always-on floor, and split each period around it.
 

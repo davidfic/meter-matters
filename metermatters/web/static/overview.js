@@ -53,8 +53,11 @@ function renderFuels(d) {
 }
 
 /* The app's best sentence, lifted up to where people actually look: of the
-   change on a year ago, how much was the weather, the rate, and you. */
+   change on a year ago, how much was the weather, the rate, and you. Each
+   utility gets its own line on its card; the headline gets them added up. */
 function renderSplits(d, found) {
+  const covered = [];
+  const sum = { total: 0, weather: 0, rate: 0, you: 0, weatherKnown: false };
   for (const f of d.fuels) {
     const block = (found.fuels || {})[f.fuel];
     const latest = block && block.latest;
@@ -70,35 +73,55 @@ function renderSplits(d, found) {
     box.innerHTML = `<span class="${dir}">${dir === "up" ? "Up" : "Down"} ${money(Math.abs(latest.d_total))}</span> on the same weeks last year: `
       + parts.map(([who, v]) => `<strong>${signedMoney(v)}</strong> ${who}`).join(", ")
       + (latest.weather_known ? "." : " <span class=\"note\">(weather not known for this period).</span>");
+    covered.push(f.fuel.toLowerCase());
+    sum.total += latest.d_total;
+    sum.rate += latest.d_rate || 0;
+    sum.you += latest.d_you || 0;
+    if (latest.weather_known) { sum.weather += latest.d_weather || 0; sum.weatherKnown = true; }
   }
+
+  const why = $("ov-why");
+  if (!why) return;
+  if (!covered.length) { why.hidden = true; return; }
+  const parts = [
+    sum.weatherKnown ? ["the weather", sum.weather] : null,
+    ["the rate", sum.rate],
+    ["you", sum.you],
+  ].filter(Boolean).filter(([, v]) => Math.abs(v) >= 0.5).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
+  const dir = sum.total < 0 ? "down" : "up";
+  const who = covered.length === 1 ? covered[0]
+    : covered.slice(0, -1).join(", ") + " and " + covered[covered.length - 1];
+  why.hidden = false;
+  why.innerHTML = `Your latest ${esc(who)} bills are <span class="${dir}">${dir} ${money(Math.abs(sum.total))}</span> on the same weeks last year`
+    + (parts.length ? ": " + parts.map(([w, v]) => `<strong>${signedMoney(v)}</strong> ${w}`).join(", ") : "")
+    + ".";
 }
 
 /* ------------------------------------------------------- combined totals */
 
 function renderTotals(d) {
-  const clear = () => { $("ov-total").textContent = "—"; $("ov-delta").innerHTML = ""; $("ov-stats").innerHTML = ""; };
-  const present = fuelsIn(d.energy || []);
-  if (present.length < 2) { clear(); return; }
-  const rows = (d.energy || []).filter((x) => present.every((f) => x[f.key]));
-  if (rows.length < 2) { clear(); return; }
-  const last12 = rows.slice(-12);
-  const sums = present.map((f) => last12.reduce((s, x) => s + (x[f.key] || 0), 0));
-  const total = sums.reduce((a, b) => a + b, 0);
-  const prior = rows.slice(-24, -12);
-  const priorTotal = prior.reduce((s, x) => s + x.total, 0);
-  const peak = last12.reduce((a, b) => (b.total > a.total ? b : a));
-  const low = last12.reduce((a, b) => (b.total < a.total ? b : a));
+  const h = d.headline;
+  if (!h) { $("ov-total").textContent = "—"; $("ov-delta").innerHTML = ""; $("ov-stats").innerHTML = ""; return; }
+  const names = Object.fromEntries(FUELS.map((f) => [f.key, f.name.toLowerCase()]));
 
-  $("ov-total").textContent = money(total, false);
-  $("ov-delta").innerHTML = prior.length === 12
-    ? `<span class="${total < priorTotal ? "down" : "up"}">${signedMoney(total - priorTotal)}</span> vs the 12 before`
-    : `Averaging ${money(total / last12.length)} a month`;
+  $("ov-total").textContent = money(h.total_12, false);
+  $("ov-delta").innerHTML = h.prior_12 != null
+    ? `<span class="${h.total_12 < h.prior_12 ? "down" : "up"}">${signedMoney(h.total_12 - h.prior_12)}</span> vs the 12 months before`
+    : `${h.months} month${h.months === 1 ? "" : "s"} of bills on file`;
+
   const stats = [
-    { k: "Split", v: sums.map((s) => Math.round(s / total * 100)).join(" / "),
-      foot: present.map((f, i) => `${money(sums[i], false)} ${f.key}`).join(" · ") },
-    { k: "Priciest month", v: money(peak.total, false), foot: peak.label },
-    { k: "Cheapest month", v: money(low.total, false), foot: low.label },
-  ];
+    { k: "Averaging", v: money(h.avg_month, false), foot: "a month" },
+    h.next_bills != null && {
+      k: "Next bills, about", v: money(h.next_bills, false),
+      foot: h.next_count === 1 ? "one utility forecast" : `${h.next_count} utilities, forecast`,
+    },
+    h.by_fuel.length > 1 && {
+      k: "Split", v: h.by_fuel.map((f) => f.pct).join(" / "),
+      foot: h.by_fuel.map((f) => `${money(f.amount, false)} ${names[f.key] || f.key}`).join(" · "),
+    },
+    { k: "Priciest month", v: money(h.peak.total, false), foot: h.peak.label },
+    { k: "Cheapest month", v: money(h.low.total, false), foot: h.low.label },
+  ].filter(Boolean);
   $("ov-stats").innerHTML = stats.map((t) =>
     `<div><dt>${esc(t.k)}</dt><dd>${esc(t.v)}</dd><div class="sf">${esc(t.foot)}</div></div>`).join("");
 }
@@ -134,12 +157,17 @@ function renderCharts(d) {
   charts.energy = new StackedColumns($("chart-energy"), {
     height: 300, series,
     data: rows.map((x) => ({ ...x, label: x.short })),
+    refValue: d.headline ? d.headline.avg_month : null,
+    refLabel: "12-month average",
   });
-  const all = rows.filter((x) => present.every((f) => x[f.key]));
-  $("energy-note").textContent = present.length > 1
-    ? `${rows.length} months · every utility on ${all.length} of them`
-      + (all.length < rows.length ? " (some bills only start partway through)" : "")
-    : `${rows.length} months`;
+  // A utility whose bills start later than the others is said so, by name,
+  // rather than counted against the whole chart.
+  const late = present
+    .map((f) => ({ f, first: rows.findIndex((x) => x[f.key]) }))
+    .filter((x) => x.first > 0)
+    .map((x) => `${x.f.name.toLowerCase()} from ${rows[x.first].short}`);
+  $("energy-note").textContent = `${rows.length} months`
+    + (late.length ? ` · ${late.join(", ")}` : "");
   $("energy-table").classList.add("scroll");
   $("energy-table").innerHTML = table(
     [
@@ -150,27 +178,18 @@ function renderCharts(d) {
     [...rows].reverse(),
   );
 
-  // Seasonal shape: average each calendar month across every year we have.
-  const buckets = new Map();
-  for (const row of all) {
-    const m = Number(row.period.split("-")[1]);
-    const b = buckets.get(m) || { n: 0 };
-    for (const f of present) b[f.key] = (b[f.key] || 0) + row[f.key];
-    b.n += 1;
-    buckets.set(m, b);
-  }
-  const season = [...buckets.entries()].sort((a, b) => a[0] - b[0]).map(([m, b]) => {
-    const out = { label: MONTHS[m - 1], month: m, n: b.n, total: 0 };
-    for (const f of present) { out[f.key] = b[f.key] / b.n; out.total += out[f.key]; }
-    return out;
-  });
+  // Seasonal shape: a typical bill for each calendar month, worked out by the
+  // server from whatever years each utility has for that month.
+  const season = d.season || [];
   charts.season?.destroy();
-  charts.season = new StackedColumns($("chart-season"), { height: 260, series, data: season });
+  if (season.length) {
+    charts.season = new StackedColumns($("chart-season"), { height: 260, series, data: season });
+  }
   $("season-table").innerHTML = table(
     [
       { head: "Month", cell: (x) => x.label },
-      ...present.map((f) => ({ head: f.name, cell: (x) => money(x[f.key]) })),
-      { head: "Total", cell: (x) => money(x.total) },
+      ...present.map((f) => ({ head: f.name, cell: (x) => money(x[f.key] || 0) })),
+      { head: "Typical", cell: (x) => money(x.total) },
       { head: "Years", cell: (x) => x.n },
     ],
     season,

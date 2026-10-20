@@ -505,7 +505,8 @@ export class StackedColumns extends Chart {
     this.size();
 
     const totals = data.map((d) => series.reduce((sum, s) => sum + (d[s.key] || 0), 0));
-    const max = Math.max(...totals) * 1.14 || 1;
+    const ref = this.opts.refValue;
+    const max = Math.max(...totals, ref ?? 0) * 1.14 || 1;
     this.yScale = (v) => this.ih - (v / max) * this.ih;
     this.grid(niceTicks(0, max, 4), this.opts.tickFormat || ((v) => money(v, false)));
 
@@ -547,6 +548,22 @@ export class StackedColumns extends Chart {
       x1: 0, x2: this.iw, y1: zero, y2: zero,
       stroke: "var(--axis)", "stroke-width": 1, "shape-rendering": "crispEdges",
     }, this.g);
+    // Optional reference line - chart chrome, not a series, so no legend entry.
+    // Dashed, so it never reads as the baseline.
+    if (ref !== undefined && ref !== null && ref > 0) {
+      const y = this.yScale(ref);
+      el("line", {
+        x1: 0, x2: this.iw, y1: y, y2: y,
+        stroke: "var(--axis)", "stroke-width": 1, "stroke-dasharray": "4 3", "shape-rendering": "crispEdges",
+      }, this.g);
+      const label = el("text", { x: this.iw - 6, y: y - 7, class: "ref-label", "text-anchor": "end" }, this.g);
+      label.textContent = `${this.opts.refLabel || "average"} ${money(ref, false)}`;
+      // A backing in the surface colour, so the words stay legible over a bar.
+      const box = label.getBBox();
+      el("rect", { x: box.x - 4, y: box.y - 1, width: box.width + 8, height: box.height + 2,
+                   rx: 3, fill: "var(--surface)", opacity: 0.92 }, this.g);
+      this.g.appendChild(label);
+    }
     this.xLabels(data.map((d) => d.label), (i) => i * band + band / 2);
   }
 }
