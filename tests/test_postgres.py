@@ -60,7 +60,7 @@ class PostgresCase(HostedCase):
     def setUp(self):
         super().setUp()
         with db.connect() as conn:
-            for table in ("files", "meta", "inbound_log", "login_attempts", "users"):
+            for table in ("files", "meta", "inbound_log", "login_attempts", "admin_log", "users"):
                 conn.execute(f"DELETE FROM {table}")
 
     def register(self, email):

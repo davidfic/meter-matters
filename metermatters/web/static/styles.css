@@ -935,3 +935,17 @@ figure.shot figcaption { margin-top: 6px; font-size: 12.5px; color: var(--text-m
   .docs-table th:first-child, .docs-table td:first-child { min-width: 6em; }
   .docs-table code { white-space: normal; overflow-wrap: anywhere; }
 }
+
+/* ----------------------------------------------------------- admin panel */
+
+.admin-grid { align-items: start; }
+.admin table.facts th { text-align: left; font-weight: 500; color: var(--text-secondary); width: 38%; vertical-align: top; }
+.admin table.facts { table-layout: fixed; }
+.admin table.facts td { text-align: left; white-space: normal; overflow-wrap: anywhere; }
+.admin table.accounts th, .admin table.accounts td { text-align: left; }
+.admin table.accounts td:first-child a { color: inherit; }
+.admin .tag.good { background: var(--series-1); color: #fff; border-color: var(--series-1); }
+.admin select { max-width: 100%; }
+.admin form.inline { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.site-notice { margin: 0 0 16px; }
+@media (max-width: 720px) { .admin-grid.cols-2 { grid-template-columns: 1fr; } }

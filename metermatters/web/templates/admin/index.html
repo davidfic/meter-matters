@@ -1,0 +1,123 @@
+{% extends "admin/_layout.html" %}
+{% from "admin/_macros.html" import when, size %}
+{% block body %}
+
+<section class="grid cols-2 admin-grid">
+  <div class="card">
+    <h2>This server</h2>
+    <p class="note">What is running, and which optional parts are configured. Whether, never the values.</p>
+    <table class="facts">
+      <tr><th>Database</th><td>{{ database }}, {{ "reachable" if database_ok else "not reachable" }}</td></tr>
+      <tr><th>Revision</th><td>{% if revision %}<code>{{ revision }}</code>{% else %}not on Cloud Run{% endif %}</td></tr>
+      <tr><th>Tests</th><td>{% if tests %}{{ tests.passed }} of {{ tests.total }} passed{% if tests.failed or tests.error %}, <strong>{{ tests.failed + tests.error }} failing</strong>{% endif %} · <a href="{{ url_for('test_suite') }}">report</a>{% else %}no report shipped with this build{% endif %}</td></tr>
+      {% for f in features %}
+      <tr><th>{{ f.name }}</th><td><span class="tag {{ 'good' if f.on else '' }}">{{ "on" if f.on else "off" }}</span> <span class="hint">{{ f.how }}</span></td></tr>
+      {% endfor %}
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Settings</h2>
+    <p class="note">Each started as an environment variable and still works as one. A choice made here wins until it is handed back.</p>
+    <form method="post" action="{{ url_for('admin.settings') }}" class="stack">
+      <div class="field">
+        <label for="signups">Sign-ups <span class="hint">now {{ settings.signups.value }}, from the {{ settings.signups.where }}</span></label>
+        <select id="signups" name="signups">
+          <option value=""{{ " selected" if settings.signups.where == "environment" }}>As {{ settings.signups.variable }} says ({{ settings.signups.env }})</option>
+          {% for c in settings.signups.choices %}
+          <option value="{{ c }}"{{ " selected" if settings.signups.where == "panel" and settings.signups.value == c }}>{{ c|capitalize }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="dkim">Unverified utility signatures <span class="hint">now {{ settings.dkim.value }}, from the {{ settings.dkim.where }}</span></label>
+        <select id="dkim" name="dkim">
+          <option value=""{{ " selected" if settings.dkim.where == "environment" }}>As {{ settings.dkim.variable }} says ({{ settings.dkim.env }})</option>
+          <option value="warn"{{ " selected" if settings.dkim.where == "panel" and settings.dkim.value == "warn" }}>Warn: file the bill, note it in the user's log</option>
+          <option value="require"{{ " selected" if settings.dkim.where == "panel" and settings.dkim.value == "require" }}>Require: refuse the bill</option>
+          <option value="off"{{ " selected" if settings.dkim.where == "panel" and settings.dkim.value == "off" }}>Off: don't check</option>
+        </select>
+      </div>
+      <div><button type="submit" class="primary">Save settings</button></div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Notice to everyone</h2>
+    <p class="note">One line, shown at the top of every page to everyone signed in, until it is cleared. For maintenance, or news.</p>
+    <form method="post" action="{{ url_for('admin.notice') }}" class="stack">
+      <div class="field">
+        <label for="text">Text <span class="hint">up to {{ notice_max }} characters; plain text</span></label>
+        <input type="text" id="text" name="text" value="{{ notice }}" maxlength="{{ notice_max }}" autocomplete="off">
+      </div>
+      <div class="row">
+        <button type="submit" class="primary">{{ "Update notice" if notice else "Show notice" }}</button>
+        {% if notice %}<button type="submit" name="clear" value="1">Clear it</button>{% endif %}
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>The daily check</h2>
+    <p class="note">Missing bills, stale data and the similar-homes pool, for every account. Counts only.</p>
+    {% if check %}
+    <table class="facts">
+      <tr><th>Last ran</th><td>{{ when(check.ran_at) }}{% if check.ran_at %} at {{ check.ran_at.strftime('%H:%M UTC') }}{% endif %}, {{ check.seconds }}s, {{ check.people }} account{{ "s" if check.people != 1 }}</td></tr>
+      <tr><th>Outcome</th><td><span class="tag {{ 'good' if check.ok else 'warn' }}">{{ "ok" if check.ok else "failures" }}</span></td></tr>
+      {% for step, tally in check.steps.items() %}
+      <tr><th>{{ step }}</th><td>{% for status, n in tally.items() %}{{ n }} {{ status }}{{ ", " if not loop.last }}{% else %}—{% endfor %}</td></tr>
+      {% endfor %}
+    </table>
+    {% else %}
+    <p class="note">It has not run yet on this server.</p>
+    {% endif %}
+    <form method="post" action="{{ url_for('admin.check') }}" class="inline">
+      <button type="submit">Run it now</button>
+      <span class="hint">Takes a few seconds per account.</span>
+    </form>
+  </div>
+</section>
+
+<section>
+  <div class="card">
+    <h2>Accounts</h2>
+    <p class="note">{{ people|length }} account{{ "s" if people|length != 1 }}. Storage is files counted, not read, so bills are not counted; arrivals are forwarded messages, filed or not.</p>
+    <table class="accounts">
+      <thead><tr><th>Email</th><th>Signs in with</th><th>Joined</th><th>Files</th><th>Forwarded mail</th><th>Last change</th></tr></thead>
+      <tbody>
+      {% for p in people %}
+      <tr>
+        <td><a href="{{ url_for('admin.account', user_id=p.id) }}">{{ p.email }}</a>{% if p.admin %} <span class="tag">admin</span>{% endif %}{% if p.me %} <span class="hint">(you)</span>{% endif %}</td>
+        <td>{{ p.signin }}</td>
+        <td>{{ when(p.joined) }}</td>
+        <td>{{ p.storage.files }} file{{ "s" if p.storage.files != 1 }}, {{ size(p.storage.bytes) }}</td>
+        <td>{{ p.arrivals.counts.get("imported", 0) }} filed{% if p.arrivals.counts.get("rejected") %}, {{ p.arrivals.counts.rejected }} not{% endif %}</td>
+        <td>{{ when(p.storage.last) }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="hint">Nobody has signed up.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <div class="card">
+    <h2>Done from this panel</h2>
+    <p class="note">The last {{ log|length }} action{{ "s" if log|length != 1 }}, newest first.</p>
+    {% if log %}
+    <table class="accounts">
+      <thead><tr><th>When</th><th>Who</th><th>What</th><th>Detail</th></tr></thead>
+      <tbody>
+      {% for row in log %}
+      <tr><td>{{ when(row.at) }}{% if row.at %} {{ row.at.strftime('%H:%M') }} UTC{% endif %}</td><td>{{ row.admin_email }}</td><td>{{ row.action }}{% if row.target %} <strong>{{ row.target }}</strong>{% endif %}</td><td>{{ row.detail }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="note" style="margin-bottom:0">Nothing yet.</p>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

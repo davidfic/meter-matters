@@ -61,6 +61,7 @@
   </header>
 
   <main class="stage">
+    {% include "_notice.html" %}
     <div id="flash" class="flash" role="status" aria-live="polite" hidden></div>
     {% block content %}{% endblock %}
   </main>

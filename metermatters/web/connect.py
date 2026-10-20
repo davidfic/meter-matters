@@ -10,7 +10,6 @@ configured isn't offered.
 
 from __future__ import annotations
 
-import os
 import secrets
 from urllib.parse import urlsplit
 
@@ -22,6 +21,7 @@ from metermatters import config
 from metermatters import fuels
 from metermatters.web import google_oauth
 from metermatters.store import homes
+from metermatters.store import site
 from metermatters.intake import importers
 from metermatters.intake import inbound
 from metermatters.intake import ingest
@@ -34,7 +34,8 @@ bp = Blueprint("web", __name__)
 
 
 def signups_open() -> bool:
-    return os.environ.get("ELEC_ALLOW_SIGNUP", "1").strip().lower() not in ("0", "false", "no", "off")
+    # ELEC_ALLOW_SIGNUP, unless the admin panel has said otherwise since.
+    return site.signups_open()
 
 
 def _safe_next(target: str | None) -> str:

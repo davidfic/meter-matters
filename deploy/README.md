@@ -122,6 +122,12 @@ edit `deploy/cloudrun.env` or run `./deploy/cloudrun.sh secrets`, then
 That command also builds and deploys whatever code is in this directory,
 without testing it - so run it from a state you would be happy to have live.
 
+Two settings need none of that: sign-ups open or closed, and what to do with
+an unverified utility signature. Both can be changed from the admin panel at
+`/admin` by any account named in `ELEC_ADMIN_EMAILS`, and take effect at once.
+The panel is also where an account is deleted and the daily check run by hand;
+the in-app operators page describes it.
+
 ## Inbound email (the private bills address)
 
 Mail for `bills-<token>@metermatters.app` is received by Cloudflare Email

@@ -65,6 +65,7 @@ class User:
     has_password: bool
     has_google: bool
     epoch: int = 0
+    created_at: str = ""
 
     @property
     def root(self) -> Path:
@@ -93,7 +94,8 @@ def _user(row) -> User | None:
                 inbound_token=row["inbound_token"],
                 has_password=bool(row["password_hash"]),
                 has_google=bool(row["google_sub"]),
-                epoch=int(row["session_epoch"] or 0))
+                epoch=int(row["session_epoch"] or 0),
+                created_at=row["created_at"] or "")
 
 
 def _clean_email(email: str) -> str:

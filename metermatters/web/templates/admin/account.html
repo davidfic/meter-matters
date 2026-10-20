@@ -1,0 +1,58 @@
+{% extends "admin/_layout.html" %}
+{% from "admin/_macros.html" import when, size %}
+{% block title %}{{ person.email }} · Admin{% endblock %}
+{% block crumb_tail %} <small>{{ person.email }}</small>{% endblock %}
+{% block body %}
+
+<section class="grid cols-2 admin-grid">
+  <div class="card">
+    <h2>{{ person.email }}{% if person.admin %} <span class="tag">admin</span>{% endif %}</h2>
+    <p class="note">What the app knows about this account without opening its files. Bills are
+      rows inside the statement file, so they are not counted here: counting them would mean reading them.</p>
+    <table class="facts">
+      <tr><th>Signs in with</th><td>{{ person.signin }}</td></tr>
+      <tr><th>Joined</th><td>{{ when(person.joined) }}</td></tr>
+      <tr><th>Statement files</th><td>{{ person.storage.statements }} <span class="hint">one per home with bills; each holds all of that home's bills</span></td></tr>
+      <tr><th>Usage exports</th><td>{{ person.storage.usage }}</td></tr>
+      <tr><th>Settings and other</th><td>{{ person.storage.other }}</td></tr>
+      <tr><th>In all</th><td>{{ person.storage.files }} file{{ "s" if person.storage.files != 1 }}, {{ size(person.storage.bytes) }}</td></tr>
+      <tr><th>Last change</th><td>{{ when(person.storage.last) }}</td></tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Forwarding</h2>
+    <p class="note">Messages that arrived at this account's bills address, by what became of them. Only forwarded mail is counted here, not uploads or bills typed in. Subjects and details stay in the user's own log.</p>
+    {% if person.arrivals.total %}
+    <table class="facts">
+      {% for outcome, n in person.arrivals.counts.items() %}
+      <tr><th>{{ outcome|capitalize }}</th><td>{{ n }}</td></tr>
+      {% endfor %}
+      <tr><th>Last arrival</th><td>{{ when(person.arrivals.last) }}</td></tr>
+    </table>
+    {% else %}
+    <p class="note" style="margin-bottom:0">Nothing has arrived.</p>
+    {% endif %}
+  </div>
+</section>
+
+<section>
+  <div class="card">
+    <h2>Delete this account</h2>
+    {% if person.me %}
+    <p class="note" style="margin-bottom:0">This is you. Delete your own account from the Add bills page, as anyone else would.</p>
+    {% else %}
+    <p class="note">Removes the account and every bill, export and setting it holds. There is no undo, and the person is not told; tell them yourself.</p>
+    <form method="post" action="{{ url_for('admin.account_delete', user_id=person.id) }}" class="controls">
+      <div class="field">
+        <label for="confirm">Type <code>{{ person.email }}</code> to confirm</label>
+        <input type="text" id="confirm" name="confirm" autocomplete="off" required>
+      </div>
+      <button type="submit" class="danger">Delete the account</button>
+    </form>
+    {% endif %}
+  </div>
+</section>
+
+<p class="note"><a href="{{ url_for('admin.index') }}">← All accounts</a></p>
+{% endblock %}

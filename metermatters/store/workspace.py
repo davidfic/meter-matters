@@ -18,6 +18,7 @@ import contextlib
 import hashlib
 import shutil
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 from metermatters.store import accounts
@@ -137,3 +138,29 @@ def open_(user, write: bool = False):
         space.close(failed=True)
         raise
     space.close()
+
+
+def inventory(user) -> list[dict]:
+    """What a user is storing: each file's path, size and when it last changed.
+
+    Names, sizes and dates only. Nothing here reads a file's contents, so it
+    is safe to call on behalf of someone who is not that user.
+    """
+    if db.is_postgres():
+        with db.connect() as conn:
+            rows = conn.execute("SELECT name, octet_length(content) AS size, updated_at "
+                                "FROM files WHERE user_id = ?", (user.id,)).fetchall()
+        return [{"name": row["name"], "size": int(row["size"]), "updated": row["updated_at"]}
+                for row in rows]
+    root = user.root
+    if not root.exists():
+        return []
+    found = []
+    for item in root.rglob("*"):
+        relative = item.relative_to(root).as_posix()
+        if item.is_file() and _is_data(relative):
+            stat = item.stat()
+            changed = datetime.fromtimestamp(stat.st_mtime, timezone.utc)
+            found.append({"name": relative, "size": stat.st_size,
+                          "updated": changed.isoformat(timespec="seconds")})
+    return found

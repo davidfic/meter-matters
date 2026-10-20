@@ -36,6 +36,7 @@ from metermatters.store import accounts
 from metermatters.intake import billmail
 from metermatters.store import db
 from metermatters.store import homes
+from metermatters.store import site
 from metermatters.store import workspace
 
 ADDRESS_PREFIX = "bills-"
@@ -317,7 +318,7 @@ def receive(delivery: Delivery) -> tuple[str, str]:
             subject = original_subject
 
     verdict = "forwarded" if forwarded_by else dkim_result(delivery.raw)
-    mode = os.environ.get("ELEC_INBOUND_DKIM", "warn").lower()
+    mode = site.dkim_mode()        # ELEC_INBOUND_DKIM, unless the admin panel has said otherwise
     if verdict != "pass" and mode == "require" and not forwarded_by:
         _log(user, "rejected", subject,
              "The utility's signature on this message didn't verify, so it wasn't filed.")

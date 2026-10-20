@@ -1,0 +1,7 @@
+{% macro when(value) -%}
+{% if value %}<time datetime="{{ value.isoformat() }}" title="{{ value.strftime('%Y-%m-%d %H:%M UTC') }}">{{ value.strftime('%b %-d, %Y') }}</time>{% else %}—{% endif %}
+{%- endmacro %}
+
+{% macro size(n) -%}
+{% if n >= 1048576 %}{{ "%.1f"|format(n / 1048576) }} MB{% elif n >= 1024 %}{{ (n / 1024)|round|int }} KB{% else %}{{ n }} B{% endif %}
+{%- endmacro %}

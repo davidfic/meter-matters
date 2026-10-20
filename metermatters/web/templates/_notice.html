@@ -1,0 +1,4 @@
+{#- A line from whoever runs this server, shown to everyone signed in until it is cleared. -#}
+{% if site_notice %}
+<div class="callout site-notice" role="status">{{ site_notice }}</div>
+{% endif %}

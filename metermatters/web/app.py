@@ -33,6 +33,7 @@ from metermatters import fuels
 from metermatters.analytics import gamify
 from metermatters.intake import greenbutton
 from metermatters.store import homes
+from metermatters.store import site
 from metermatters.intake import importers
 from metermatters.intake import ingest
 from metermatters.analytics import insights
@@ -211,7 +212,9 @@ def gate():
     # The machine endpoints act for whoever their own credential says, and
     # open those files themselves. A browser session that happens to ride
     # along must not hold its user's lock while they wait for it.
-    if request.path.startswith(("/static/", "/api/tasks/", "/api/inbound/", "/health")):
+    # The admin pages are about the installation, not the admin's own bills:
+    # they open nobody's files, and hold nobody's lock.
+    if request.path.startswith(("/static/", "/api/tasks/", "/api/inbound/", "/health", "/admin")):
         return None
     # The user's files, for the length of this request. Anything that might
     # change them takes the user's lock; a plain read doesn't wait for it.
@@ -261,8 +264,21 @@ def release(error):
 
 @app.context_processor
 def who():
-    return {"user": getattr(g, "user", None),
-            "accounts_on": config.multi_user()}
+    user = getattr(g, "user", None)
+    return {"user": user, "accounts_on": config.multi_user(),
+            "is_admin": config.multi_user() and site.is_admin(user)}
+
+
+@app.context_processor
+def word_from_the_operator():
+    """The admin panel's notice, on every page of anyone signed in."""
+    user = getattr(g, "user", None)
+    if not config.multi_user() or user is None or user is accounts.LOCAL:
+        return {"site_notice": None}
+    try:
+        return {"site_notice": site.notice() or None}
+    except Exception:                       # noqa: BLE001 - a page must render even if this can't be read
+        return {"site_notice": None}
 
 
 @app.context_processor
@@ -1416,10 +1432,11 @@ def test_suite():
     return response
 
 
-from metermatters.web import connect, docs  # noqa: E402 - the routes need `app` and `paths` to exist first
+from metermatters.web import admin, connect, docs  # noqa: E402 - the routes need `app` and `paths` to exist first
 
 app.register_blueprint(connect.bp)
 app.register_blueprint(docs.bp)
+app.register_blueprint(admin.bp)
 
 
 @app.errorhandler(413)

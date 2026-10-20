@@ -4,6 +4,9 @@
 <a class="btn" href="{{ url_for('web.connect') }}">Add bills</a>
 {% endif %}
 <a class="btn" href="{{ url_for('docs.index') }}">Docs</a>
+{% if is_admin %}
+<a class="btn" href="{{ url_for('admin.index') }}">Admin</a>
+{% endif %}
 {% if accounts_on and user %}
 <form method="post" action="{{ url_for('web.logout') }}" class="inline">
   <button type="submit" title="Signed in as {{ user.email }}">Sign out</button>

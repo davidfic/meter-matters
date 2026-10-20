@@ -122,6 +122,15 @@ TABLES = {
         updated_at TEXT NOT NULL,
         PRIMARY KEY (home_key, fuel)
     """,
+    # What was done from the admin panel, by whom. See site.py.
+    "admin_log": """
+        id          {id},
+        at          TEXT NOT NULL,
+        admin_email TEXT NOT NULL,
+        action      TEXT NOT NULL,
+        target      TEXT NOT NULL DEFAULT '',
+        detail      TEXT NOT NULL DEFAULT ''
+    """,
     # A user's statements, usage exports and settings, as the files they are.
     # Only used on Postgres - with a disk, files are simply files.
     "files": """

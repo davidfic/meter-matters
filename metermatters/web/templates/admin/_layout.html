@@ -1,0 +1,24 @@
+{#- The frame the admin pages sit in: the app's shell, with the pages filling `body`. -#}
+{% extends "_layout.html" %}
+{% block title %}Admin{% endblock %}
+{% block head %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+{% block body_class %}page-admin admin{% endblock %}
+{% block crumb %}Admin{% block crumb_tail %}{% endblock %}{% endblock %}
+{% block actions %}<a class="btn" href="{{ url_for('docs.page', slug='operators') }}">Operator docs</a>{% endblock %}
+{% block content %}
+  {% for category, message in get_flashed_messages(with_categories=true) %}
+    <div class="flash {{ 'err' if category == 'err' }}" role="status">{{ message }}</div>
+  {% endfor %}
+
+  {% block body %}{% endblock %}
+
+  <p class="note fine" style="text-align:center;margin:24px 0">
+    Nothing on these pages opens an account's files. What is done here is recorded below the accounts.
+  </p>
+{% endblock %}
+{% block scripts %}
+<script type="module">
+  import { initTheme } from "{{ url_for('static', filename='ui.js') }}";
+  initTheme();
+</script>
+{% endblock %}
