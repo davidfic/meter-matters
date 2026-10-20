@@ -1,0 +1,86 @@
+{% extends "_layout.html" %}
+{%- set v = view -%}
+{%- set wi = v.what_if -%}
+{%- macro money(x) %}${{ "{:,.0f}".format(x) }}{% endmacro -%}
+{%- macro change(x) %}{% if x|round(0) == 0 %}unchanged{% else %}<span class="{{ 'up' if x > 0 else 'down' }}">{{ "+" if x > 0 else "−" }}${{ "{:,.0f}".format(x|abs) }}</span>{% endif %}{% endmacro -%}
+{%- macro pct(x) %}<span class="{{ 'up' if x > 0 else 'down' }}">{{ "{:+.0f}".format(x)|replace("-", "−") }}%</span>{% endmacro -%}
+{% block title %}{{ fuel }} year by year{% endblock %}
+{% block body_class %}page-years{% endblock %}
+{% block crumb %}{{ fuel }} <small>year by year</small>{% endblock %}
+{% block actions %}<a class="btn" href="{{ url_for('fuel_page', fuel=slug) }}">Back to {{ fuel|lower }}</a>{% endblock %}
+{% block content %}
+  {%- set latest = (v.years|selectattr("year", "equalto", wi.latest)|first) if wi else none %}
+  <section class="panel long-hero">
+    <div class="hero-label">The average {{ noun }} statement, {{ v.years[0].year }} to {{ v.years[-1].year }}</div>
+    {% if wi %}
+    <div class="long-figures">
+      <span>{{ money(wi.bill_then) }}<small>{{ wi.base }}</small></span>
+      <span class="arrow" aria-hidden="true">→</span>
+      <span>{{ money(wi.bill_now) }}<small>{{ wi.latest }}{% if wi.partial %} so far{% endif %}</small></span>
+    </div>
+    <p class="hero-meta">
+      Usage {{ pct(wi.usage_pct) }}, the price per {{ unit }} {{ pct(wi.price_pct) }}.
+      Of the {{ change(wi.bill_now - wi.bill_then) }} a statement, usage added {{ change(latest.usage_added) }} and the price added {{ change(latest.price_added) }}.
+    </p>
+    <dl class="statline">
+      <div><dt>{{ wi.latest }}'s usage at {{ wi.base }} prices</dt><dd>{{ money(wi.usage_now_price_then) }}</dd><div class="sf">a statement, if only usage had changed</div></div>
+      <div><dt>{{ wi.base }}'s usage at {{ wi.latest }} prices</dt><dd>{{ money(wi.usage_then_price_now) }}</dd><div class="sf">a statement, if only the price had changed</div></div>
+      <div><dt>Measured against</dt><dd>{{ wi.base }}</dd><div class="sf">the first full year with usage{% if v.estimated %}, estimated or metered{% endif %}</div></div>
+    </dl>
+    {% else %}
+    <p class="hero-meta">Not enough years with usage to split the change yet.</p>
+    {% endif %}
+  </section>
+
+  <section class="panel">
+    <div class="chart-head"><div><h2>The average statement, by year</h2>
+      <p class="note">With the two what-ifs drawn in: today's usage at the old price, and the old usage at today's price.</p></div></div>
+    <div id="chart-years"></div>
+    {% if v.estimated or not v.years[-1].full %}<p class="note" style="margin-top:8px">{% if v.estimated %}* usage estimated from published rates.{% endif %}{% if not v.years[-1].full %} † year still in progress.{% endif %}</p>{% endif %}
+  </section>
+
+  <section class="panel">
+    <div class="chart-head"><div><h2>Where the change came from</h2>
+      <p class="note">Each year against {{ v.base }}: what more or less usage added, and what the price added{% if v.weather %}; and how much of the usage the weather accounts for{% endif %}.</p></div></div>
+    <div class="legend" style="margin-bottom:10px">
+      <span class="item"><span class="swatch" style="background:var(--series-1)"></span>Usage</span>
+      <span class="item"><span class="swatch" style="background:var(--series-2)"></span>Price</span>
+      {% if v.weather %}<span class="item"><span class="swatch" style="background:var(--series-3)"></span>Of the usage, the weather</span>{% endif %}
+    </div>
+    <div id="chart-split"></div>
+  </section>
+
+  <section class="panel">
+    <header class="panel-h"><h2>The numbers</h2></header>
+    <div class="table-view">
+      <table class="years-table">
+        <thead><tr><th>Year</th><th>Statements</th><th>Average bill</th><th>{{ unit }} a statement</th><th>$ per {{ unit }}</th><th>Usage added</th><th>Price added</th>{% if v.weather %}<th>Of which weather</th>{% endif %}<th>Usage from</th></tr></thead>
+        <tbody>
+        {% for y in v.years %}
+        <tr class="{{ 'base' if y.baseline }}">
+          <td>{{ y.year }}{% if not y.full %} <span class="sf">so far</span>{% endif %}</td>
+          <td>{{ y.statements }}</td>
+          <td>${{ "{:,.2f}".format(y.bill) }}</td>
+          <td>{{ "{:,.0f}".format(y.kwh) if y.kwh is not none else "—" }}</td>
+          <td>{{ "$%.3f"|format(y.rate) if y.rate is not none else "—" }}</td>
+          <td>{% if y.baseline %}measured against{% elif y.usage_added is not none %}{{ change(y.usage_added) }}{% else %}—{% endif %}</td>
+          <td>{% if y.baseline %}{% elif y.price_added is not none %}{{ change(y.price_added) }}{% else %}—{% endif %}</td>
+          {% if v.weather %}<td>{% if y.weather_added is not none %}{{ change(y.weather_added) }}{% else %}—{% endif %}</td>{% endif %}
+          <td class="sf">{% if y.basis == "metered" %}the meter{% elif y.basis == "estimated" %}published rates{% else %}not known{% endif %}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <p class="note">
+    Bills are grouped by the year of their due date; a year marked “so far” is still filling in.
+    {% if v.estimated %}Years marked “published rates” have no usage export on file, so usage is estimated from the bill and the published residential rate for your area ({{ v.source.text }}); the metered years were checked against the same rates first. The published rate is the utility's own Basic Service; if your supply came from a town aggregation or another supplier in an estimated year, that year's usage is off by the difference in price.{% endif %}
+    {% if v.dollars_only %}For {{ v.dollars_only|join(", ") }} there is no usage and no published rate to estimate it from, so only the dollars show.{% endif %}
+  </p>
+  <script id="long-view" type="application/json">{{ v|tojson }}</script>
+{% endblock %}
+{% block scripts %}
+<script type="module" src="{{ url_for('static', filename='years.js') }}"></script>
+{% endblock %}

@@ -44,7 +44,10 @@
       <div class="chart-head">
         <div><h2>{{ fuel }} bill by statement</h2>
           <p class="note" id="trend-note">Every statement on record, dated by its due date.</p></div>
-        <button class="table-toggle" data-table="trend-table" type="button">Table</button>
+        <div class="panel-tools">
+          {% if long_view %}<a class="btn" href="{{ url_for('long_view_page', fuel=fuel|lower) }}">Year by year</a>{% endif %}
+          <button class="table-toggle" data-table="trend-table" type="button">Table</button>
+        </div>
       </div>
       <div id="chart-trend"></div>
       <div class="table-view" id="trend-table" hidden></div>

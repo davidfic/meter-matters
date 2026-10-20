@@ -19,6 +19,7 @@ import re
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
+from statistics import mean
 
 from flask import Flask, abort, g, jsonify, make_response, redirect, render_template, request, session, url_for
 
@@ -41,6 +42,7 @@ from metermatters import region
 from metermatters.store import storage
 from metermatters.analytics import benchmarks
 from metermatters.analytics import yearly
+from metermatters.analytics import longview, tariffs
 from metermatters import testreport
 from metermatters.tasks import watchdog
 from metermatters.analytics import weather
@@ -762,8 +764,51 @@ def api_overview():
 @app.get("/<any(electric, gas, water):fuel>")
 def fuel_page(fuel):
     kind = fuels.BY_SLUG[fuel]
-    return render_template("index.html", fuel=kind.name, tagline=kind.tagline,
-                           bootstrap=inline(build_report(load_state(), fuel=kind.name)))
+    report = build_report(load_state(), fuel=kind.name)
+    years = {r["year"] for r in report.get("series", [])}
+    return render_template("index.html", fuel=kind.name, tagline=kind.tagline, long_view=len(years) >= 2,
+                           bootstrap=inline(report))
+
+
+def build_long_view(state: dict, fuel: str) -> dict | None:
+    """Year by year, usage against price, for one fuel."""
+    report = build_report(state, fuel=fuel)
+    if report.get("fuel") != fuel or not report.get("series"):
+        return None
+    with_address = {**state, "_address": _address()}
+    published, source = tariffs.for_area(home_state(with_address), fuel)
+    weather = None
+    try:
+        usage = greenbutton.load_dir(paths().usage).periods if paths().usage.exists() else []
+    except (OSError, ValueError):
+        usage = []
+    mine = [p for p in usage if insights.fuel_of(p) == fuel]
+    found = _weather_model(fuel, mine, with_address)
+    if found is not None and found[1] is not None and found[1].matters:
+        wx, model, _ = found
+        covered = [p for p in mine if model.covers(p)]
+        if covered:
+            # A typical period's weather: the mean of the features over every period known.
+            typical = [mean(f) for f in zip(*(model.features(p) for p in covered))]
+            usual = sum(b * v for b, v in zip(model.beta, (1.0, *typical)))
+            by_end = {p.end.isoformat(): p for p in mine}
+
+            def weather(r: dict):
+                p = by_end.get(r.get("service_end"))
+                if p is None or not model.covers(p):
+                    return None
+                return (model.expect(p) - usual) * p.days
+    return longview.build(report["series"], published, weather, source)
+
+
+@app.get("/<any(electric, gas, water):fuel>/years")
+def long_view_page(fuel):
+    kind = fuels.BY_SLUG[fuel]
+    view = build_long_view(load_state(), kind.name)
+    if view is None:
+        abort(404)
+    return render_template("years.html", fuel=kind.name, slug=kind.slug, noun=kind.noun, unit=kind.unit, view=view,
+                           home_name=g.home.name if homes.several(g.base_paths) else None)
 
 
 def build_raw() -> dict:

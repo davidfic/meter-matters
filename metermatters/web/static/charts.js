@@ -692,7 +692,7 @@ export class Lines extends Chart {
     const hi = Math.max(...values), lo = Math.min(...values);
     const pad = (hi - lo) * 0.18 || Math.abs(hi) * 0.1 || 1;
     const min = lo < 0 ? lo - pad : (this.opts.zero ? 0 : Math.max(0, lo - pad));
-    const max = hi + pad + (levels.length ? (hi - min) * 0.2 : 0);
+    const max = hi + pad + (levels.length ? (hi - min) * (0.12 + 0.12 * levels.length) : 0);
     this.yScale = (v) => this.ih - ((v - min) / (max - min)) * this.ih;
     const step = data.length > 1 ? this.iw / (data.length - 1) : 0;
     const xFor = (i) => i * step;
@@ -707,7 +707,7 @@ export class Lines extends Chart {
                    fill: "var(--series-1)", "fill-opacity": 0.07 }, this.g);
     }
 
-    for (const level of levels) {
+    for (const [k, level] of levels.entries()) {
       const x0 = Math.max(0, xFor(level.from) - step / 2);
       const x1 = Math.min(this.iw, xFor(level.to) + step / 2);
       const y = this.yScale(level.value);
@@ -717,7 +717,7 @@ export class Lines extends Chart {
       const fits = (text) => text.length * 6.1 + 8 <= x1 - x0;
       const text = [level.label, level.short].find((t) => t && fits(t));
       if (text) {
-        el("text", { x: (x0 + x1) / 2, y: 14, class: "note-label", "text-anchor": "middle" }, this.g)
+        el("text", { x: (x0 + x1) / 2, y: 14 + k * 15, class: "note-label", "text-anchor": "middle" }, this.g)
           .textContent = text;
       }
     }
