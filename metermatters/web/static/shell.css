@@ -515,3 +515,8 @@ thead th { font-family: var(--font-body); font-size: 11.5px; font-weight: 600; t
 
 .page-login .narrow { max-width: 440px; margin: 24px auto 0; }
 .page-login .card.auth h2 { font-size: 18px; }
+
+/* ---------------------------------------------------------------- docs */
+
+.page-docs .docs-nav { top: 74px; }
+.page-docs .docs-body a { color: var(--link); }

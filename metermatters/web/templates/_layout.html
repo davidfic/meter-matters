@@ -51,7 +51,7 @@
   <header class="bar">
     <div class="crumb">
       <h1>{% block crumb %}{% endblock %}</h1>
-      {%- if homes_nav %}{% for h in homes_nav['items'] if h.current %}<span class="chip-home">{{ h.name }}</span>{% endfor %}{% endif %}
+      {%- if homes_nav and not bare %}{% for h in homes_nav['items'] if h.current %}<span class="chip-home">{{ h.name }}</span>{% endfor %}{% endif %}
       <span class="period" id="coverage">{% block period %}{% endblock %}</span>
     </div>
     <div class="bar-right">

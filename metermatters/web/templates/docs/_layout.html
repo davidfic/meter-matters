@@ -1,33 +1,14 @@
-{#- The frame every documentation page sits in: the site header, a sidebar of
+{#- The frame every documentation page sits in: the app's shell, a sidebar of
     pages, the page itself, and prev / next at the foot. Pages extend this and
-    fill `body`. The `shot` macro is how a page shows a screenshot. -#}
-<!doctype html>
-<html lang="en" data-base="{{ request.script_root }}">
-<head>
-<title>{{ page.title if page else "Documentation" }} · Meter Matters</title>
-<meta name="description" content="{{ page.blurb if page else 'How to get your utility bills into Meter Matters, step by step, and what each way can and cannot see.' }}">
-{% include "_head.html" %}
-</head>
-<body>
-<div class="wrap">
-
-  <header class="top">
-    <div class="brand">
-      <h1><a href="{{ url_for('index') }}" style="color:inherit;text-decoration:none">{% include "_brand.html" %}</a>
-        <span style="color:var(--text-muted);font-weight:400"> / <a href="{{ url_for('docs.index') }}" style="color:inherit;text-decoration:none">Docs</a>{% if page %} / {{ page.title }}{% endif %}</span></h1>
-    </div>
-    <div class="top-actions">
-      {% include "_fuels.html" %}
-      {% include "_homes.html" %}
-      {% if accounts_on and not user %}
-        <a class="btn" href="{{ url_for('web.login') }}">Sign in</a>
-      {% else %}
-        {% include "_account.html" %}
-      {% endif %}
-      <button id="theme" type="button" aria-label="Toggle colour theme">Theme</button>
-    </div>
-  </header>
-
+    fill `body`. The `shot` macro in _macros.html is how a page shows a screenshot. -#}
+{% extends "_layout.html" %}
+{% block title %}{{ page.title if page else "Documentation" }}{% endblock %}
+{#- Open to anyone and meant to be found: no robots meta here, whoever is looking. -#}
+{% block head %}<meta name="description" content="{{ page.blurb if page else 'How to get your utility bills into Meter Matters, step by step, and what each way can and cannot see.' }}">{% endblock %}
+{% block body_class %}page-docs{% endblock %}
+{% block crumb %}Docs{% if page %} <small>{{ page.title }}</small>{% endif %}{% endblock %}
+{% block actions %}{% if accounts_on and not user %}<a class="btn" href="{{ url_for('web.login') }}">Sign in</a>{% endif %}{% endblock %}
+{% block content %}
   <div class="docs">
     <nav class="docs-nav" aria-label="Documentation">
       <a href="{{ url_for('docs.index') }}"{% if not page %} aria-current="page"{% endif %}>Overview</a>
@@ -55,10 +36,10 @@
     Every screenshot in these pages is the app on an invented household. No real bills.
     {% if accounts_on and user %}· <a href="{{ url_for('web.connect') }}">Add bills</a>{% endif %}
   </p>
-</div>
+{% endblock %}
+{% block scripts %}
 <script type="module">
   import { initTheme } from "{{ url_for('static', filename='ui.js') }}";
   initTheme();
 </script>
-</body>
-</html>
+{% endblock %}
