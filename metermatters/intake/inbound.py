@@ -34,6 +34,7 @@ from email.utils import getaddresses, parseaddr
 
 from metermatters.store import accounts
 from metermatters.intake import billmail
+from metermatters.intake import redact
 from metermatters.store import db
 from metermatters.store import homes
 from metermatters.store import site
@@ -179,7 +180,8 @@ def _log(user, outcome: str, subject: str, detail: str,
         conn.execute(
             "INSERT INTO inbound_log (user_id, received_at, outcome, subject, detail, "
             "confirm_url, confirm_code) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (user.id, db.now(), outcome, subject[:200], detail[:500], confirm_url, confirm_code))
+            (user.id, db.now(), outcome, redact.subject(subject)[:200], detail[:500],
+             confirm_url, confirm_code))
         conn.execute(
             "DELETE FROM inbound_log WHERE user_id = ? AND id NOT IN "
             "(SELECT id FROM inbound_log WHERE user_id = ? ORDER BY id DESC LIMIT ?)",

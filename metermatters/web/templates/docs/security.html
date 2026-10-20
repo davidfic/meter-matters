@@ -12,11 +12,13 @@
   <tbody>
     <tr><td><strong>Upload</strong></td>
         <td>The files you drop in</td>
-        <td>Those files, and the rows read from them</td>
+        <td>The rows read from them, and the files with three things taken out before they are written:
+            your name, your street (the state and ZIP code stay, for the weather) and all but the
+            last four digits of each account number</td>
         <td>Your utility login. Nothing is fetched on your behalf, ever.</td></tr>
     <tr><td><strong>Forwarding</strong></td>
         <td>Only the messages your own filter forwards</td>
-        <td>The amount, the dates, the fuel, the last digits of the account, and the subject line on a log entry. Not the message.</td>
+        <td>The amount, the dates, the fuel, the last digits of the account, and the subject line on a log entry, with any long number in it cut to its last four digits. Not the message.</td>
         <td>A password or any kind of access to your mailbox. Any mail your filter did not send.</td></tr>
     <tr><td><strong>By hand</strong></td>
         <td>What you type</td>

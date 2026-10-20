@@ -120,8 +120,8 @@
     separately; a mixed file is turned away with a note saying so.</li>
   <li><strong>Which account is which.</strong> An export is per account. If a file names an account the app
     has not seen, it files it as a new account; the account switcher on the utility page shows them all.
-    A bill history that masks the account number (<code>******0001</code>) learns the full number from a
-    usage export that has it.</li>
+    Only the last four digits of an account number are kept (<code>******0001</code>), which is also all
+    a bill email ever shows, so bills and usage for the same account meet whichever way they came in.</li>
   <li><strong>Bills come before usage.</strong> A statement due in October usually charges for power metered
     in August and September. The app pairs each bill with its metered period by amount and date, so the
     month on the statement is not the month the power was used.</li>

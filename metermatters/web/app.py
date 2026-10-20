@@ -1268,8 +1268,6 @@ def ingest_upload(filename: str, data: bytes, mapping: dict | None = None) -> di
                 "notes": found.notes}
     stored = ingest.store_usage(paths().usage, importers_name(filename), found.text.encode())
     made = backfill.fill_missing(paths().csv, paths().usage)
-    if paths().csv.exists():
-        stored["renamed"] = len(ingest.reconcile_accounts(paths().csv, stored["accounts"]))
     # The store's own notes (a figure already on file that this file disagrees
     # with) come before the importer's, which are about the file itself.
     return {**stored, "notes": list(stored.get("notes") or []) + found.notes, "bills_made": made}
@@ -1319,10 +1317,6 @@ def _ingest_known(filename: str, data: bytes) -> dict:
             return {"kind": "bills", "added": result.added, "total": result.total}
 
     stored = ingest.store_usage(paths().usage, filename, data)
-    # A usage export names accounts in full; bills first seen in email only
-    # carry the last four digits. Join them up, or the two never match.
-    if paths().csv.exists():
-        stored["renamed"] = len(ingest.reconcile_accounts(paths().csv, stored["accounts"]))
     return stored
 
 

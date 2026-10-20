@@ -24,6 +24,7 @@ from pathlib import Path
 
 from metermatters.analytics import analysis
 from metermatters.intake import greenbutton
+from metermatters.intake import redact
 from metermatters.store import storage
 
 # The column order the utility's own export uses. We only fall back to this
@@ -117,6 +118,15 @@ def _merge(path: Path, incoming: list[dict], incoming_fields: list[str] | None,
     if SOURCE_FIELD not in fields:
         fields.append(SOURCE_FIELD)
 
+    # Account numbers are kept as their last four digits, whichever way a row
+    # arrives - and rows written before that was so are reduced on the way past.
+    reduced = 0
+    for row in existing:
+        before = dict(row)
+        if redact.bill_row(row) != before:
+            reduced += 1
+    incoming = [redact.bill_row(dict(row)) for row in incoming]
+
     merged = list(existing)
     by_key = {row_key(r): r for r in existing}
     seen = set(by_key)
@@ -136,7 +146,7 @@ def _merge(path: Path, incoming: list[dict], incoming_fields: list[str] | None,
 
     retired = _retire_backfill(merged, [r for r in incoming if row_key(r) in seen]) if added else 0
     merged.sort(key=_sort_key, reverse=True)
-    if (added or retired) and not dry_run:
+    if (added or retired or reduced) and not dry_run:
         write_rows(path, merged, fields)
     return MergeResult(added=added, total=len(merged), rows=merged,
                        fieldnames=fields, skipped=skipped)
@@ -219,47 +229,6 @@ def bill_row(account: str, due: str, amount: float, *,
     }
 
 
-def reconcile_accounts(path: Path, real_accounts, *, dry_run: bool = False) -> dict:
-    """Replace masked account numbers with the real ones, once we learn them.
-
-    Bill emails only show the last four digits, so a gas account first seen in
-    email is filed as ``******0003``. When a usage export later names it in
-    full, the rows should say so - otherwise the bills and the metered periods
-    never join, and the dashboard silently shows no usage for that fuel.
-    """
-    with storage.locked(path):
-        return _reconcile_accounts(path, real_accounts, dry_run=dry_run)
-
-
-def _reconcile_accounts(path: Path, real_accounts, *, dry_run: bool) -> dict:
-    rows, fields = read_rows(path)
-    by_suffix = {}
-    for account in real_accounts:
-        digits = "".join(c for c in str(account) if c.isdigit())
-        if len(digits) >= 4:
-            by_suffix[digits[-4:]] = str(account)
-
-    changed: dict[str, str] = {}
-    for row in rows:
-        cell = (row.get("Account# or Nickname") or "").strip()
-        if "*" not in cell:
-            continue
-        match = re.search(r"\*+\s*(\d{3,4})", cell)
-        if not match:
-            continue
-        real = by_suffix.get(match.group(1))
-        if not real:
-            continue
-        # Keep any "(nickname)" suffix the cell already carries.
-        replacement = re.sub(r"\*+\s*\d{3,4}", real, cell, count=1)
-        changed[cell] = replacement
-        row["Account# or Nickname"] = replacement
-
-    if changed and not dry_run:
-        write_rows(path, rows, fields)
-    return changed
-
-
 def default_account(path: Path, fuel: str | None = None) -> str | None:
     """The account string already in the file, so imports match its formatting.
 
@@ -310,6 +279,17 @@ def store_usage(usage_dir: Path, filename: str, data: bytes) -> dict:
     usage_dir = Path(usage_dir)
     usage_dir.mkdir(parents=True, exist_ok=True)
     is_zip = data[:2] == b"PK"
+    if is_zip:
+        try:
+            with zipfile.ZipFile(io.BytesIO(data)) as archive:
+                if sum(i.file_size for i in archive.infolist()) > MAX_UNPACKED_BYTES:
+                    raise ValueError("that zip unpacks to far more than an export should")
+        except zipfile.BadZipFile:
+            raise ValueError("that zip is damaged") from None
+    # Reduced before it is written anywhere, even temporarily: the name, the
+    # street and the full account number never touch the disk.
+    data = redact.usage_bytes(data)
+    filename = redact.filename(filename)
 
     fd, tmp = tempfile.mkstemp(dir=usage_dir, prefix=".upload-", suffix=".tmp")
     tmp = Path(tmp)
@@ -317,12 +297,6 @@ def store_usage(usage_dir: Path, filename: str, data: bytes) -> dict:
         with os.fdopen(fd, "wb") as handle:
             handle.write(data)
         if is_zip:
-            try:
-                with zipfile.ZipFile(tmp) as archive:
-                    if sum(i.file_size for i in archive.infolist()) > MAX_UNPACKED_BYTES:
-                        raise ValueError("that zip unpacks to far more than an export should")
-            except zipfile.BadZipFile:
-                raise ValueError("that zip is damaged") from None
             exports = greenbutton.load_zip(tmp)
             if not exports:
                 raise ValueError("no usage export found inside that zip")

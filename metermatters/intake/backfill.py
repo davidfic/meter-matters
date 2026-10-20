@@ -19,6 +19,7 @@ service period ending and its statement falling due.
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from datetime import timedelta
 from pathlib import Path
@@ -43,6 +44,13 @@ def observed_lag(bills, periods) -> tuple[int, int]:
     return (int(median(lags)) if lags else FALLBACK_LAG), len(lags)
 
 
+def same_account(a: str, b: str) -> bool:
+    """Accounts are kept as their last four digits; a file from before that was
+    so still has the number in full. Either way, the same four digits."""
+    da, db = re.sub(r"\D", "", a or ""), re.sub(r"\D", "", b or "")
+    return a == b or (len(da) >= 4 and len(db) >= 4 and da[-4:] == db[-4:])
+
+
 def already_billed(period, bills, lag: int) -> bool:
     """Is this service period already represented by a statement?
 
@@ -50,7 +58,7 @@ def already_billed(period, bills, lag: int) -> bool:
     and a later real export of the same bill can't both land.
     """
     for bill in bills:
-        if bill.account != period.account:
+        if not same_account(bill.account, period.account):
             continue
         if abs(bill.amount - period.cost) < 0.01 and abs((bill.due - period.end).days - lag) <= 15:
             return True
@@ -110,7 +118,7 @@ def main(argv: list[str] | None = None) -> int:
     # it by hand would pull the digits out of a nickname like "electric10".
     account_digits = args.account or analysis.split_account(account_raw or "")[0]
     periods = [p for p in greenbutton.load_dir(args.usage_dir).periods
-               if p.account == account_digits]
+               if same_account(p.account, account_digits)]
     if not periods:
         print(f"error: no usage periods for account {account_digits}", file=sys.stderr)
         return 1

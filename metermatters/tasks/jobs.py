@@ -159,6 +159,33 @@ def _worst(results: list[tuple[str, dict]], several: bool) -> dict:
             "detail": "; ".join(f"{name}: {r['detail']}" for name, r in results if r["detail"])}
 
 
+def _reduce(base) -> None:
+    """Files kept before names, streets and full account numbers were left out
+    of them are reduced here, once; after that this finds nothing to do. Never
+    a reason for the check to fail."""
+    from metermatters.intake import redact
+    for home in homes.everything(base):
+        try:
+            redact.scrub(homes.paths_for(base, home))
+        except Exception:                      # noqa: BLE001 - best effort, every run
+            pass
+
+
+def _reduce_log() -> None:
+    """Subject lines logged before long numbers were cut from them, cut now.
+    Finds nothing to do after the first run; never a reason for the check to fail."""
+    from metermatters.intake import redact
+    try:
+        with db.connect() as conn:
+            rows = conn.execute("SELECT id, subject FROM inbound_log WHERE subject <> ''").fetchall()
+            for row in rows:
+                reduced = redact.subject(row["subject"])
+                if reduced != row["subject"]:
+                    conn.execute("UPDATE inbound_log SET subject = ? WHERE id = ?", (reduced, row["id"]))
+    except Exception:                          # noqa: BLE001 - best effort, every run
+        pass
+
+
 def _run_steps(target: Target, base) -> dict:
     """Every step for one person: the mailbox once, everything else once per home."""
     # Import first: a bill that just arrived must not be reported missing.
@@ -170,6 +197,7 @@ def _run_steps(target: Target, base) -> dict:
         steps["import"] = {"status": "failed", "detail": f"{type(exc).__name__}: {exc}"}
 
     homes.purge(base)
+    _reduce(base)
     each = homes.active(base)
     several = len(each) > 1
     for name in ("staleness", "watchdog"):
@@ -215,6 +243,7 @@ def _step_benchmark(user, base, each) -> dict:
 def run_check() -> dict:
     """Run every step for everyone and record the outcome. Safe at any time."""
     started = datetime.now(timezone.utc)
+    _reduce_log()
     people = []
     for target in targets():
         steps = {}

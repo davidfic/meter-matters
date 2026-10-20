@@ -1,6 +1,7 @@
 """Tests for bills arriving by forwarded email."""
 
 import base64
+import email
 import hashlib
 import hmac
 import os
@@ -142,6 +143,25 @@ class TestDelivery(InboundCase):
         self.assertEqual(res.status_code, 413)
         self.assertEqual(self.log(), [])
         self.assertFalse(self.ann.paths.csv.exists())
+
+
+class TestWhatTheLogKeeps(InboundCase):
+    def test_a_long_number_in_the_subject_is_cut_to_four_digits(self):
+        msg = email.message_from_bytes(self.bill)
+        del msg["Subject"]
+        msg["Subject"] = "Your bill for account 55500010001 is ready"
+        self.deliver(msg.as_bytes())
+        subjects = [row["subject"] for row in self.log()]
+        self.assertEqual(subjects, ["Your bill for account ******0001 is ready"])
+
+    def test_subjects_logged_before_are_cut_by_the_daily_check(self):
+        from metermatters.store import db
+        from metermatters.tasks import jobs
+        self.deliver()
+        with db.connect() as conn:
+            conn.execute("UPDATE inbound_log SET subject = ?", ("Account 55500010001, Pat",))
+        jobs._reduce_log()
+        self.assertEqual([row["subject"] for row in self.log()], ["Account ******0001, Pat"])
 
 
 class TestHandForwards(InboundCase):

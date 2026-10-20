@@ -73,7 +73,7 @@ class TestUsageUpload(UploadCase):
         self.assertEqual(upload["kind"], "usage")
         self.assertTrue(upload["stored"])
         self.assertEqual(upload["periods"], 2)
-        self.assertEqual(upload["accounts"], ["55500010001"])
+        self.assertEqual(upload["accounts"], ["******0001"])
         self.assertEqual(self.stored(), ["ever-abc-BillingData.zip"])
 
     def test_the_dashboard_gains_usage_from_it(self):
@@ -152,12 +152,17 @@ class TestUsageUpload(UploadCase):
         self.assertTrue(upload["stored"])
         self.assertIn("already on file", " ".join(upload.get("notes", [])))
 
-    def test_masked_accounts_learn_their_real_number(self):
+    def test_a_bill_from_email_and_a_usage_export_are_one_account(self):
+        # A bill email only ever shows the last four digits, and that is all
+        # the app keeps of any account - so the export joins it as it is.
         row = ingest.bill_row("******0003 (gas)", "2026-03-20", 52.74, account_type="Gas")
         ingest.merge(self.csv, [row], list(row))
         upload, = self.post(("gas.zip", zipped(GAS_BILLING))).get_json()["uploads"]
-        self.assertEqual(upload["renamed"], 1)
-        self.assertIn("55500030003 (gas)", self.csv.read_text())
+        self.assertEqual(upload["accounts"], ["******0003"])
+        self.assertIn("******0003 (gas)", self.csv.read_text())
+        self.assertNotIn("55500030003", self.csv.read_text())
+        for item in self.usage.iterdir():
+            self.assertNotIn(b"55500030003", item.read_bytes(), item.name)
 
 
 class TestMixedUpload(UploadCase):
