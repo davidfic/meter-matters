@@ -310,9 +310,9 @@ class TestPages(InsightsCase):
                        'id="changed"', 'id="note-form"', 'id="chart-scatter"', 'id="tips"',
                        'id="streak-count"', 'id="zip-form"'):
             self.assertIn(needed, fuel)
-        # The comparison leads; the game follows the bills.
-        self.assertLess(fuel.index('id="insights"'), fuel.index('id="tiles"'))
-        self.assertLess(fuel.index('id="tiles"'), fuel.index('id="streak-count"'))
+        # The bills sit beside the hero; the comparison leads the panes; the game follows.
+        self.assertLess(fuel.index('id="tiles"'), fuel.index('id="insights"'))
+        self.assertLess(fuel.index('id="insights"'), fuel.index('id="streak-count"'))
         overview = self.client.get("/").get_data(as_text=True)
         for needed in ('id="carbon-section"', 'id="chart-carbon"', 'id="carbon-tiles"'):
             self.assertIn(needed, overview)

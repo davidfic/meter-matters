@@ -1,6 +1,7 @@
 """Tests for water as a third utility: units, pages, and what stays electric-only."""
 
 import io
+import re
 import unittest
 from datetime import date
 
@@ -84,17 +85,17 @@ class TestWaterPages(WebCase):
         self.assertEqual((report["fuel"], report["fuels"]), ("Gas", []))
         self.assertIn("No gas bills yet", self.client.get("/gas").get_data(as_text=True))
 
-    def test_every_page_has_the_utility_switcher_with_the_right_one_chosen(self):
+    def test_every_page_lists_the_utilities_in_the_rail_with_the_right_one_lit(self):
         self.upload("export.csv", daily())                       # electric only
-        for path, chosen in (("/", "All utilities"), ("/electric", "⚡ Electric"), ("/water", "💧 Water · none yet")):
+        lit = lambda page: re.findall(r'class="fuel-(\w+) on', page)
+        for path, chosen in (("/", []), ("/electric", ["electric"]), ("/water", ["water"])):
             page = self.client.get(path).get_data(as_text=True)
-            self.assertIn('id="fuel-switch"', page, path)
-            self.assertRegex(page, r'<option[^>]*selected[^>]*>' + chosen, path)
-            self.assertIn("🔥 Gas · none yet", page, path)
+            self.assertEqual(lit(page), chosen, path)
+            self.assertRegex(page, r'class="fuel-gas\s+empty"', path)   # known, nothing on file yet
         for path in ("/year", "/raw", "/rates", "/connect"):
             page = self.client.get(path).get_data(as_text=True)
-            self.assertIn('id="fuel-switch"', page, path)
-            self.assertIn("Utilities…", page, path)
+            for name in ("electric", "gas", "water"):
+                self.assertIn(f'class="fuel-{name}', page, path)
 
     def test_water_says_nothing_about_the_weather(self):
         self.upload("water.csv", water_csv(rows=14))

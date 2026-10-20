@@ -1,41 +1,12 @@
-<!doctype html>
-<html lang="en" data-base="{{ request.script_root }}">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{ fuel }} · Meter Matters</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-<link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='icon.svg') }}">
-<script>
-  // Before first paint, so a chosen theme never flashes the other one.
-  try { const t = localStorage.getItem("elec-theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
-</script>
-</head>
-<body>
-<div class="wrap">
-
-  <header class="top">
-    <div class="brand">
-      <h1><a href="{{ url_for('index') }}" style="color:inherit;text-decoration:none">{% include "_brand.html" %}</a>
-        <span style="color:var(--text-muted);font-weight:400"> / {{ tagline or fuel }}</span></h1>
-      <span class="sub" id="coverage"></span>
-    </div>
-    <div class="top-actions">
-      {% include "_fuels.html" %}
-      <select id="account" hidden aria-label="Account"></select>
-      <a class="btn" href="{{ url_for('year_page') }}">Your year</a>
-      {% if fuel == "Electric" %}<a class="btn" href="{{ url_for('rates_page') }}">Rates</a>{% endif %}
-      <a class="btn" href="{{ url_for('raw_page') }}">Raw data</a>
-      {% include "_homes.html" %}
-      {% include "_account.html" %}
-      <button id="refresh" type="button">Refresh</button>
-      <button id="theme" type="button" aria-label="Toggle colour theme">Theme</button>
-    </div>
-  </header>
-
-  <div id="flash" class="flash" role="status" aria-live="polite" hidden></div>
-
-  <!-- ------------------------------------------------- nothing on file yet -->
+{% extends "_layout.html" %}
+{% block title %}{{ fuel }}{% endblock %}
+{% block body_class %}page-fuel fuel-{{ fuel|lower }}{% endblock %}
+{% block crumb %}{{ fuel }}{% if tagline %} <small>{{ tagline.split(' ', 1)[-1] }}</small>{% endif %}{% endblock %}
+{% block actions %}
+<select id="account" hidden aria-label="Account"></select>
+<button id="refresh" type="button">Refresh</button>
+{% endblock %}
+{% block content %}
   <section id="empty-state" hidden>
     <div class="card empty">
       <h2>No {{ fuel|lower }} bills yet</h2>
@@ -59,30 +30,60 @@
     </div>
   </section>
 
-  <!-- ------------------------------------------------------ hero + streak -->
-  <section>
-    <div class="card">
-      <div class="hero">
-        <div>
-          <div class="hero-label" id="hero-label">Current statement</div>
-          <div class="hero-figure" id="hero-figure">—</div>
-          <div id="hero-delta"></div>
-          <div class="hero-meta" id="hero-meta"></div>
-          <div class="hero-forecast" id="hero-forecast" hidden></div>
-        </div>
-        <div class="streak compare-box" id="compare-box">
-          <div class="count" id="compare-figure">…</div>
-          <div class="copy">
-            <div id="compare-copy">Comparing with the same weeks last year…</div>
-            <div class="pips" id="compare-pips" aria-hidden="true"></div>
-            <div id="compare-weather" class="hero-meta" style="margin-top:8px"></div>
-          </div>
-        </div>
+<div class="fuel-top">
+  <!-- Primary: this statement, and the run of statements behind it -->
+  <section class="panel primary hero-panel">
+    <div class="hero-l">
+      <div class="hero-label" id="hero-label">Current statement</div>
+      <div class="hero-figure" id="hero-figure">—</div>
+      <div id="hero-delta"></div>
+      <div class="hero-meta" id="hero-meta"></div>
+      <div class="hero-forecast" id="hero-forecast" hidden></div>
+    </div>
+    <div class="hero-r">
+      <div class="chart-head">
+        <div><h2>{{ fuel }} bill by statement</h2>
+          <p class="note" id="trend-note">Every statement on record, dated by its due date.</p></div>
+        <button class="table-toggle" data-table="trend-table" type="button">Table</button>
       </div>
+      <div id="chart-trend"></div>
+      <div class="table-view" id="trend-table" hidden></div>
     </div>
   </section>
 
-  <!-- ------------------------------------------ compared with last year -->
+  <!-- Secondary: where you stand against the same weeks last year -->
+  <aside class="side">
+    <section class="panel">
+      <header class="panel-h"><h2>Against last year</h2></header>
+      <div class="streak compare-box" id="compare-box">
+        <div class="count" id="compare-figure">…</div>
+        <div class="copy">
+          <div id="compare-copy">Comparing with the same weeks last year…</div>
+          <div class="pips" id="compare-pips" aria-hidden="true"></div>
+          <div id="compare-weather" class="hero-meta" style="margin-top:8px"></div>
+        </div>
+      </div>
+    </section>
+    <section class="panel">
+      <header class="panel-h"><h2>The bills</h2></header>
+      <div class="rows" id="tiles"></div>
+    </section>
+  </aside>
+</div>
+
+<div class="tabs" role="tablist" aria-label="{{ fuel }} sections">
+  <button class="tab" role="tab" data-pane="why" type="button">Why it changed</button>
+  <button class="tab" role="tab" data-pane="charts" type="button">Charts</button>
+  <button class="tab" role="tab" data-pane="bills" type="button">Bills</button>
+  <button class="tab" role="tab" data-pane="game" type="button">Streaks &amp; badges</button>
+  <button class="tab" role="tab" data-pane="tools" type="button">Tools &amp; import</button>
+</div>
+
+<div class="pane" id="pane-why" data-pane="why" role="tabpanel">
+    <section class="panel" id="anomaly-section" hidden>
+      <header class="panel-h"><div><h2>Worth a look</h2><p class="note" id="anomaly-note"></p></div></header>
+      <div id="anomaly-list"></div>
+    </section>
   <div id="insights" hidden>
     <div class="part">
       <h2>Compared with last year</h2>
@@ -170,28 +171,6 @@
 
     <p class="note" id="insights-foot" style="margin:0 0 16px"></p>
   </div>
-
-  <!-- --------------------------------------------- what's this costing me -->
-  <section id="calc-section" hidden>
-    <div class="card">
-      <div class="chart-head">
-        <div>
-          <h2>What's this costing me?</h2>
-          <p class="note" id="calc-note">Pick something, say how long it runs, and see what it costs at your own price.</p>
-        </div>
-      </div>
-      <div class="calc">
-        <label><span class="k">Thing</span>
-          <select id="calc-preset"></select><span class="u">&nbsp;</span></label>
-        <label id="calc-power-label"><span class="k">Power</span>
-          <input type="number" id="calc-power" min="0" step="any" style="width:110px"><span class="u" id="calc-power-unit"></span></label>
-        <label><span class="k">Runs for</span>
-          <input type="number" id="calc-hours" min="0" max="24" step="0.25" value="1" style="width:80px"><span class="u" id="calc-hours-unit">hours a day</span></label>
-        <div class="calc-out" id="calc-out"></div>
-      </div>
-    </div>
-  </section>
-
   <!-- Shown instead when there is nothing to compare yet. -->
   <section id="insights-empty" hidden>
     <div class="card">
@@ -206,29 +185,9 @@
       </form>
     </div>
   </section>
+</div>
 
-  <div class="part">
-    <h2>The bills</h2>
-    <p>What you were charged, statement by statement.</p>
-  </div>
-
-  <!-- ----------------------------------------------------------- stat tiles -->
-  <section class="grid cols-4" id="tiles"></section>
-
-  <!-- --------------------------------------------------------------- alerts -->
-  <section id="anomaly-section" hidden>
-    <div class="card">
-      <div class="chart-head">
-        <div>
-          <h2>Worth a look</h2>
-          <p class="note" id="anomaly-note"></p>
-        </div>
-      </div>
-      <div id="anomaly-list"></div>
-    </div>
-  </section>
-
-  <!-- ------------------------------------------------- baseload and rates -->
+<div class="pane" id="pane-charts" data-pane="charts" role="tabpanel" hidden>
   <section class="grid cols-2" id="baseload-section" hidden>
     <div class="card">
       <div class="chart-head">
@@ -259,9 +218,6 @@
       <div class="table-view" id="rate-table" hidden></div>
     </div>
   </section>
-
-  <!-- --------------------------------------------------------- all energy -->
-  <!-- ------------------------------------------------------------ compare -->
   <section id="cmp-section" hidden>
     <div class="card">
       <div class="chart-head">
@@ -303,22 +259,6 @@
       <div class="table-view" id="energy-table" hidden></div>
     </div>
   </section>
-
-  <!-- --------------------------------------------------------------- charts -->
-  <section>
-    <div class="card">
-      <div class="chart-head">
-        <div>
-          <h2>{{ fuel }} bill by statement</h2>
-          <p class="note" id="trend-note">Every statement on record, dated by its due date.</p>
-        </div>
-        <button class="table-toggle" data-table="trend-table" type="button">Table view</button>
-      </div>
-      <div id="chart-trend"></div>
-      <div class="table-view" id="trend-table" hidden></div>
-    </div>
-  </section>
-
   <section class="grid cols-2" id="usage-section" hidden>
     <div class="card">
       <div class="chart-head">
@@ -398,48 +338,25 @@
       <div id="yoy-body"></div>
     </div>
   </section>
+</div>
 
-  <!-- ------------------------------------------------------------- controls -->
-  <section class="grid cols-2">
+<div class="pane" id="pane-bills" data-pane="bills" role="tabpanel" hidden>
+  <section>
     <div class="card">
-      <header><h2>Set your target</h2></header>
-      <p class="note">Your goal drives the “Called Your Shot” badge; the sustained cut drives the forecast.</p>
-      <div class="controls">
-        <div class="field">
-          <label for="goal">Goal for next statement ($)</label>
-          <input type="number" id="goal" min="0" step="1" placeholder="none set">
+      <div class="chart-head">
+        <div>
+          <h2>Every statement</h2>
+          <p class="note" id="source-note"></p>
+          <p class="note" id="provenance-note" style="margin-top:-8px"></p>
         </div>
-        <div class="field">
-          <label for="target-pct">Sustained cut (%)</label>
-          <input type="number" id="target-pct" min="0" max="50" step="0.5">
-        </div>
-        <div class="field">
-          <label for="baseline-months">Baseline = first N statements</label>
-          <input type="number" id="baseline-months" min="1" max="24" step="1">
-        </div>
-        <button class="primary" id="save-settings" type="button">Save</button>
+        <button class="table-toggle" data-table="full-table" type="button">Hide</button>
       </div>
-      <p class="note" id="projection" style="margin:16px 0 0"></p>
-    </div>
-
-    <div class="card">
-      <header><h2>Add a new export</h2></header>
-      <p class="note">Drop a bill history or a usage export from your utility — a spreadsheet (CSV), a Green Button file, or the <code>.zip</code> straight from the portal. It's sorted by what's inside; new rows are merged and nothing is overwritten.</p>
-      <div class="dropzone" id="dropzone" tabindex="0" role="button">
-        Drop exports here, or click to choose files
-      </div>
-      <input type="file" id="file" accept=".csv,.zip,.xml,text/csv,application/zip,text/xml" multiple hidden>
-      {% if accounts_on %}<p class="note fine" style="margin-top:12px">Or have bills arrive on their own by
-        <a href="{{ url_for('web.connect') }}">forwarding</a> the utility's emails
-        (<a href="{{ url_for('docs.page', slug='forwarding') }}">how, and what it can see</a>).</p>{% endif %}
+      <div class="table-view" id="full-table"></div>
     </div>
   </section>
+</div>
 
-  <!-- ------------------------------------------------------------- the game -->
-  <div class="part">
-    <h2>The game</h2>
-    <p>Streaks, levels and badges, all earned from the bills above.</p>
-  </div>
+<div class="pane" id="pane-game" data-pane="game" role="tabpanel" hidden>
   <section class="grid cols-3">
     <div class="card">
       <header><h2>Streak</h2></header>
@@ -490,28 +407,69 @@
       <div class="badges" id="badges"></div>
     </div>
   </section>
+</div>
 
-  <!-- ------------------------------------------------------------ full table -->
-  <section>
+<div class="pane" id="pane-tools" data-pane="tools" role="tabpanel" hidden>
+  <section id="calc-section" hidden>
     <div class="card">
       <div class="chart-head">
         <div>
-          <h2>Every statement</h2>
-          <p class="note" id="source-note"></p>
-          <p class="note" id="provenance-note" style="margin-top:-8px"></p>
+          <h2>What's this costing me?</h2>
+          <p class="note" id="calc-note">Pick something, say how long it runs, and see what it costs at your own price.</p>
         </div>
-        <button class="table-toggle" data-table="full-table" type="button">Hide</button>
       </div>
-      <div class="table-view" id="full-table"></div>
+      <div class="calc">
+        <label><span class="k">Thing</span>
+          <select id="calc-preset"></select><span class="u">&nbsp;</span></label>
+        <label id="calc-power-label"><span class="k">Power</span>
+          <input type="number" id="calc-power" min="0" step="any" style="width:110px"><span class="u" id="calc-power-unit"></span></label>
+        <label><span class="k">Runs for</span>
+          <input type="number" id="calc-hours" min="0" max="24" step="0.25" value="1" style="width:80px"><span class="u" id="calc-hours-unit">hours a day</span></label>
+        <div class="calc-out" id="calc-out"></div>
+      </div>
     </div>
   </section>
+<div id="add">
+  <section class="grid cols-2">
+    <div class="card">
+      <header><h2>Set your target</h2></header>
+      <p class="note">Your goal drives the “Called Your Shot” badge; the sustained cut drives the forecast.</p>
+      <div class="controls">
+        <div class="field">
+          <label for="goal">Goal for next statement ($)</label>
+          <input type="number" id="goal" min="0" step="1" placeholder="none set">
+        </div>
+        <div class="field">
+          <label for="target-pct">Sustained cut (%)</label>
+          <input type="number" id="target-pct" min="0" max="50" step="0.5">
+        </div>
+        <div class="field">
+          <label for="baseline-months">Baseline = first N statements</label>
+          <input type="number" id="baseline-months" min="1" max="24" step="1">
+        </div>
+        <button class="primary" id="save-settings" type="button">Save</button>
+      </div>
+      <p class="note" id="projection" style="margin:16px 0 0"></p>
+    </div>
 
-  <footer class="foot">
-    Bills are dated by the due date on the statement. Every figure comes from the files and bills you brought in - nothing is estimated unless it says so.
-  </footer>
+    <div class="card">
+      <header><h2>Add a new export</h2></header>
+      <p class="note">Drop a bill history or a usage export from your utility — a spreadsheet (CSV), a Green Button file, or the <code>.zip</code> straight from the portal. It's sorted by what's inside; new rows are merged and nothing is overwritten.</p>
+      <div class="dropzone" id="dropzone" tabindex="0" role="button">
+        Drop exports here, or click to choose files
+      </div>
+      <input type="file" id="file" accept=".csv,.zip,.xml,text/csv,application/zip,text/xml" multiple hidden>
+      {% if accounts_on %}<p class="note fine" style="margin-top:12px">Or have bills arrive on their own by
+        <a href="{{ url_for('web.connect') }}">forwarding</a> the utility's emails
+        (<a href="{{ url_for('docs.page', slug='forwarding') }}">how, and what it can see</a>).</p>{% endif %}
+    </div>
+  </section>
+</div>
 </div>
 
+<p class="foot">Bills are dated by the due date on the statement. Every figure comes from the files and bills you brought in - nothing is estimated unless it says so.</p>
+{% endblock %}
+{% block scripts %}
 <script id="bootstrap" type="application/json">{{ bootstrap | safe }}</script>
 <script type="module" src="{{ url_for('static', filename='app.js') }}"></script>
-</body>
-</html>
+{% endblock %}

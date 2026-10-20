@@ -34,20 +34,20 @@ function renderFuels(d) {
       { k: "Level", v: `${f.level.level} · ${f.level.title}` },
     ].filter(Boolean);
 
-    return `<a class="card fuel-card" href="${f.href}">
-      <div class="fuel-head">
+    return `<a class="frow" href="${esc(f.href)}">
+      <div class="frow-top">
         <span class="fuel-name"><span class="dot-lg" style="background:${fuelColor(f.fuel)}"></span>${esc(f.fuel)}</span>
-        <span class="go">${f.statements} statements · ${f.badges.earned}/${f.badges.total} badges →</span>
+        <span class="figure">${money(l.amount)}</span>
       </div>
-      <div class="figure">${money(l.amount)}</div>
-      <div>${delta}</div>
-      <div class="sub-line" style="margin-top:6px">
-        ${l.label}${l.paid ? "" : " · due " + l.due} · ${money(f.total_12, false)} over the last 12
+      <div class="frow-mid">
+        <span class="sub-line">${l.label}${l.paid ? "" : " · due " + l.due} · ${money(f.total_12, false)} over the last 12</span>
+        ${delta}
       </div>
       <div class="split-line" id="split-${esc(f.key)}" hidden></div>
       <div class="facts">
         ${facts.map((x) => `<div class="fact"><div class="k">${x.k}</div><div class="v">${x.v}</div></div>`).join("")}
       </div>
+      <div class="go">${f.statements} statements · ${f.badges.earned}/${f.badges.total} badges <span aria-hidden="true">→</span></div>
     </a>`;
   }).join("");
 }
@@ -76,10 +76,11 @@ function renderSplits(d, found) {
 /* ------------------------------------------------------- combined totals */
 
 function renderTotals(d) {
+  const clear = () => { $("ov-total").textContent = "—"; $("ov-delta").innerHTML = ""; $("ov-stats").innerHTML = ""; };
   const present = fuelsIn(d.energy || []);
-  if (present.length < 2) { $("totals").innerHTML = ""; return; }
+  if (present.length < 2) { clear(); return; }
   const rows = (d.energy || []).filter((x) => present.every((f) => x[f.key]));
-  if (rows.length < 2) { $("totals").innerHTML = ""; return; }
+  if (rows.length < 2) { clear(); return; }
   const last12 = rows.slice(-12);
   const sums = present.map((f) => last12.reduce((s, x) => s + (x[f.key] || 0), 0));
   const total = sums.reduce((a, b) => a + b, 0);
@@ -88,19 +89,18 @@ function renderTotals(d) {
   const peak = last12.reduce((a, b) => (b.total > a.total ? b : a));
   const low = last12.reduce((a, b) => (b.total < a.total ? b : a));
 
-  const tiles = [
-    { label: "Energy, last 12 months", value: money(total, false),
-      foot: prior.length === 12
-        ? `<span class="${total < priorTotal ? "down" : "up"}">${signedMoney(total - priorTotal)}</span> vs the 12 before`
-        : `Averaging ${money(total / last12.length)} a month` },
-    { label: "Split", value: sums.map((s) => Math.round(s / total * 100)).join(" / "),
+  $("ov-total").textContent = money(total, false);
+  $("ov-delta").innerHTML = prior.length === 12
+    ? `<span class="${total < priorTotal ? "down" : "up"}">${signedMoney(total - priorTotal)}</span> vs the 12 before`
+    : `Averaging ${money(total / last12.length)} a month`;
+  const stats = [
+    { k: "Split", v: sums.map((s) => Math.round(s / total * 100)).join(" / "),
       foot: present.map((f, i) => `${money(sums[i], false)} ${f.key}`).join(" · ") },
-    { label: "Priciest month", value: money(peak.total, false), foot: peak.label },
-    { label: "Cheapest month", value: money(low.total, false), foot: low.label },
+    { k: "Priciest month", v: money(peak.total, false), foot: peak.label },
+    { k: "Cheapest month", v: money(low.total, false), foot: low.label },
   ];
-  $("totals").innerHTML = tiles.map((t) => `<div class="card tile">
-      <div class="label">${t.label}</div><div class="value">${t.value}</div>
-      <div class="foot">${t.foot}</div></div>`).join("");
+  $("ov-stats").innerHTML = stats.map((t) =>
+    `<div><dt>${esc(t.k)}</dt><dd>${esc(t.v)}</dd><div class="sf">${esc(t.foot)}</div></div>`).join("");
 }
 
 /* ------------------------------------------------------------- alerts */
@@ -132,7 +132,7 @@ function renderCharts(d) {
 
   charts.energy?.destroy();
   charts.energy = new StackedColumns($("chart-energy"), {
-    height: 280, series,
+    height: 300, series,
     data: rows.map((x) => ({ ...x, label: x.short })),
   });
   const all = rows.filter((x) => present.every((f) => x[f.key]));

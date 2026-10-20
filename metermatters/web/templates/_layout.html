@@ -1,0 +1,72 @@
+{% import "_icons.html" as i %}
+{%- set ep = request.endpoint -%}
+{#- Bare: no way to go anywhere - a shared year, or nobody signed in yet. -#}
+{%- set bare = shared_view|default(false) or (accounts_on and not user) -%}
+<!doctype html>
+<html lang="en" data-base="{{ request.script_root }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+{% block head %}{% if bare %}<meta name="robots" content="noindex">{% endif %}{% endblock %}
+<title>{% block title %}Meter Matters{% endblock %} · Meter Matters</title>
+<link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='icon.svg') }}">
+<script>
+  // Before first paint, so a chosen theme never flashes the other one.
+  try { const t = localStorage.getItem("elec-theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
+</script>
+{#- The base sheet draws the shared pieces (charts, tables, badges, forms); the shell sheet re-skins and re-lays-out all of it. -#}
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='shell.css') }}">
+</head>
+<body class="{% block body_class %}{% endblock %}">
+
+<aside class="rail" aria-label="Main">
+  <a class="rail-brand" href="{{ url_for('index') if not bare else 'https://metermatters.app' }}">{% include "_brand.html" %}</a>
+
+  {% if not bare %}
+  <nav class="rail-nav">
+    <a href="{{ url_for('index') }}" class="{{ 'on' if ep == 'index' }}">{{ i.ico("overview") }}<span>Overview</span></a>
+    {% if fuels_nav %}
+    <div class="rail-group"><span>Utilities</span></div>
+    {% for f in fuels_nav['items'] %}
+    <a href="{{ f.url }}" class="fuel-{{ f.name|lower }} {{ 'on' if f.current }} {{ 'empty' if not f.has_bills }}">{{ i.ico(f.name|lower) }}<span>{{ f.name }}</span></a>
+    {% endfor %}
+    {% endif %}
+    <div class="rail-group"><span>Look closer</span></div>
+    <a href="{{ url_for('year_page') }}" class="{{ 'on' if ep == 'year_page' }}">{{ i.ico("year") }}<span>Your year</span></a>
+    <a href="{{ url_for('rates_page') }}" class="{{ 'on' if ep == 'rates_page' }}">{{ i.ico("rates") }}<span>Rates</span></a>
+    <a href="{{ url_for('raw_page') }}" class="{{ 'on' if ep == 'raw_page' }}">{{ i.ico("raw") }}<span>Raw data</span></a>
+    {% if homes_nav %}<a href="{{ url_for('all_homes') }}" class="{{ 'on' if ep == 'all_homes' }}">{{ i.ico("homes") }}<span>All homes</span></a>{% endif %}
+    <div class="rail-group"><span>Bring in</span></div>
+    <a class="add" href="{% if accounts_on %}{{ url_for('web.connect') }}{% else %}{{ url_for('fuel_page', fuel='electric') }}#add{% endif %}">{{ i.ico("add") }}<span>Add bills</span></a>
+  </nav>
+  {% endif %}
+
+  <div class="rail-foot">
+    <button id="theme" type="button" aria-label="Toggle colour theme">{{ i.ico("theme") }}<span>Theme</span></button>
+  </div>
+</aside>
+
+<div class="main">
+  <header class="bar">
+    <div class="crumb">
+      <h1>{% block crumb %}{% endblock %}</h1>
+      {%- if homes_nav %}{% for h in homes_nav['items'] if h.current %}<span class="chip-home">{{ h.name }}</span>{% endfor %}{% endif %}
+      <span class="period" id="coverage">{% block period %}{% endblock %}</span>
+    </div>
+    <div class="bar-right">
+      {% block actions %}{% endblock %}
+      {% if not bare %}<a class="btn add-narrow" href="{% if accounts_on %}{{ url_for('web.connect') }}{% else %}{{ url_for('fuel_page', fuel='electric') }}#add{% endif %}">Add bills</a>{% include "_homes.html" %}{% include "_account.html" %}{% endif %}
+    </div>
+  </header>
+
+  <main class="stage">
+    <div id="flash" class="flash" role="status" aria-live="polite" hidden></div>
+    {% block content %}{% endblock %}
+  </main>
+</div>
+
+<script src="{{ url_for('static', filename='tabs.js') }}" defer></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,31 +1,11 @@
-<!doctype html>
-<html lang="en" data-base="{{ request.script_root }}">
-<head>
-<title>Add bills · Meter Matters</title>
-{% include "_head.html" %}
-</head>
-<body>
-<div class="wrap">
-
-  <header class="top">
-    <div class="brand">
-      <h1><a href="{{ url_for('index') }}" style="color:inherit;text-decoration:none">{% include "_brand.html" %}</a>
-        <span style="color:var(--text-muted);font-weight:400"> / Add bills</span></h1>
-    </div>
-    <div class="top-actions">
-      {% if has_bills %}{% include "_fuels.html" %}{% endif %}
-      {% include "_homes.html" %}
-      <a class="btn" href="{{ url_for('docs.index') }}">Docs</a>
-      <form method="post" action="{{ url_for('web.logout') }}" class="inline">
-        <button type="submit" title="Signed in as {{ user.email }}">Sign out</button>
-      </form>
-    </div>
-  </header>
-
-  {% for category, message in get_flashed_messages(with_categories=true) %}
-    <div class="flash {{ 'err' if category == 'err' }}" role="status">{{ message }}</div>
-  {% endfor %}
-  <div id="flash" class="flash" role="status" aria-live="polite" hidden></div>
+{% extends "_layout.html" %}
+{% block title %}Add bills{% endblock %}
+{% block body_class %}page-connect{% endblock %}
+{% block crumb %}Add bills{% endblock %}
+{% block content %}
+{% for category, message in get_flashed_messages(with_categories=true) %}
+  <div class="flash {{ 'err' if category == 'err' }}" role="status">{{ message }}</div>
+{% endfor %}
 
   {% if homes_view.pending %}
   <section id="held">
@@ -349,8 +329,7 @@
       </details>
     </div>
   </section>
-</div>
-
+{% endblock %}
+{% block scripts %}
 <script type="module" src="{{ url_for('static', filename='connect.js') }}"></script>
-</body>
-</html>
+{% endblock %}

@@ -1,34 +1,8 @@
-<!doctype html>
-<html lang="en" data-base="{{ request.script_root }}">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>All homes · Meter Matters</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-<link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='icon.svg') }}">
-<script>
-  try { const t = localStorage.getItem("elec-theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
-</script>
-</head>
-<body>
-<div class="wrap">
-
-  <header class="top">
-    <div class="brand">
-      <h1><a href="{{ url_for('index') }}" style="color:inherit;text-decoration:none">{% include "_brand.html" %}</a>
-        <span style="color:var(--text-muted);font-weight:400"> / All homes</span></h1>
-      <span class="sub" id="coverage"></span>
-    </div>
-    <div class="top-actions">
-      {% include "_fuels.html" %}
-      {% include "_homes.html" %}
-      <a class="btn" href="{{ url_for('web.connect') }}">Homes &amp; bills</a>
-      {% include "_account.html" %}
-      <button id="theme" type="button" aria-label="Toggle colour theme">Theme</button>
-    </div>
-  </header>
-
-  <div id="flash" class="flash" role="status" aria-live="polite" hidden></div>
+{% extends "_layout.html" %}
+{% block title %}All homes{% endblock %}
+{% block body_class %}page-homes{% endblock %}
+{% block crumb %}All homes{% endblock %}
+{% block content %}
   <section class="grid cols-4" id="totals"></section>
 
   <section>
@@ -60,8 +34,8 @@
   </section>
 
   <footer class="foot" id="foot"></footer>
-</div>
+{% endblock %}
+{% block scripts %}
 <script id="bootstrap" type="application/json">{{ bootstrap | safe }}</script>
 <script type="module" src="{{ url_for('static', filename='homes.js') }}"></script>
-</body>
-</html>
+{% endblock %}

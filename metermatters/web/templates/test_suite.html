@@ -1,27 +1,9 @@
-<!doctype html>
-<html lang="en" data-base="{{ request.script_root }}">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex, nofollow">
-<title>Test suite · Meter Matters</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-<link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='icon.svg') }}">
-<script>
-  try { const t = localStorage.getItem("elec-theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
-</script>
-</head>
-<body>
-<div class="wrap">
-
-  <header class="top">
-    <div class="brand">
-      <h1>{% include "_brand.html" %}<span style="color:var(--text-muted);font-weight:400"> / Test suite</span></h1>
-    </div>
-    <div class="top-actions">
-      <button id="theme" type="button" aria-label="Toggle colour theme">Theme</button>
-    </div>
-  </header>
+{% extends "_layout.html" %}
+{% block head %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+{% block title %}Test suite{% endblock %}
+{% block body_class %}page-test-suite{% endblock %}
+{% block crumb %}Test suite{% endblock %}
+{% block content %}
 
   {% if not report %}
   <section>
@@ -144,8 +126,7 @@
     </div>
   </section>
   {% endif %}
-
-</div>
+{% endblock %}
+{% block scripts %}
 <script type="module" src="{{ url_for('static', filename='test-suite.js') }}"></script>
-</body>
-</html>
+{% endblock %}

@@ -1,15 +1,9 @@
-<!doctype html>
-<html lang="en">
-<head>
-<title>{{ "Create an account" if mode == "register" else "Sign in" }} · Meter Matters</title>
-{% include "_head.html" %}
-</head>
-<body>
-<div class="wrap narrow">
-
-  <header class="top">
-    <div class="brand"><h1>{% include "_brand.html" %}</h1></div>
-  </header>
+{% extends "_layout.html" %}
+{% block title %}{{ "Create an account" if mode == "register" else "Sign in" }}{% endblock %}
+{% block body_class %}page-login{% endblock %}
+{% block crumb %}{{ "Create an account" if mode == "register" else "Sign in" }}{% endblock %}
+{% block content %}
+<div class="narrow">
 
   <section>
     <div class="card auth">
@@ -85,5 +79,4 @@
     </p>
   </section>
 </div>
-</body>
-</html>
+{% endblock %}
