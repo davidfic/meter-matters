@@ -1,0 +1,96 @@
+{% extends "_layout.html" %}
+{%- set d = detail -%}
+{%- macro change(v) %}{% if v|round(2) == 0 %}unchanged{% else %}<span class="{{ 'up' if v > 0 else 'down' }}">{{ "+" if v > 0 else "−" }}${{ "{:,.2f}".format(v|abs) }}</span>{% endif %}{% endmacro -%}
+{%- macro pct(v) %}{{ "{:+.0f}".format(v)|replace("-", "−") }}%{% endmacro -%}
+{%- macro signed(v) %}{{ "{:+,.0f}".format(v)|replace("-", "−") }}{% endmacro -%}
+{%- macro nth(n) %}{{ n }}{{ "th" if 10 <= n % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th") }}{% endmacro -%}
+{%- macro to(m) %}{{ url_for('shared_month', token=share_token, month=m) if shared_view else url_for('month_page', year=d.year, month=m) }}{% endmacro -%}
+{%- macro against(f, c) -%}
+  {{ change(c.delta) }}{% if c.pct is not none %} ({{ pct(c.pct) }}){% endif %} on {{ c.label }}.
+  {%- if c.usage_effect is not none %} Usage {{ signed(c.kwh_delta) }} {{ f.unit }}, worth {{ change(c.usage_effect) }}; the price, {{ change(c.rate_effect) }}.
+  {%- elif c.kwh_delta is not none %} Usage {{ signed(c.kwh_delta) }} {{ f.unit }}.{% endif %}
+{%- endmacro -%}
+{% block title %}{{ d.name }} {{ d.year }}{% endblock %}
+{% block body_class %}page-month{% endblock %}
+{% block crumb %}{{ "An energy year" if shared_view else "Your year" }} <small>{{ d.name }} {{ d.year }}</small>{% endblock %}
+{% block actions %}
+<nav class="month-nav" aria-label="Month">
+  {% if d.previous %}<a class="btn" href="{{ to(d.previous.month) }}">← {{ d.previous.short }}</a>{% endif %}
+  <a class="btn" href="{{ url_for('shared_year', token=share_token) if shared_view else url_for('year_page', year=d.year) }}">Whole year</a>
+  {% if d.next %}<a class="btn" href="{{ to(d.next.month) }}">{{ d.next.short }} →</a>{% endif %}
+</nav>
+{% endblock %}
+{% block content %}
+  <section class="panel month-hero">
+    <div class="hero-label">{{ d.name }} {{ d.year }} · {{ d.fuels|length }} statement{{ "s" if d.fuels|length != 1 }}</div>
+    <div class="hero-figure">${{ "{:,.2f}".format(d.total) }}</div>
+    <div class="hero-meta">
+      {% if d.of == 1 %}The only month of {{ d.year }} on file{% elif d.rank == 1 %}The dearest month of {{ d.year }}{% elif d.rank == d.of %}The cheapest month of {{ d.year }}{% else %}{{ nth(d.rank) }} dearest of {{ d.of }} months{% endif %}
+      · {{ "%.0f"|format(d.total / d.year_total * 100) }}% of the year's ${{ "{:,.0f}".format(d.year_total) }}
+    </div>
+  </section>
+
+  {% for f in d.fuels %}
+  <section class="panel month-fuel">
+    <header class="panel-h">
+      <div class="fuel-name"><span class="dot-lg" style="background:var(--series-{{ f.series }})"></span>{{ f.fuel }}
+        <span class="sub-line">{{ f.label }} statement</span></div>
+      <div class="month-amt">${{ "{:,.2f}".format(f.amount) }}</div>
+    </header>
+
+    <dl class="statline cols-4">
+      <div><dt>Used</dt>
+        {% if f.kwh is not none %}<dd>{{ "{:,.0f}".format(f.kwh) }} <span class="sf">{{ f.unit }}</span></dd>
+          <div class="sf">{{ "%.1f"|format(f.per_day) }} {{ f.unit }} a day{% if f.exported %} · {{ "{:,.0f}".format(f.exported) }} sent back{% endif %}</div>
+        {% else %}<dd>—</dd><div class="sf">usage not on file</div>{% endif %}</div>
+      <div><dt>Price</dt>
+        <dd>{% if f.rate %}${{ "%.3f"|format(f.rate) }} <span class="sf">per {{ f.unit }}</span>{% else %}—{% endif %}</dd>
+        {% if f.kwh is not none and not f.verified %}<div class="sf">paired by dates, so approximate</div>{% endif %}</div>
+      <div><dt>Metered</dt>
+        <dd>{% if f.days %}{{ f.days }} <span class="sf">days</span>{% else %}—{% endif %}</dd>
+        {% if f.service %}<div class="sf">{{ f.service }}</div>{% endif %}</div>
+      <div><dt>Due</dt><dd>{{ f.due }}</dd>
+        <div class="sf">{% if f.paid %}paid{% if f.paid_on %} {{ f.paid_on }}{% endif %}{% else %}not marked paid{% endif %}</div></div>
+    </dl>
+
+    <div class="month-grid">
+      <div class="month-part">
+        <h3>Against the statement before</h3>
+        {% if f.previous %}<p>{{ against(f, f.previous) }}</p>
+        {% else %}<p class="note">The first {{ f.noun }} statement on file.</p>{% endif %}
+      </div>
+      <div class="month-part">
+        <h3>Against {{ d.name }} {{ d.year - 1 }}</h3>
+        {% if f.year_ago %}<p>{{ against(f, f.year_ago) }}</p>
+          {% if f.weather and f.weather.split %}{% set w = f.weather.split %}
+          <p>Of that, the weather accounts for {{ change(w.weather) }}, the price {{ change(w.rate) }}, and you {{ change(w.you) }}{% if w.you_pct is not none %}: {{ pct(w.you_pct) }} in usage, weather aside{% endif %}.</p>
+          {% endif %}
+        {% else %}<p class="note">Nothing from {{ d.name }} {{ d.year - 1 }} to compare with.</p>{% endif %}
+      </div>
+      <div class="month-part">
+        <h3>In {{ d.year }}</h3>
+        <p>{% if f.of == 1 %}The only{% elif f.rank == 1 %}The dearest{% elif f.rank == f.of %}The cheapest{% else %}{{ nth(f.rank) }} dearest{% endif %} of {{ f.of }} {{ f.noun }} statement{{ "s" if f.of != 1 }}{% if f.of > 1 %}; they average ${{ "{:,.2f}".format(f.year_average) }}{% endif %}.
+          {% if f.kg %}About {{ "{:,.0f}".format(f.kg) }} kg CO₂e.{% endif %}</p>
+        {% if f.flag %}<p class="flag">Flagged: {{ "%.0f"|format(f.flag.pct|abs) }}% {{ "above" if f.flag.high else "below" }} the usual for this month, going by {{ f.flag.peers }} nearby year{{ "s" if f.flag.peers != 1 }}.</p>{% endif %}
+      </div>
+    </div>
+
+    {% if f.weather %}{% set w = f.weather %}
+    <div class="month-weather">
+      <div class="chart-head"><div><h3>The weather, day by day</h3>
+        <p class="note">{{ w.place }}. Averaged {{ w.average }}°F{% if w.then is not none %}, against {{ w.then }}°F a year earlier{% endif %}; {{ w.coldest }}° to {{ w.warmest }}°.
+          {%- if w.heating %} {{ "{:,}".format(w.heating) }} heating degree-days{% if w.cooling %}, {{ "{:,}".format(w.cooling) }} cooling{% endif %}.{% elif w.cooling %} {{ "{:,}".format(w.cooling) }} cooling degree-days.{% endif %}
+          {%- if w.rain is not none %} {{ w.rain }} in of rain.{% endif %}</p></div></div>
+      <div class="temps" data-temps='{{ w.days|tojson }}'></div>
+    </div>
+    {% endif %}
+
+    {% if not shared_view %}<p class="month-go"><a href="{{ url_for('fuel_page', fuel=f.slug) }}">The {{ f.noun }} page</a> has every statement and the charts behind them.</p>{% endif %}
+  </section>
+  {% endfor %}
+
+  <p class="note">Bills are dated by the due date on the statement.{% if shared_view %} Made with <a href="https://metermatters.app">Meter Matters</a>.{% endif %}</p>
+{% endblock %}
+{% block scripts %}
+<script type="module" src="{{ url_for('static', filename='month.js') }}"></script>
+{% endblock %}

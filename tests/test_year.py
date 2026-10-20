@@ -35,6 +35,25 @@ class TestYearPage(WebCase):
         self.assertGreaterEqual(len(s["months"]), 11)      # due dates spill into the next year
         self.assertGreater(s["kg"], 0)
         self.assertIn("California", s["grid"])
+    def test_a_month_has_its_own_page(self):
+        reports = {"Electric": self.client.get("/api/report?fuel=Electric").get_json()}
+        d = yearly.month_detail(reports, 2025, 3, yearly.build(reports, 2025, "CA"))
+        f = d["fuels"][0]
+        self.assertEqual((d["name"], d["total"], f["fuel"]), ("March", f["amount"], "Electric"))
+        self.assertEqual(f["year_ago"]["label"], "Mar 2024")
+        self.assertEqual(f["previous"]["label"], "Feb 2025")
+        self.assertIsNotNone(f["previous"]["usage_effect"])      # the change splits into usage and price
+        self.assertEqual(d["previous"]["month"], 2)
+        self.assertIsNone(yearly.month_detail(reports, 2025, 12, yearly.build(reports, 2025, "CA")))
+
+        year = self.client.get("/year/2025").get_data(as_text=True)
+        self.assertIn('href="/year/2025/3"', year)                 # a bar opens the month
+        html = self.client.get("/year/2025/3").get_data(as_text=True)
+        for needed in ("March 2025", "Against the statement before", "Against March 2024",
+                       "Mar 2025 statement", 'href="/electric"', 'href="/year/2025/2"', 'href="/year/2025"'):
+            self.assertIn(needed, html, needed)
+        self.assertEqual(self.client.get("/year/2025/12").status_code, 404)
+        self.assertEqual(self.client.get("/year/1999/3").status_code, 404)
 
     def test_without_bills_it_says_so(self):
         from metermatters.web import app as webapp
@@ -63,6 +82,14 @@ class TestSharing(WebCase):
         self.assertIn("2024", html)
         for private in ("ann@example.com", "9876543210", "Example St", "Sign out", "Add bills", "home-switch"):
             self.assertNotIn(private, html, private)
+        self.assertIn(f'href="/s/{token}/3"', html)        # the months open up here too...
+        month = stranger.get(f"/s/{token}/3")
+        self.assertEqual(month.status_code, 200)
+        page = month.get_data(as_text=True)
+        self.assertIn("March 2024", page)
+        for private in ("ann@example.com", "9876543210", "Example St", "Sign out", "Add bills", "/electric"):
+            self.assertNotIn(private, page, private)       # ...and lead nowhere private
+        self.assertEqual(stranger.get(f"/s/{token}/13").status_code, 404)
         self.assertIn("noindex", res.headers.get("X-Robots-Tag", ""))
 
     def test_the_picture_is_an_svg_of_the_same_year(self):
@@ -88,6 +115,22 @@ class TestSharing(WebCase):
 
     def test_a_year_with_no_bills_cannot_be_shared(self):
         self.assertEqual(self.client.post("/api/share/year/1999", json={}).status_code, 404)
+
+    def test_the_picture_escapes_a_unit_read_off_an_uploaded_file(self):
+        # The unit and fuel can carry whatever an uploaded file's headers held.
+        # In an SVG served as image/svg+xml, an unescaped "<" would close the
+        # <text> element and run what followed as script on our own origin.
+        summary = {
+            "year": 2024, "total": 100.0, "prior_total": None, "kg": 0,
+            "peak_month": "</text><script>alert(1)</script>",
+            "months": [{"month": 1, "short": "Jan", "total": 100.0, "e": 100.0}],
+            "fuels": [{"key": "e", "fuel": "<script>x</script>", "spend": 100.0,
+                       "usage": 500.0, "unit": "kWh\"><script>alert(2)</script>"}],
+            "grid": "US",
+        }
+        svg = yearly.card_svg(summary)
+        self.assertNotIn("<script>", svg)
+        self.assertIn("&lt;script&gt;", svg)
 
     def test_deleting_the_account_takes_the_link_with_it(self):
         from metermatters.web import app as webapp

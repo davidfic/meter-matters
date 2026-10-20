@@ -527,15 +527,13 @@ def build_report(state: dict, fuel: str | None = None) -> dict:
 # Routes
 # --------------------------------------------------------------------------
 
-def _take_the_weather_out(report: dict, fuel: str, periods: list, state: dict) -> None:
-    """Give each statement its weather-adjusted change on a year earlier, where known.
+def _weather_model(fuel: str, periods: list, state: dict):
+    """(weather, model, place name) for this fuel, from temperatures already on file - or None.
 
-    Uses only temperatures already on file - this runs on every page and must
-    never wait on the weather service. With them, the streak and the streak
-    badges rest on what the person did rather than on the season.
+    Never waits on the weather service: this runs while pages are drawn.
     """
     if not fuels.by_name(fuel).weather or len(periods) < insights.MIN_TO_MODEL:
-        return
+        return None
     try:
         export = greenbutton.load_dir(paths().usage) if paths().usage.exists() else None
     except (OSError, ValueError):
@@ -543,14 +541,26 @@ def _take_the_weather_out(report: dict, fuel: str, periods: list, state: dict) -
     zipcode = state.get("zip") or (weather.zip_in(export.address) if export else None)
     place = weather.known_place(zipcode) if weather.enabled() else None
     if place is None:
-        return
+        return None
     try:
         temps, rain, need = weather.held_all(place, min(p.start for p in periods),
                                              max(p.end for p in periods))
     except (sqlite3.Error, OSError):
-        return
+        return None
     wx = insights.Weather(temps, rain, need)
-    model = insights.Model.learn(wx, periods, fuel)
+    return wx, insights.Model.learn(wx, periods, fuel), place.name
+
+
+def _take_the_weather_out(report: dict, fuel: str, periods: list, state: dict) -> None:
+    """Give each statement its weather-adjusted change on a year earlier, where known.
+
+    With them, the streak and the streak badges rest on what the person did
+    rather than on the season.
+    """
+    found = _weather_model(fuel, periods, state)
+    if found is None:
+        return
+    wx, model, _ = found
     if model is None or not model.matters:
         return
     by_end = {row["end"]: row for row in insights.compare(periods, model, wx) if row["weather_known"]}
@@ -928,19 +938,86 @@ def _publish_benchmark(state: dict) -> None:
 # Your year
 # --------------------------------------------------------------------------
 
-def build_year(state: dict, year: int | None) -> dict:
+def _year_reports(state: dict) -> dict:
     reports = {}
     for fuel in fuels.NAMES:
         report = build_report(state, fuel=fuel)
         if report.get("series") and report.get("fuel") == fuel:
             reports[fuel] = report
+    return reports
+
+
+def _year_summary(state: dict, reports: dict, year: int) -> dict | None:
+    badges = {fuel: report["scoreboard"]["badges"] for fuel, report in reports.items()}
+    return yearly.build(reports, year, home_state({**state, "_address": _address()}), badges)
+
+
+def build_year(state: dict, year: int | None) -> dict:
+    reports = _year_reports(state)
     years = yearly.years_with_bills(reports)
     if not years:
         return {"years": [], "summary": None, "year": None}
     year = year if year in years else years[0]
-    badges = {fuel: report["scoreboard"]["badges"] for fuel, report in reports.items()}
-    summary = yearly.build(reports, year, home_state({**state, "_address": _address()}), badges)
-    return {"years": years, "year": year, "summary": summary}
+    return {"years": years, "year": year, "summary": _year_summary(state, reports, year)}
+
+
+def _statement_weather(fuel: str, periods: list, state: dict):
+    """A function from a statement's series row to its weather block, or None when there is none to tell."""
+    found = _weather_model(fuel, periods, state)
+    if found is None:
+        return None
+    wx, model, place = found
+    by_end = {p.end.isoformat(): p for p in periods}
+    compared = {row["end"]: row for row in insights.compare(periods, model, wx)}
+    heat = model.heat if model is not None and model.heat is not None else greenbutton.BALANCE_POINT_F
+
+    def block(r: dict) -> dict | None:
+        p = by_end.get(r.get("service_end"))
+        if p is None or not wx.covers(p):
+            return None
+        row = compared.get(p.end.isoformat())
+        return {
+            "place": place,
+            "average": round(wx.average(p), 1),
+            "coldest": round(min(wx.temps[d] for d in wx.days(p)), 1),
+            "warmest": round(max(wx.temps[d] for d in wx.days(p)), 1),
+            # Degree-days over the whole period, at the balance points this home showed.
+            "heating": round(wx.heating(p, heat) * p.days),
+            "cooling": round(wx.cooling(p, model.cool) * p.days) if model is not None and model.cool is not None else None,
+            "rain": round(wx.rainfall(p), 2) if wx.covers_dryness(p) else None,
+            "days": [{"label": f"{d:%b %-d}", "temp": round(wx.temps[d], 1)} for d in wx.days(p)],
+            "then": round(row["temp_then"], 1) if row and row.get("temp_then") is not None else None,
+            # The change on a year earlier, split three ways - when the weather is known to matter here.
+            "split": {"label": row["label"], "total": round(row["d_total"], 2), "weather": round(row["d_weather"], 2),
+                      "you": round(row["d_you"], 2), "rate": round(row["d_rate"], 2),
+                      "you_pct": round(row["you_pct"], 1) if row["you_pct"] is not None and row["pct_ok"] else None}
+            if row and row["weather_known"] and model is not None and model.matters else None,
+        }
+    return block
+
+
+def build_month(state: dict, year: int, month: int) -> dict | None:
+    """One month of one year, close up. None when there is nothing in it."""
+    reports = _year_reports(state)
+    if year not in yearly.years_with_bills(reports):
+        return None
+    summary = _year_summary(state, reports, year)
+    if not summary:
+        return None
+    try:
+        usage = greenbutton.load_dir(paths().usage).periods if paths().usage.exists() else []
+    except (OSError, ValueError):
+        usage = []
+    with_address = {**state, "_address": _address()}
+    blocks: dict = {}
+
+    def weather_of(fuel: str, r: dict):
+        if fuel not in blocks:
+            blocks[fuel] = _statement_weather(fuel, [p for p in usage if insights.fuel_of(p) == fuel], with_address)
+        return blocks[fuel](r) if blocks[fuel] else None
+
+    detail = yearly.month_detail(reports, year, month, summary, weather_of)
+    return {"summary": summary, "detail": detail} if detail else None
 
 
 @app.get("/year")
@@ -953,6 +1030,15 @@ def year_page(year=None):
     return render_template("year.html", **data, token=token, shared_view=False,
                            home_name=g.home.name if homes.several(g.base_paths) else None,
                            site=os.environ.get("ELEC_BASE_URL", "").rstrip("/") or request.url_root.rstrip("/"))
+
+
+@app.get("/year/<int:year>/<int:month>")
+def month_page(year, month):
+    data = build_month(load_state(), year, month)
+    if data is None:
+        abort(404)
+    return render_template("month.html", **data, shared_view=False,
+                           home_name=g.home.name if homes.several(g.base_paths) else None)
 
 
 @app.post("/api/share/year/<int:year>")
@@ -968,8 +1054,8 @@ def api_share_year(year):
     return jsonify({"ok": True, "token": yearly.share(g.user.id, g.home.id, year)})
 
 
-def _shared_year(token: str):
-    """The year a share token points at, built as the owner, read-only."""
+def _as_owner(token: str, build):
+    """What a share token points at, built as the owner, read-only: build(state, year)."""
     link = yearly.lookup(token.removesuffix(".svg"))
     owner = accounts.get(link["user_id"]) if link else None
     if owner is None:
@@ -980,7 +1066,23 @@ def _shared_year(token: str):
         if home is None or home.deleted_at:
             abort(404)
         g.home, g.paths = home, homes.paths_for(base, home)
-        return build_year(load_state(), link["year"])
+        return build(load_state(), link["year"])
+
+
+def _shared_year(token: str):
+    return _as_owner(token, build_year)
+
+
+@app.get("/s/<token>/<int:month>")
+def shared_month(token, month):
+    """One month of a shared year. The same page the owner sees, less the ways out of it."""
+    data = _as_owner(token, lambda state, year: build_month(state, year, month))
+    if data is None:
+        abort(404)
+    response = make_response(render_template("month.html", **data, shared_view=True, home_name=None,
+                                             share_token=token))
+    response.headers["X-Robots-Tag"] = "noindex"
+    return response
 
 
 @app.get("/s/<token>")

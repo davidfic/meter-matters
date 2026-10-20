@@ -20,3 +20,4 @@ $("copy-share")?.addEventListener("click", async (e) => {
   catch { getSelection().selectAllChildren($("share-url")); e.target.textContent = "Press Ctrl+C"; }
   setTimeout(() => { e.target.textContent = "Copy"; }, 2000);
 });
+
