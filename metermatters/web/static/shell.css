@@ -263,7 +263,7 @@ thead th { font-family: var(--font-body); font-size: 11.5px; font-weight: 600; t
 .ov .lead { display: grid; gap: 16px; min-width: 0; }
 .ov .side { display: grid; gap: 16px; min-width: 0; }
 #alerts { max-height: 380px; overflow-y: auto; margin-right: -8px; padding-right: 8px; }
-.ov .carbon, .ov > .foot { grid-column: 1 / -1; }
+.ov > .foot { grid-column: 1 / -1; }
 .ov .primary .panel-h { margin-bottom: 4px; }
 
 .frows { display: grid; margin: 0 -8px; }
@@ -296,7 +296,7 @@ thead th { font-family: var(--font-body); font-size: 11.5px; font-weight: 600; t
 .alert-row .d { font-size: 12.5px; color: var(--text-secondary); }
 .alert-row a { font-weight: 550; }
 
-.carbon-body { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 24px; align-items: start; }
+.carbon-body { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 20px; align-items: start; }
 .tiles-col { display: grid; gap: 0; }
 
 /* tiles, wherever the JS still makes them: ruled rows, not boxes */
