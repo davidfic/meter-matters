@@ -213,6 +213,14 @@ class TestSettings(AdminCase):
         with self.assertRaises(ValueError):
             site.set_("dkim", "loudly")
 
+    def test_a_bad_value_later_in_the_form_saves_nothing_earlier_in_it(self):
+        res = self.client.post("/admin/settings", data={"signups": "closed", "dkim": "loudly"},
+                               follow_redirects=True)
+        self.assertIn("not a choice", res.get_data(as_text=True))
+        self.assertEqual(site.stored(), {})
+        self.assertEqual(site.setting("signups"), ("open", "environment"))
+        self.assertEqual(site.recent(), [])
+
     def test_a_stored_value_that_is_no_longer_a_choice_is_ignored(self):
         site.set_("notice", "x")                       # not a choice setting; harmless
         with db.connect() as conn:

@@ -575,10 +575,17 @@ def overview_headline(energy: list[dict], forecasts: dict | None = None) -> dict
     sums = {k: _round(sum(r.get(k, 0.0) for r in last12)) for k in present}
     total = _round(sum(sums.values()))
     # The priciest and cheapest months are judged among months that have every
-    # utility the month before them had: the latest month, with only the water
-    # bill in so far, would otherwise be "cheapest" on a technicality.
-    complete = [r for i, r in enumerate(last12)
-                if i == 0 or all(r.get(k) for k in present if last12[i - 1].get(k))]
+    # utility due in them: the latest month, with only the water bill in so
+    # far, would otherwise be "cheapest" on a technicality. A utility is due
+    # when it was billed in both months before; one billed every other month
+    # (water, often) is never due, so its empty months count as whole.
+    offset = len(rows) - len(last12)
+
+    def due(k: str, i: int) -> bool:
+        before = rows[max(0, offset + i - 2):offset + i]
+        return len(before) == 2 and all(p.get(k) for p in before)
+
+    complete = [r for i, r in enumerate(last12) if all(r.get(k) for k in present if due(k, i))]
     judged = complete or last12
     peak = max(judged, key=lambda r: r["total"])
     low = min(judged, key=lambda r: r["total"])

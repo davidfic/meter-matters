@@ -10,7 +10,7 @@ from pathlib import Path
 from unittest import mock
 
 from metermatters.store import accounts
-from metermatters.intake import ingest
+from metermatters.intake import ingest, redact
 from metermatters.tasks import jobs
 from tests.support import CLEAN, SECRET, HostedCase
 
@@ -102,6 +102,25 @@ class TestJobPerUser(JobCase):
             result = jobs.run_check()
         self.assertEqual(result["steps"]["staleness"], {"failed": 1, "ok": 1})
         self.assertEqual(result["steps"]["watchdog"], {"off": 1, "ok": 1})
+
+    def test_old_files_are_reduced_once_and_then_left_alone(self):
+        give_bills(self.sign_up().paths, date.today())
+        with mock.patch("metermatters.intake.redact.scrub", wraps=redact.scrub) as scrub:
+            jobs.run_check()
+            self.assertEqual(scrub.call_count, 1)
+            jobs.run_check()
+            self.assertEqual(scrub.call_count, 1, "a pass that covered everyone is not repeated")
+
+    def test_a_reduction_that_failed_is_tried_again(self):
+        give_bills(self.sign_up().paths, date.today())
+        with mock.patch("metermatters.intake.redact.scrub", side_effect=OSError("disk gone")) as scrub:
+            self.assertTrue(jobs.run_check()["ok"], "never a reason for the check to fail")
+            self.assertEqual(scrub.call_count, 1)
+        with mock.patch("metermatters.intake.redact.scrub", return_value={"bills": 0, "usage": 0}) as scrub:
+            jobs.run_check()
+            self.assertEqual(scrub.call_count, 1)
+            jobs.run_check()
+            self.assertEqual(scrub.call_count, 1)
 
     def test_no_connected_mailbox_means_no_polling(self):
         self.sign_up()

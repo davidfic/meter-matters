@@ -68,6 +68,22 @@ class TestTheSplit(unittest.TestCase):
         # With no full year after the base, the what-ifs use the one in progress and say so.
         self.assertEqual((out["what_if"]["latest"], out["what_if"]["partial"]), (2025, True))
 
+    def test_the_weather_split_needs_the_base_years_weather(self):
+        rows = [statement(2023, m, 7.0 + 800 * 0.30, kwh=800.0, rate=0.30) for m in range(1, 13)] + \
+               [statement(2024, m, 7.0 + 900 * 0.30, kwh=900.0, rate=0.30) for m in range(1, 13)]
+        known_from_2024 = lambda r: 40.0 if r["year"] >= 2024 else None
+        out = longview.build(rows, None, weather=known_from_2024)
+        base, later = out["years"]
+        self.assertEqual(base["year"], 2023)
+        self.assertIsNone(base["weather_kwh"])
+        self.assertEqual(later["weather_kwh"], 40.0)
+        # 2024 against 2023, like the bars beside it - and 2023's weather is unknown.
+        self.assertIsNone(later["weather_added"])
+        self.assertFalse(out["weather"])
+        known_throughout = lambda r: 40.0 if r["year"] >= 2024 else 10.0
+        later = longview.build(rows, None, weather=known_throughout)["years"][1]
+        self.assertAlmostEqual(later["weather_added"], 30.0 * (7.0 + 800 * 0.30) / 800, places=2)   # at the base year's own rate
+
     def test_two_years_without_usage_is_nothing_to_split(self):
         rows = [statement(2019, m, 100.0) for m in range(1, 13)] + [statement(2020, m, 120.0) for m in range(1, 13)]
         self.assertIsNone(longview.build(rows, None))

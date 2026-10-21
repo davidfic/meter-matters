@@ -185,11 +185,12 @@ def account_delete(user_id):
 @bp.post("/settings")
 def settings():
     changed = []
-    for key, choices in site.CHOICES.items():
-        given = request.form.get(key, "").strip().lower()
-        if given not in choices and given != "":
+    wanted = {key: request.form.get(key, "").strip().lower() for key in site.CHOICES}
+    for key, given in wanted.items():
+        if given not in site.CHOICES[key] and given != "":
             flash(f"{given!r} is not a choice for {key}.", "err")
             return redirect(url_for("admin.index"))
+    for key, given in wanted.items():
         before = site.setting(key)
         site.set_(key, given or None)
         after = site.setting(key)

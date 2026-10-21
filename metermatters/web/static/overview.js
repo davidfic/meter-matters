@@ -3,7 +3,7 @@
 import { url } from "./base.js";
 import { StackedColumns } from "./charts.js";
 import * as insights from "./insights.js";
-import { $, esc, table, money, signedMoney, pctText, MONTHS, FUELS, fuelColor, fuelsIn,
+import { $, esc, table, money, signedMoney, pctText, FUELS, fuelColor, fuelsIn,
          initTheme, initTableToggles, boot } from "./ui.js";
 
 const charts = {};

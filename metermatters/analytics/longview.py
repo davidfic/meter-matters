@@ -58,7 +58,7 @@ def published_matches(series: list[dict], published) -> bool:
         own = (r["amount"] - p["customer"]) / r["kwh"] if r["kwh"] else None
         if own is not None and own > 0:
             pairs.append(abs(own - p["per_kwh"]) / p["per_kwh"])
-    return len(pairs) >= 6 and mean(pairs) <= MATCH_WITHIN
+    return len(pairs) >= ENOUGH and mean(pairs) <= MATCH_WITHIN
 
 
 def _year_rows(series: list[dict], published, weather) -> list[dict]:
@@ -129,8 +129,10 @@ def build(series: list[dict], published=None, weather=None, source: dict | None 
         y["change"] = _round(y["_bill"] - base["_bill"])
         y["usage_added"] = _round((y["_kwh"] - base["_kwh"]) * base["_rate"])
         y["price_added"] = _round(y["_kwh"] * (y["_rate"] - base["_rate"]))
-        if y.get("_weather_kwh") is not None:
-            y["weather_added"] = _round((y["_weather_kwh"] - base.get("_weather_kwh", 0.0)) * base["_rate"])
+        # Against the base year's own weather, like the two bars beside it. Without
+        # temperatures for the base year there is no such comparison to make.
+        if y.get("_weather_kwh") is not None and base.get("_weather_kwh") is not None:
+            y["weather_added"] = _round((y["_weather_kwh"] - base["_weather_kwh"]) * base["_rate"])
         else:
             y["weather_added"] = None
     # The newest year with usage that is not the base - a full one if there is one, else the one in progress.

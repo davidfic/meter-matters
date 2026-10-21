@@ -159,21 +159,26 @@ def _worst(results: list[tuple[str, dict]], several: bool) -> dict:
             "detail": "; ".join(f"{name}: {r['detail']}" for name, r in results if r["detail"])}
 
 
-def _reduce(base) -> None:
+REDUCED_KEY = "files_reduced"              # set once a pass has reduced everyone's files
+
+
+def _reduce(base) -> bool:
     """Files kept before names, streets and full account numbers were left out
-    of them are reduced here, once; after that this finds nothing to do. Never
-    a reason for the check to fail."""
+    of them are reduced here. Returns whether every home was done; never a
+    reason for the check to fail."""
     from metermatters.intake import redact
+    done = True
     for home in homes.everything(base):
         try:
             redact.scrub(homes.paths_for(base, home))
         except Exception:                      # noqa: BLE001 - best effort, every run
-            pass
+            done = False
+    return done
 
 
-def _reduce_log() -> None:
+def _reduce_log() -> bool:
     """Subject lines logged before long numbers were cut from them, cut now.
-    Finds nothing to do after the first run; never a reason for the check to fail."""
+    Returns whether it got through; never a reason for the check to fail."""
     from metermatters.intake import redact
     try:
         with db.connect() as conn:
@@ -182,11 +187,35 @@ def _reduce_log() -> None:
                 reduced = redact.subject(row["subject"])
                 if reduced != row["subject"]:
                     conn.execute("UPDATE inbound_log SET subject = ? WHERE id = ?", (reduced, row["id"]))
+        return True
     except Exception:                          # noqa: BLE001 - best effort, every run
+        return False
+
+
+def _reduced_already() -> bool:
+    """Has one check reduced everything that was on disk and in the log before
+    the intake started reducing it? Everything since arrives reduced, so after
+    that pass the work is a no-op and is skipped - rereading and rebuilding
+    every zip on every run was the whole of the check's cost for some."""
+    try:
+        with db.connect() as conn:
+            row = conn.execute("SELECT value FROM meta WHERE key = ?", (REDUCED_KEY,)).fetchone()
+        return row is not None
+    except Exception:                          # noqa: BLE001 - no record means do it again
+        return False
+
+
+def _mark_reduced(when: datetime) -> None:
+    try:
+        with db.connect() as conn:
+            conn.execute("INSERT INTO meta (key, value) VALUES (?, ?) "
+                         "ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+                         (REDUCED_KEY, when.isoformat(timespec="seconds")))
+    except Exception:                          # noqa: BLE001 - next run does the pass again
         pass
 
 
-def _run_steps(target: Target, base) -> dict:
+def _run_steps(target: Target, base, reduce: bool = True) -> dict:
     """Every step for one person: the mailbox once, everything else once per home."""
     # Import first: a bill that just arrived must not be reported missing.
     steps = {}
@@ -197,7 +226,8 @@ def _run_steps(target: Target, base) -> dict:
         steps["import"] = {"status": "failed", "detail": f"{type(exc).__name__}: {exc}"}
 
     homes.purge(base)
-    _reduce(base)
+    if reduce:
+        steps["_reduced"] = _reduce(base)
     each = homes.active(base)
     several = len(each) > 1
     for name in ("staleness", "watchdog"):
@@ -243,18 +273,22 @@ def _step_benchmark(user, base, each) -> dict:
 def run_check() -> dict:
     """Run every step for everyone and record the outcome. Safe at any time."""
     started = datetime.now(timezone.utc)
-    _reduce_log()
+    reducing = not _reduced_already()
+    reduced = _reduce_log() if reducing else False
     people = []
     for target in targets():
         steps = {}
         try:
             with workspace.open_(target.user, write=True) as base:
-                steps = _run_steps(target, base)
+                steps = _run_steps(target, base, reduce=reducing)
         except Exception as exc:               # couldn't open, or couldn't save
             for name in STEPS:
                 steps.setdefault(name, {"status": "failed",
                                         "detail": f"{type(exc).__name__}: {exc}"})
+        reduced = reduced and steps.pop("_reduced", False)
         people.append({"who": target.label, "steps": steps})
+    if reducing and reduced:
+        _mark_reduced(started)
 
     tally: dict[str, dict[str, int]] = {name: {} for name in list(STEPS) + ["benchmark"]}
     for person in people:

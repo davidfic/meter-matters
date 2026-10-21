@@ -40,6 +40,15 @@ class Headline(unittest.TestCase):
         self.assertEqual(h["peak"]["label"], "Jan 2026")
         self.assertEqual(h["total_12"], round(250 * 10 + 197.65, 2))
 
+    def test_water_billed_every_other_month_leaves_every_month_in_the_running(self):
+        # Water arrives on the even months. The cheapest month is an odd one, with
+        # no water bill in it, and that is the right answer, not a technicality.
+        rows = energy(*[(f"2026-{m:02d}", 200.0 + m, 50.0, 90.0 if m % 2 == 0 else 0.0)
+                        for m in range(1, 13)])
+        h = analysis.overview_headline(rows)
+        self.assertEqual(h["low"]["label"], "Jan 2026")
+        self.assertEqual(h["peak"]["label"], "Dec 2026")
+
     def test_one_utility_still_gets_a_headline(self):
         rows = energy(*[(f"2026-{m:02d}", 100.0 + m, 0.0, 0.0) for m in range(1, 7)])
         h = analysis.overview_headline(rows)

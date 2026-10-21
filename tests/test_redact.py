@@ -122,6 +122,32 @@ class UsageFiles(unittest.TestCase):
         self.assertIn("Account Number,******0001", text)
         self.assertEqual(redact.usage_bytes(buffer.getvalue()), reduced, "same upload, same bytes")
 
+    def test_only_the_csvs_in_a_zip_are_kept(self):
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w") as archive:
+            archive.writestr("usage_555000100010000000001.csv", BILLING)
+            archive.writestr("usage_555000100010000000001.xml", b"<customer>Pat Sample, 12 Placeholder Ln</customer>")
+            archive.writestr("readme.txt", b"Pat Sample")
+        reduced = redact.usage_bytes(buffer.getvalue())
+        with zipfile.ZipFile(io.BytesIO(reduced)) as archive:
+            self.assertEqual(archive.namelist(), ["usage_******0001.csv"])
+        self.assertNotIn(b"Pat Sample", reduced)
+
+    def test_member_names_keep_their_dates_and_stay_apart(self):
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w") as archive:
+            archive.writestr("usage_555000100010000000001_20240101_20241231.csv", BILLING)
+            archive.writestr("usage_555000100010000000002_20240101_20241231.csv", HISTORY)
+            archive.writestr("usage_555000100020000000001_20240101_20241231.csv", BILLING)
+        reduced = redact.usage_bytes(buffer.getvalue())
+        with zipfile.ZipFile(io.BytesIO(reduced)) as archive:
+            self.assertEqual(archive.namelist(), ["usage_******0001_20240101_20241231.csv",
+                                                  "usage_******0002_20240101_20241231.csv",
+                                                  "usage_******0001_20240101_20241231-2.csv"])
+            texts = [archive.read(name).decode() for name in archive.namelist()]
+        self.assertNotEqual(texts[0], texts[1], "each member keeps its own content")
+        self.assertEqual(redact.usage_bytes(buffer.getvalue()), reduced, "same upload, same bytes")
+
     def test_store_usage_writes_only_the_reduced_file(self):
         with tempfile.TemporaryDirectory() as tmp:
             usage = Path(tmp) / "usage"

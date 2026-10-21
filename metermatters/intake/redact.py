@@ -35,6 +35,9 @@ STARS = "******"
 ACCOUNT_FIELD = "Account# or Nickname"
 
 _LONG_NUMBER = re.compile(r"\d{6,}")
+# A run of digits that reads as a date, YYYYMMDD: the portal puts the export's
+# dates in a file's name, and those say nothing about who the customer is.
+_DATE_RUN = re.compile(r"(?:19|20)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])")
 _SUBJECT_NUMBER = re.compile(r"\d{5,}")
 _ADDRESS_TAIL = re.compile(r"\b([A-Za-z]{2})\s+(\d{5})(?:-\d{4})?\s*$")
 _ZIP_TAIL = re.compile(r"\b(\d{5})(?:-\d{4})?\s*$")
@@ -46,6 +49,22 @@ _NUMBER_KEYS = ("account number", "account", "account no", "account #", "service
 
 def _last_four(match: re.Match) -> str:
     return STARS + match.group()[-4:]
+
+
+def _member_name(name: str, taken: set[str]) -> str:
+    """A zip member's name with its long numbers cut to their last four digits,
+    dates left alone, and a suffix when two members would otherwise share a name."""
+    reduced = _LONG_NUMBER.sub(lambda m: m.group() if _DATE_RUN.fullmatch(m.group()) else _last_four(m),
+                               name)
+    stem, dot, ext = reduced.rpartition(".")
+    if not dot:
+        stem, ext = reduced, ""
+    candidate, n = reduced, 2
+    while candidate in taken:
+        candidate = f"{stem}-{n}{dot}{ext}"
+        n += 1
+    taken.add(candidate)
+    return candidate
 
 
 def account(text: str | None) -> str:
@@ -114,9 +133,11 @@ def usage_csv(text: str) -> str:
 def usage_bytes(data: bytes) -> bytes:
     """An uploaded export - a CSV, or the portal's zip of them - reduced.
 
-    A zip is rebuilt member by member, with the member names masked too (the
-    portal puts the service point's number in them) and the dates kept, so the
-    same upload always yields the same bytes and is recognised as a repeat.
+    A zip is rebuilt from its CSVs alone - anything else in it (a readme, the
+    XML flavour of the same export) is never read and could carry the name and
+    street, so it is left out. Member names are masked too (the portal puts the
+    service point's number in them) with the dates kept, so the same upload
+    always yields the same bytes and is recognised as a repeat.
     Raises ``zipfile.BadZipFile`` for a zip that cannot be opened.
     """
     if data[:2] != b"PK":
@@ -126,17 +147,17 @@ def usage_bytes(data: bytes) -> bytes:
             return data
     source = zipfile.ZipFile(io.BytesIO(data))
     buffer = io.BytesIO()
+    taken: set[str] = set()
     with zipfile.ZipFile(buffer, "w") as target:
         for info in source.infolist():
-            if info.is_dir() or info.filename.startswith("__MACOSX"):
+            if info.is_dir() or info.filename.startswith("__MACOSX") \
+                    or not info.filename.lower().endswith(".csv"):
                 continue
-            raw = source.read(info.filename)
-            if info.filename.lower().endswith(".csv"):
-                try:
-                    raw = usage_csv(raw.decode("utf-8-sig")).encode("utf-8")
-                except UnicodeDecodeError:
-                    pass
-            member = zipfile.ZipInfo(account(info.filename), date_time=info.date_time)
+            try:
+                raw = usage_csv(source.read(info.filename).decode("utf-8-sig")).encode("utf-8")
+            except UnicodeDecodeError:
+                continue                    # not text the loader would read either
+            member = zipfile.ZipInfo(_member_name(info.filename, taken), date_time=info.date_time)
             member.compress_type = zipfile.ZIP_DEFLATED
             target.writestr(member, raw)
     return buffer.getvalue()

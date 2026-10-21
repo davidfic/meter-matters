@@ -21,7 +21,8 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from statistics import mean
 
-from flask import Flask, abort, g, jsonify, make_response, redirect, render_template, request, session, url_for
+from flask import (Flask, abort, g, has_request_context, jsonify, make_response, redirect, render_template,
+                   request, session, url_for)
 
 from metermatters.store import accounts
 from metermatters.analytics import analysis
@@ -459,10 +460,7 @@ def build_report(state: dict, fuel: str | None = None) -> dict:
     bills = analysis.build_bills(entries)
 
     # Usage is optional - the dashboard degrades to dollars-only without it.
-    try:
-        usage = greenbutton.load_dir(paths().usage).periods if paths().usage.exists() else []
-    except (OSError, ValueError):
-        usage = []
+    usage = _usage_periods()
 
     # Electric and gas run side by side, so they are never merged with each
     # other - only accounts of the SAME fuel that never overlap in time, which
@@ -545,6 +543,38 @@ def build_report(state: dict, fuel: str | None = None) -> dict:
 # Routes
 # --------------------------------------------------------------------------
 
+def _usage_export():
+    """The home's usage export, parsed once per request - or None.
+
+    A page can want it three or four times over (the address, the periods, the
+    weather model's own look), and the zips are the slow part of drawing it.
+    Pages only read here; the upload routes, which change the files, load
+    their own.
+    """
+    usage = paths().usage
+    cached = g.get("_usage_exports") if has_request_context() else None
+    if cached is not None and usage in cached:
+        return cached[usage]
+    try:
+        export = greenbutton.load_dir(usage) if usage.exists() else None
+    except (OSError, ValueError):
+        export = None
+    if has_request_context():
+        g.setdefault("_usage_exports", {})[usage] = export
+    return export
+
+
+def _forget_usage() -> None:
+    """Drop the request's parsed export after the files change."""
+    if has_request_context():
+        g.pop("_usage_exports", None)
+
+
+def _usage_periods() -> list:
+    export = _usage_export()
+    return list(export.periods) if export is not None else []
+
+
 def _weather_model(fuel: str, periods: list, state: dict):
     """(weather, model, place name) for this fuel, from temperatures already on file - or None.
 
@@ -552,10 +582,7 @@ def _weather_model(fuel: str, periods: list, state: dict):
     """
     if not fuels.by_name(fuel).weather or len(periods) < insights.MIN_TO_MODEL:
         return None
-    try:
-        export = greenbutton.load_dir(paths().usage) if paths().usage.exists() else None
-    except (OSError, ValueError):
-        export = None
+    export = _usage_export()
     zipcode = state.get("zip") or (weather.zip_in(export.address) if export else None)
     place = weather.known_place(zipcode) if weather.enabled() else None
     if place is None:
@@ -687,10 +714,8 @@ def build_overview(state: dict) -> dict:
 
 def _address() -> str | None:
     """The street address a usage export carries, if one has been uploaded."""
-    try:
-        return greenbutton.load_dir(paths().usage).address if paths().usage.exists() else None
-    except (OSError, ValueError):
-        return None
+    export = _usage_export()
+    return export.address if export is not None else None
 
 
 def home_state(state: dict) -> str | None:
@@ -797,11 +822,7 @@ def build_long_view(state: dict, fuel: str) -> dict | None:
     with_address = {**state, "_address": _address()}
     published, source = tariffs.for_area(home_state(with_address), fuel)
     weather = None
-    try:
-        usage = greenbutton.load_dir(paths().usage).periods if paths().usage.exists() else []
-    except (OSError, ValueError):
-        usage = []
-    mine = [p for p in usage if insights.fuel_of(p) == fuel]
+    mine = [p for p in _usage_periods() if insights.fuel_of(p) == fuel]
     found = _weather_model(fuel, mine, with_address)
     if found is not None and found[1] is not None and found[1].matters:
         wx, model, _ = found
@@ -836,10 +857,7 @@ def build_raw() -> dict:
         return {"error": "No bills on file yet.", "statements": [], "usage": []}
     entries = analysis.load_entries(paths().csv)
     bills = analysis.build_bills(entries)
-    try:
-        periods = greenbutton.load_dir(paths().usage).periods if paths().usage.exists() else []
-    except (OSError, ValueError):
-        periods = []
+    periods = _usage_periods()
     analysis.attach_usage(bills, periods)
     return {
         "statements": analysis.raw_rows(entries, bills),
@@ -874,10 +892,7 @@ def build_insights(state: dict) -> dict:
     and nothing about a slow or absent weather service should hold up the
     bills. The pages draw themselves first and ask for this afterwards.
     """
-    try:
-        export = greenbutton.load_dir(paths().usage) if paths().usage.exists() else None
-    except (OSError, ValueError):
-        export = None
+    export = _usage_export()
     periods = export.periods if export else []
     zipcode = state.get("zip") or (weather.zip_in(export.address) if export else None)
 
@@ -937,10 +952,7 @@ def build_rates(state: dict) -> dict:
     out = {"error": report.get("error"), "series": [], "settings": settings}
     if not series:
         return out
-    try:
-        export = greenbutton.load_dir(paths().usage) if paths().usage.exists() else None
-    except (OSError, ValueError):
-        export = None
+    export = _usage_export()
     zipcode = state.get("zip") or (weather.zip_in(export.address) if export else None)
     rate_now = (report.get("rates") or {}).get("current")
 
@@ -990,7 +1002,7 @@ def _publish_benchmark(state: dict) -> None:
     if g.user is accounts.LOCAL or g.user is None:
         return
     try:
-        export = greenbutton.load_dir(paths().usage) if paths().usage.exists() else None
+        export = _usage_export()
         where = region.resolve(state.get("state"), export.address if export else None)
         benchmarks.publish(g.user.id, g.home.id, where, export.periods if export else [],
                            allowed=bool(state.get("share_benchmark", True)))
@@ -1068,10 +1080,7 @@ def build_month(state: dict, year: int, month: int) -> dict | None:
     summary = _year_summary(state, reports, year)
     if not summary:
         return None
-    try:
-        usage = greenbutton.load_dir(paths().usage).periods if paths().usage.exists() else []
-    except (OSError, ValueError):
-        usage = []
+    usage = _usage_periods()
     with_address = {**state, "_address": _address()}
     blocks: dict = {}
 
@@ -1270,6 +1279,7 @@ def ingest_upload(filename: str, data: bytes, mapping: dict | None = None) -> di
         return {"kind": "bills", "added": result.added, "total": result.total,
                 "notes": found.notes}
     stored = ingest.store_usage(paths().usage, importers_name(filename), found.text.encode())
+    _forget_usage()
     made = backfill.fill_missing(paths().csv, paths().usage)
     # The store's own notes (a figure already on file that this file disagrees
     # with) come before the importer's, which are about the file itself.
@@ -1320,6 +1330,7 @@ def _ingest_known(filename: str, data: bytes) -> dict:
             return {"kind": "bills", "added": result.added, "total": result.total}
 
     stored = ingest.store_usage(paths().usage, filename, data)
+    _forget_usage()
     return stored
 
 
