@@ -1,0 +1,64 @@
+{% extends "docs/_layout.html" %}
+{% from "docs/_macros.html" import shot, doc, app %}
+{% block body %}
+<h1>iCloud Mail, step by step</h1>
+<ul class="docs-where">
+  <li>icloud.com, in a browser on a computer</li>
+  <li class="in-app">Meter Matters, the Add bills page</li>
+  <li>About five minutes</li>
+</ul>
+<p class="lead">iCloud Mail forwards with a rule, and needs no confirmation of the address. One
+  rule, then a test.</p>
+
+<p>Make the rule at icloud.com, not in the Mail app on a Mac. A rule made at icloud.com runs on
+  Apple's servers, so it works whichever device you read mail on. A rule made in the Mac's Mail
+  app runs only while that Mac is awake with Mail open.</p>
+
+<h2 id="rule">Make the rule</h2>
+<ol class="steps big">
+  <li>On {{ app("web.connect", "Add bills") }}, press <strong>Copy</strong> next to your bills address.</li>
+  <li>Sign in at <strong>icloud.com</strong> and open <strong>Mail</strong>.</li>
+  <li>Press the <strong>gear</strong> at the top of the folder list, then <strong>Settings</strong>, then
+    <strong>Rules</strong>.</li>
+</ol>
+{{ shot("icloud-rules.png", "iCloud Mail's settings on the Rules tab, with the Add a Rule button",
+        "The Rules tab. Add a Rule is at the top.") }}
+<ol class="steps big" start="4">
+  <li>Press <strong>Add a Rule</strong>.</li>
+  <li><em>If a message</em>: choose <strong>is from</strong>, and paste your utility's sender address.
+    For Eversource it is <code>noreply@notifications.eversource.com</code>.</li>
+  <li><em>Then</em>: choose <strong>Forward to</strong>, and paste your bills address.</li>
+</ol>
+{{ shot("icloud-rule.png", "The new rule: is from the utility's sender, forward to the bills address",
+        "The whole rule. One condition, one action.") }}
+<ol class="steps big" start="7">
+  <li>Press <strong>Add</strong>, then <strong>Done</strong>.</li>
+</ol>
+<p>If gas and electric come from different senders, make a second rule the same way.</p>
+
+<h2 id="test">Send a test</h2>
+<p>A rule applies only to mail that arrives from now on. To see it work today, open a recent
+  bill email, press <strong>Forward</strong>, put your bills address in <em>To</em>, and send. From
+  the Mail app on an iPhone is fine. Within a minute or two, a <strong>Filed</strong> line appears
+  under <strong>What has arrived</strong> on Add bills.</p>
+{{ shot("forwarding-filed.png", "The What has arrived list with a bill filed, marked as forwarded by you",
+        "The test bill, filed. The next real bill will arrive through the rule on its own.") }}
+<p>Send the test from the address you signed up with. A forward from any other address is not
+  filed.</p>
+
+<h2 id="snags">If something is off</h2>
+<table class="docs-table">
+  <thead><tr><th>What you see</th><th>What to do</th></tr></thead>
+  <tbody>
+    <tr><td>The rule exists, but no bill ever arrives</td>
+        <td>Rules apply to new mail only; send a test by hand. Check the rule is at icloud.com, not only in the Mac's Mail app.</td></tr>
+    <tr><td>The test says <em>Forwarded by …, who isn't you</em></td>
+        <td>Forward from the address you signed up with. An iCloud account can have several addresses; use the one on your Meter Matters account.</td></tr>
+    <tr><td>The log says <em>Not from the utility's address</em> for a bill the rule sent</td>
+        <td>The rule's sender must be the address on the bill email exactly. Utilities use different addresses for bills, payments and offers.</td></tr>
+    <tr><td>I pressed Issue a new address</td>
+        <td>The old address stopped working. Change the rule's Forward to address to the new one.</td></tr>
+  </tbody>
+</table>
+<p>Anything else: the {{ doc("troubleshooting", "troubleshooting page", "email") }}.</p>
+{% endblock %}

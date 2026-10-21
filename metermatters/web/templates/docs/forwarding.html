@@ -2,176 +2,136 @@
 {% from "docs/_macros.html" import shot, doc, app %}
 {% block body %}
 <h1>Forward your bill emails</h1>
-<p class="lead">Your account has an email address that is yours alone. Tell your mailbox to
-  forward your utility's "your bill is ready" emails to it, and from then on each new bill files
-  itself. The app never has a password to your mail and never sees anything your filter does
-  not send.</p>
+<p class="lead">Your account has an email address that is yours alone. Set your mailbox to
+  forward your utility's "your bill is ready" emails to it. From then on, each new bill files
+  itself.</p>
 
-<div class="callout">
-  <strong>What this is, in one paragraph.</strong> You are not connecting your mailbox to anything.
-  You are adding a rule inside your own mailbox that says "when a message arrives from
-  <em>this one sender</em>, send a copy to <em>this address</em>". Your mail provider does the
-  sending. The app receives only those copies, checks that each one really came from the
-  utility, reads the amount and the dates out of it, and files the bill. The copy itself is not
-  kept. The {{ doc("security", "security page", "forwarding") }} goes through every step of that
-  in detail.
+<h2 id="how">How it works</h2>
+<div class="docs-flow">
+  <div class="box"><strong>Your utility</strong><span>Emails you when a bill is ready, as it does now.</span></div>
+  <div class="box you"><strong>Your mailbox</strong><span>A filter you make sends a copy of that one sender's mail on. Nothing else leaves.</span></div>
+  <div class="box"><strong>Your bills address</strong><span><code>bills-…@…</code>, made for you. Nobody else has it.</span></div>
+  <div class="box"><strong>Meter Matters</strong><span>Checks the sender, reads the amount and the dates, files the bill.</span></div>
 </div>
+<p>The app never signs in to your mail and holds no password for it. It receives only the
+  copies your filter sends, and it does not keep them. The
+  {{ doc("security", "security page", "forwarding") }} goes through that in detail.</p>
 
-<h2 id="address">1. Find your address</h2>
+<h2 id="before">Before you start</h2>
+<ul class="facts-list">
+  <li><strong>A computer.</strong> Mail filters are made in a browser, not in the phone app. Ten
+    minutes, once.</li>
+  <li><strong>A recent bill email</strong> from your utility, open, so you can see who sent it.</li>
+  <li><strong>Your bills address</strong>, on the first card of {{ app("web.connect", "Add bills") }}.
+    If the card says <em>Not available on this server</em>, the person running the server has not
+    switched inbound email on. Upload and by-hand still work. The
+    {{ doc("operators", "operators page") }} says what switching it on involves.</li>
+</ul>
+
+<h2 id="steps">The three steps</h2>
+<ol class="steps big">
+  <li><strong>Copy your bills address</strong> from Add bills.</li>
+  <li><strong>Tell your mailbox it may forward to that address.</strong> Gmail asks you to confirm
+    the address first. Google's confirmation goes to the bills address, not your inbox, and
+    Meter Matters shows it to you. Outlook and iCloud have no confirmation step.</li>
+  <li><strong>Make a filter:</strong> mail <em>from</em> your utility's sender, <em>forward it to</em>
+    your bills address.</li>
+</ol>
+<p>Then forward one bill by hand to check it all works. Each page below walks through every
+  screen.</p>
+
+<h2 id="pick">Pick your mail</h2>
+<div class="docs-cards three">
+  <a class="docs-card" href="{{ url_for('docs.page', slug='forwarding-gmail') }}">
+    <strong>Gmail</strong><span>Add the address, confirm it, make the filter.</span></a>
+  <a class="docs-card" href="{{ url_for('docs.page', slug='forwarding-outlook') }}">
+    <strong>Outlook</strong><span>Outlook.com and Microsoft 365. One rule.</span></a>
+  <a class="docs-card" href="{{ url_for('docs.page', slug='forwarding-icloud') }}">
+    <strong>iCloud Mail</strong><span>One rule at icloud.com.</span></a>
+</div>
+<p>Yahoo, or a mail app with no forwarding rule? Skip the filter and
+  <a href="#by-hand">forward each bill by hand</a>. It is one tap a month.</p>
+
+<h2 id="address">Your bills address</h2>
 <p>On {{ app("web.connect", "Add bills") }}, the first card is <strong>Your private bills address</strong>.
-  It looks like <code>bills-k7m2…@in.example.com</code>: the word <em>bills</em>, a dash, and
-  twenty-four random letters and digits. Press <strong>Copy</strong>.</p>
+  The address is the word <em>bills</em>, a dash, and twenty-four random letters and digits.
+  Press <strong>Copy</strong>. You will paste it into your mail in the next step.</p>
 
 {{ shot("forwarding-card.png", "The Your private bills address card with the address, a Copy button, and the three steps",
         "The card on a new account. The address is made for you and is different for every account.") }}
 
-<p>If the card says <em>Not available on this server</em>, the person running it has not switched
-  inbound email on. Upload and by-hand still work, and the
-  {{ doc("operators", "operators page") }} says what switching it on involves.</p>
+<h2 id="sender">Who sends your bills</h2>
+<p>The filter matches on the sender's address, so that only bill emails are forwarded. Open a
+  recent "your bill is ready" email. The address is next to the sender's name at the top. On a
+  phone, tap the name to see it.</p>
 
-<h2 id="sender">2. Find who sends your bills</h2>
-<p>Open a recent "your bill is ready" email from your utility and note the exact sender address.
-  For Eversource it is <code>noreply@notifications.eversource.com</code>. That address is what
-  your filter will match on, so that only bill emails are forwarded and nothing else.</p>
+<table class="docs-table">
+  <thead><tr><th>Utility</th><th>Bill emails come from</th><th>Read by the app</th></tr></thead>
+  <tbody>
+    <tr><td>Eversource (electric and gas)</td><td><code>noreply@notifications.eversource.com</code></td><td>Yes</td></tr>
+    <tr><td>Other utilities</td><td>On the bill email</td><td>Not yet. The log says <em>Not filed</em> for them.</td></tr>
+  </tbody>
+</table>
+<p>More utilities are being added. Until yours is, {{ doc("upload", "uploading") }} its export is
+  the way to bring its bills in. Utilities use different addresses for bills, payments and offers.
+  Match the one on the bill email.</p>
 
-<p><strong>Which utilities' emails can be read today:</strong> Eversource's bill-ready email, for
-  electric and gas. An email from any other sender is logged on the Add bills page as
-  <em>Not filed</em>, and the bill is not read. More utilities are being added; until yours is,
-  {{ doc("upload", "uploading") }} is the way to bring its bills in.</p>
+<h2 id="test">Check that it works</h2>
+<p>A filter applies only to mail that arrives after it was made, so the first real test would be
+  next month. Do not wait. Open a recent bill email, press <strong>Forward</strong>, put your bills
+  address in <em>To</em>, and send. Within a minute or two a line appears under
+  <strong>What has arrived</strong> on Add bills.</p>
 
-<h2 id="gmail">3. Set up the filter: Gmail</h2>
-<p>Gmail wants the destination address confirmed before any filter can forward to it. That is
-  Google's safeguard, and the app helps with it. Three parts.</p>
+{{ shot("forwarding-filed.png", "The What has arrived list with one bill filed, marked as forwarded by you",
+        "A bill forwarded by hand. The amount and dates are read the same way as from a filter.") }}
 
-<h3>a. Add the forwarding address</h3>
-<ol class="steps big">
-  <li>In Gmail on a computer, open <strong>Settings</strong> (the gear) → <strong>See all settings</strong>
-    → the <strong>Forwarding and POP/IMAP</strong> tab.</li>
-  <li>Press <strong>Add a forwarding address</strong>, paste your bills address, and press
-    <strong>Next</strong>, then <strong>Proceed</strong>, then <strong>OK</strong>.</li>
-  <li>Leave <strong>Disable forwarding</strong> selected on that tab. You are not forwarding your whole
-    mailbox; the filter in part c will forward only the bills.</li>
-</ol>
+<p><strong>One rule:</strong> forward from the address you signed up with. A forward carries your
+  signature, not the utility's, so your address is the only proof the app has that it was you.
+  A forward from anywhere else is logged as <em>Not filed</em>, and nobody who learns your bills
+  address can plant a bill in it.</p>
+<p>If your bills land in a different mailbox from the one you signed up with, a filter in that
+  mailbox still works. A filter passes the utility's own message through, signature and all.</p>
 
-<h3>b. Confirm it</h3>
-<p>Gmail now sends a confirmation message to your bills address. The app receives it and shows
-  Google's link on the Add bills page. Reload the page, and:</p>
-<ol class="steps big">
-  <li>Press <strong>Open Gmail's confirmation link</strong>. Google's own page opens; press
-    <strong>Confirm</strong>. (If you would rather type the code, it is shown next to the link, and goes
-    in the box on Gmail's Forwarding tab.)</li>
-  <li>Back on Add bills, press <strong>Done</strong>. Google does not tell the app when you have confirmed,
-    so this is how it knows.</li>
-</ol>
+<h2 id="arrivals">What has arrived</h2>
+<p>Everything that reaches your address is listed on the card, filed or not, with a line saying
+  what was done and why. The list refreshes on its own.</p>
 
-{{ shot("forwarding-confirm.png", "The card with Gmail's confirmation waiting: a link to Google's page, the code, and a Done button",
-        "The confirmation as it appears on the Add bills page. The only link ever shown here is one to Google's own site.") }}
-
-<h3>c. Make the filter</h3>
-<ol class="steps big">
-  <li>In Gmail's search box, press the sliders icon on the right (<em>Show search options</em>). Or go to
-    <strong>Settings</strong> → <strong>Filters and Blocked Addresses</strong> → <strong>Create a new filter</strong>;
-    it opens the same panel.</li>
-  <li>In <strong>From</strong>, paste the utility's sender address from step 2. Leave every other field empty.
-    Press <strong>Create filter</strong> (not Search).</li>
-</ol>
-
-{{ shot("gmail-filter-from.png", "Gmail's search options panel with From set to noreply@notifications.eversource.com and the Create filter button",
-        "The panel, with only From filled in. This is a real Gmail screenshot; the sender shown is Eversource's.") }}
-
-<ol class="steps big" start="3">
-  <li>On the next panel, tick <strong>Forward it to</strong> and choose your bills address from the list beside it.
-    If the address is not in the list yet, the <strong>Add forwarding address</strong> link right there does the
-    same as step a, and Gmail will want it confirmed (step b) before the filter can use it.</li>
-  <li>Leave everything else unticked and press <strong>Create filter</strong>.</li>
-  <li>One filter per utility. If gas and electric come from different senders, make two.</li>
-</ol>
-
-{{ shot("gmail-filter-actions.png", "Gmail's filter actions panel: a list of checkboxes including Forward it to with an address dropdown and an Add forwarding address link, and the Create filter button",
-        "The actions panel. Forward it to is the only box to tick.") }}
-<p>A Gmail filter applies to mail arriving from now on, not to what is already in the inbox.
-  To bring in past bills, or to try it out right away, forward one by hand
-  (step 5 below).</p>
-
-<h2 id="outlook">4. Set up the filter: Outlook, iCloud and others</h2>
-
-<h3>Outlook.com and Microsoft 365</h3>
-<ol class="steps big">
-  <li>Open <strong>Settings</strong> (the gear) → <strong>Mail</strong> → <strong>Rules</strong> →
-    <strong>Add new rule</strong>.</li>
-  <li>Name it. Condition: <strong>From</strong>, the utility's sender address.</li>
-  <li>Action: <strong>Forward to</strong>, your bills address. Save.</li>
-</ol>
-
-<h3>iCloud Mail</h3>
-<ol class="steps big">
-  <li>At icloud.com, open <strong>Mail</strong>, then the gear at the top of the folder list →
-    <strong>Settings</strong> → <strong>Rules</strong> → <strong>Add a Rule</strong>.</li>
-  <li><em>If a message</em> <strong>is from</strong> the utility's sender address, <em>then</em>
-    <strong>Forward to</strong> your bills address. Done.</li>
-</ol>
-
-<h3>Yahoo, and mail apps without forwarding rules</h3>
-<p>Yahoo's filters sort mail but do not forward it, and some mail apps only offer forwarding of
-  the whole mailbox. Do not forward your whole mailbox. Forward each bill by hand instead; it is
-  one tap a month.</p>
-
-<h2 id="by-hand">5. Or forward one by hand</h2>
-<p>Open the bill email and press <strong>Forward</strong>, to your bills address. The app finds the
-  utility's own sender and subject inside the forwarded message and files the bill from that. It
-  works from any mail app, including on a phone, and it is the quickest way to check that
-  everything is wired up before the filter has had a bill to forward.</p>
-<p>One rule: <strong>the forward has to come from the address you signed up with.</strong> A forward
-  carries your mail's signature rather than the utility's, so that address is the only proof the app
-  has that it was you. A forward from any other address is logged as <em>Not filed</em>, so that
-  nobody who learns your bills address can plant a bill in it. If your bills land in a different
-  mailbox from the one you signed up with, use a filter there instead; a filter sends the utility's
-  own message through unchanged, signature and all.</p>
-<p>A bill forwarded by hand is marked in the log as forwarded by you. The amount and dates are read
-  exactly the same.</p>
-
-<h2 id="arrivals">6. Watch what arrives</h2>
-<p>Everything that reaches your address is listed under <strong>What has arrived</strong> on the
-  card, filed or not, with a line saying what was done and why. The page refreshes the list on
-  its own, so you can watch a bill land.</p>
-
-{{ shot("forwarding-arrivals.png", "The What has arrived list: a bill filed, the same bill arriving again, a message from someone else not filed, and the Gmail confirmation",
-        "Four arrivals: a bill filed, the same one again (counted once), a message that was not from the utility, and the confirmation.") }}
+{{ shot("forwarding-arrivals.png", "The What has arrived list: a message from someone else not filed, a bill that was already on file, a bill filed from a hand forward, and the Gmail confirmation",
+        "Four arrivals. Newest first: a message that was not from the utility, the filter's copy of a bill already filed by hand, that bill, and Gmail's confirmation.") }}
 
 <table class="docs-table">
   <thead><tr><th>Line</th><th>Meaning</th></tr></thead>
   <tbody>
     <tr><td><strong>Filed</strong></td><td>A new bill, now on your dashboard. The line says the fuel, the amount and the due date.</td></tr>
     <tr><td><strong>Already had it</strong></td><td>The same bill arrived again. Counted once.</td></tr>
-    <tr><td><strong>Not filed</strong></td><td>Something was wrong: not from the utility's address, a subject that names neither electric nor gas, or no bill could be read out of it. The line says which.</td></tr>
+    <tr><td><strong>Not filed</strong></td><td>Not from the utility's address, a subject that names neither electric nor gas, or no bill could be read out of it. The line says which.</td></tr>
     <tr><td><strong>Needs a home</strong></td><td>You have more than one home and this bill's account matches none of them yet. A box at the top of the page lets you say where it belongs. {{ doc("homes", "More than one home") }}</td></tr>
-    <tr><td><strong>Confirmation</strong></td><td>Gmail asking you to confirm the address (step 3b).</td></tr>
+    <tr><td><strong>Confirmation</strong></td><td>Gmail asking you to confirm the address.</td></tr>
     <tr><td><strong>Confirmed</strong></td><td>You pressed Done.</td></tr>
   </tbody>
 </table>
-<p>Each line also says how long the message took to arrive, which is almost entirely the mail
-  path; the app's own share is under a second. The {{ doc("troubleshooting", "troubleshooting page") }}
-  goes through every <em>Not filed</em> reason.</p>
+<p>The {{ doc("troubleshooting", "troubleshooting page", "email") }} goes through every
+  <em>Not filed</em> reason and what to do.</p>
 
-<h2 id="new-address">7. If the address leaks</h2>
-<p>The address is a secret: anyone who has it could send mail to it. The app only files messages
-  that really come from the utility, so a stranger cannot plant a bill, but if you have pasted
-  the address somewhere you should not have, press <strong>Issue a new address</strong> at the foot of
-  the card. The old one stops working at once. Then update the filter in your mailbox to the new
-  one; in Gmail that means adding and confirming it again.</p>
+<h2 id="by-hand">Forward one by hand, every month</h2>
+<p>Without a filter, forwarding each bill yourself works just as well. Open the bill email,
+  press <strong>Forward</strong>, send it to your bills address. It works from any mail app,
+  including on a phone. The same rule applies: send it from the address you signed up with.</p>
 
-<h2 id="see">What the app sees, and what it does not</h2>
+<h2 id="questions">Questions</h2>
 <ul class="facts-list">
-  <li><strong>It has no access to your mailbox.</strong> No password, no app password, no OAuth grant.
-    There is nothing to revoke because nothing was granted.</li>
-  <li><strong>It receives only what your filter forwards.</strong> A filter on one sender forwards that
-    sender's mail. Nothing else leaves your mailbox.</li>
-  <li><strong>It checks every message.</strong> A message that is not from the utility's own address is
-    not filed. The utility's cryptographic signature on the message (DKIM) is checked too, and the
-    log says if it did not verify.</li>
-  <li><strong>It keeps the bill, not the email.</strong> The amount, the due date, the bill date, the
-    fuel and the last digits of the account number. The message's subject is kept on the log line.
-    The message itself is read once and discarded.</li>
+  <li><strong>Will it see my other mail?</strong> No. A filter on one sender forwards that sender's
+    mail. Nothing else leaves your mailbox, and the app has no way in.</li>
+  <li><strong>What about bills from before today?</strong> A filter applies to new mail only. Forward
+    old ones by hand, or {{ doc("upload", "upload") }} your utility's export, which brings in years
+    at once.</li>
+  <li><strong>Electric and gas from different senders?</strong> One filter per sender.</li>
+  <li><strong>Can I do this on my phone?</strong> Making the filter needs a browser on a computer, once.
+    Forwarding by hand works anywhere.</li>
+  <li><strong>I pasted the address somewhere I should not have.</strong> Press
+    <strong>Issue a new address</strong> at the foot of the card. The old one stops working at once.
+    Then put the new one in your filter. In Gmail that means adding and confirming it again.</li>
+  <li><strong>How do I stop?</strong> Delete the filter. In Gmail, also remove the address on the
+    Forwarding tab. Nothing else was connected, so there is nothing else to undo.</li>
 </ul>
-<p>The {{ doc("security", "security page") }} has the same list with more on each point.</p>
 {% endblock %}

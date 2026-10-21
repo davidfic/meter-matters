@@ -15,7 +15,7 @@
       {% for part in parts %}
       <div class="docs-part">{{ part }}</div>
       {% for p in pages if p.part == part %}
-      <a href="{{ url_for('docs.page', slug=p.slug) }}"{% if page and p.slug == page.slug %} aria-current="page"{% endif %}>{{ p.title }}</a>
+      <a href="{{ url_for('docs.page', slug=p.slug) }}"{% if p.parent %} class="sub"{% endif %}{% if page and p.slug == page.slug %} aria-current="page"{% endif %}>{{ p.title }}</a>
       {% endfor %}
       {% endfor %}
     </nav>

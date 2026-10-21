@@ -27,13 +27,16 @@
 {% for part in parts %}
 <h2>{{ part }}</h2>
 <div class="docs-cards">
-  {% for p in pages if p.part == part %}
+  {% for p in pages if p.part == part and not p.parent %}
   <a class="docs-card" href="{{ url_for('docs.page', slug=p.slug) }}">
     <strong>{{ p.title }}</strong>
     <span>{{ p.blurb }}</span>
+    {% set subs = pages | selectattr("parent", "equalto", p.slug) | list %}
+    {% if subs %}<span class="subs">{% for s in subs %}{{ s.title }}{{ " · " if not loop.last }}{% endfor %}</span>{% endif %}
   </a>
   {% endfor %}
 </div>
+{% for p in pages if p.part == part and p.parent %}<a class="docs-sub-link" href="{{ url_for('docs.page', slug=p.slug) }}">{{ p.title }}</a>{% endfor %}
 {% endfor %}
 
 <h2>If you only read one page</h2>

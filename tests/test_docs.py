@@ -77,6 +77,22 @@ class TestNothingDangles(HostedCase):
             self.assertIn(f'href="/docs/{page.slug}"', html)
             self.assertIn(str(escape(page.title)), html)
 
+    def test_a_screenshot_not_taken_yet_is_left_out_not_broken(self):
+        # The mail providers' own screens are taken by hand; a page shows what there is.
+        self.assertFalse(docs.shot_exists("no-such-screen.png"))
+        self.assertTrue(docs.shot_exists("forwarding-address.png"))
+        html = self.client.get("/docs/forwarding-gmail").get_data(as_text=True)
+        self.assertIn("forwarding-address.png", html)
+        self.assertNotIn('src=""', html)
+
+    def test_the_step_by_step_pages_sit_under_forwarding(self):
+        html = self.client.get("/docs/forwarding").get_data(as_text=True)
+        for slug in ("forwarding-gmail", "forwarding-outlook", "forwarding-icloud"):
+            with self.subTest(slug):
+                self.assertIn(f'href="/docs/{slug}" class="sub"', html)
+                self.assertIn(f'class="docs-card" href="/docs/{slug}"', html)
+        self.assertEqual(docs.BY_SLUG["forwarding-gmail"].parent, "forwarding")
+
     def test_the_sidebar_marks_the_current_page(self):
         html = self.client.get("/docs/upload").get_data(as_text=True)
         self.assertIn('href="/docs/upload" aria-current="page"', html)

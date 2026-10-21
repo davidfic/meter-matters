@@ -12,9 +12,29 @@ and a bill waiting for one. Nothing leaves the machine: the weather lookup is
 off, the DKIM check and the text reader are replaced with stand-ins, and every
 bill is from tests/fixtures/synthetic/.
 
-The two Gmail screenshots (static/docs/gmail-filter-*.png) are not made here:
-they are real Gmail dialogs, cropped so nothing personal is in frame, and only
-need retaking if Gmail's filter panel changes.
+The mail providers' own screens are not made here: they are real Gmail,
+Outlook and iCloud dialogs, cropped so nothing personal is in frame, and only
+need retaking when a provider changes its settings pages. A docs page shows
+the ones that exist and leaves the others out. The full set, as the pages
+name them:
+
+    gmail-settings-gear.png      the gear's Quick settings panel, See all settings at the top
+    gmail-forwarding-tab.png     Forwarding and POP/IMAP, the Add a forwarding address button
+    gmail-add-address.png        the Add a forwarding address dialog, a bills-... address pasted in
+    gmail-confirmation-sent.png  "A confirmation code has been sent to ... to verify permission"
+    google-confirm-page.png      Google's Confirm forwarding page, with its Confirm button
+    gmail-search-options.png     the search box with the sliders icon at its right
+    gmail-filter-from.png        search options, From filled in, Create filter   (have)
+    gmail-filter-actions.png     the filter actions list, Forward it to among them (have)
+    gmail-forward-to.png         Forward it to ticked, a bills-... address chosen
+    gmail-filter-list.png        Filters and Blocked Addresses, the new filter listed
+    outlook-rules.png            Settings > Mail > Rules, Add new rule
+    outlook-rule.png             the rule: a name, From, Forward to
+    icloud-rules.png             icloud.com Mail > Settings > Rules, Add a Rule
+    icloud-rule.png              the rule: is from, Forward to
+
+Use a throwaway address for anything typed in; the app's own addresses here
+are all under in.example.com.
 
 Needs Playwright and its Chromium:  .venv/bin/pip install playwright && .venv/bin/python -m playwright install chromium
 """
@@ -111,6 +131,33 @@ def confirmation(to: str) -> bytes:
     return msg.as_bytes()
 
 
+def forwarded_by_hand(bill: bytes, to: str) -> bytes:
+    """The sample bill, forwarded from the person's own mail: what Gmail sends
+    when they open the bill and press Forward."""
+    from email import message_from_bytes, policy
+    from email.message import EmailMessage
+    from email.utils import parseaddr
+    original = message_from_bytes(bill, policy=policy.default)
+    body = original.get_body(("html", "plain"))   # the reader wants the HTML part
+    text = body.get_content() if body else ""
+    html = body is not None and body.get_content_subtype() == "html"
+    sender = parseaddr(str(original["From"]))[1]
+    lines = ["---------- Forwarded message ---------",
+             f"From: Eversource Do Not Reply {'&lt;' if html else '<'}{sender}{'&gt;' if html else '>'}",
+             "Date: Tue, 20 Oct 2026 09:00:00 -0400",
+             f"Subject: {original['Subject']}",
+             f"To: {'&lt;' if html else '<'}pat.sample@gmail.com{'&gt;' if html else '>'}"]
+    msg = EmailMessage()
+    msg["From"] = f"Pat Sample <{EMAIL}>"
+    msg["To"] = to
+    msg["Subject"] = "Fwd: " + str(original["Subject"])
+    if html:
+        msg.set_content("<div>" + "<br>".join(lines) + "<br></div><br>" + text, subtype="html")
+    else:
+        msg.set_content("\n".join(lines) + "\n\n" + text)
+    return msg.as_bytes()
+
+
 def from_someone_else(to: str) -> bytes:
     from email.message import EmailMessage
     msg = EmailMessage()
@@ -192,6 +239,7 @@ def main() -> None:
         page.screenshot(path=str(OUT / "add-bills.png"), full_page=True)
         print("  add-bills.png")
         shot(page, ".way.featured", "forwarding-card.png")
+        shot(page, ".way.featured .field:has(#address)", "forwarding-address.png")
         page.locator("details.howto").evaluate("d => d.open = true")
         shot(page, ".ways .way:not(.featured)", "upload-card.png")
         page.locator("details.howto").evaluate("d => d.open = false")
@@ -208,7 +256,7 @@ def main() -> None:
         page.locator("#flash:not([hidden])").wait_for()
         shot(page, "#flash", "upload-done.png")
         page.wait_for_url(f"{BASE}/", timeout=10000)
-        page.locator("#fuel-cards .fuel-card").first.wait_for()
+        page.locator("#fuel-cards .frow").first.wait_for()
         page.wait_for_timeout(600)
         page.screenshot(path=str(OUT / "overview.png"), clip={"x": 0, "y": 0, "width": 1180, "height": 300})
         print("  overview.png")
@@ -217,12 +265,18 @@ def main() -> None:
         deliver(confirmation(address), address)
         page.goto(f"{BASE}/connect")
         shot(page, ".way.featured", "forwarding-confirm.png")
+        shot(page, ".way.featured .callout", "forwarding-confirm-box.png")
         page.click(".callout form button")
         page.wait_for_url(f"{BASE}/connect")
+        shot(page, "#arrivals", "forwarding-confirmed.png")
 
-        # -- arrivals: a bill, the same bill, and something else ------------
+        # -- the test: next month's bill, forwarded by hand -----------------
         bill = next_months_bill((FIXTURES / "bill_ready.eml").read_bytes())
-        deliver(bill, address)
+        deliver(forwarded_by_hand(bill, address), address)
+        page.goto(f"{BASE}/connect")
+        shot(page, "#arrivals", "forwarding-filed.png")
+
+        # -- arrivals: the filter's copy of the same bill, and something else
         deliver(bill, address)
         deliver(from_someone_else(address), address)
         page.goto(f"{BASE}/connect")

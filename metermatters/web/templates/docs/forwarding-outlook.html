@@ -1,0 +1,64 @@
+{% extends "docs/_layout.html" %}
+{% from "docs/_macros.html" import shot, doc, app %}
+{% block body %}
+<h1>Outlook, step by step</h1>
+<ul class="docs-where">
+  <li>Outlook.com, or Microsoft 365, in a browser on a computer</li>
+  <li class="in-app">Meter Matters, the Add bills page</li>
+  <li>About five minutes</li>
+</ul>
+<p class="lead">Outlook forwards with a rule, and needs no confirmation of the address. One rule,
+  then a test.</p>
+
+<p>These steps are for Outlook on the web and the new Outlook app, which share the same settings.
+  The classic Outlook desktop app runs its rules only while it is open, so make the rule on the
+  web even if you read mail in the app.</p>
+
+<h2 id="rule">Make the rule</h2>
+<ol class="steps big">
+  <li>On {{ app("web.connect", "Add bills") }}, press <strong>Copy</strong> next to your bills address.</li>
+  <li>In Outlook, press the <strong>gear</strong> at the top right. Choose <strong>Mail</strong>, then
+    <strong>Rules</strong>.</li>
+</ol>
+{{ shot("outlook-rules.png", "Outlook's settings with Mail and Rules selected, and the Add new rule button",
+        "The Rules page. Add new rule is at the top.") }}
+<ol class="steps big" start="3">
+  <li>Press <strong>Add new rule</strong>. Name it, say <em>Eversource bills</em>.</li>
+  <li>Under <strong>Add a condition</strong>, choose <strong>From</strong> and paste your utility's sender
+    address. For Eversource it is <code>noreply@notifications.eversource.com</code>.</li>
+  <li>Under <strong>Add an action</strong>, choose <strong>Forward to</strong> and paste your bills address.
+    Not <em>Forward as attachment</em>: the app reads the message itself.</li>
+</ol>
+{{ shot("outlook-rule.png", "The new rule: named, From set to the utility's sender, Forward to set to the bills address",
+        "The whole rule. One condition, one action.") }}
+<ol class="steps big" start="6">
+  <li>Press <strong>Save</strong>.</li>
+</ol>
+<p>If gas and electric come from different senders, make a second rule the same way.</p>
+
+<h2 id="test">Send a test</h2>
+<p>A rule applies only to mail that arrives from now on. To see it work today, open a recent
+  bill email, press <strong>Forward</strong>, put your bills address in <em>To</em>, and send.
+  Within a minute or two, a <strong>Filed</strong> line appears under <strong>What has arrived</strong>
+  on Add bills.</p>
+{{ shot("forwarding-filed.png", "The What has arrived list with a bill filed, marked as forwarded by you",
+        "The test bill, filed. The next real bill will arrive through the rule on its own.") }}
+<p>Send the test from the address you signed up with. A forward from any other address is not
+  filed.</p>
+
+<h2 id="snags">If something is off</h2>
+<table class="docs-table">
+  <thead><tr><th>What you see</th><th>What to do</th></tr></thead>
+  <tbody>
+    <tr><td>The rule saved, but no bill ever arrives</td>
+        <td>Rules apply to new mail only; send a test by hand. On a work or school Microsoft 365 account, the administrator may block forwarding outside the organisation. The rule saves but the mail never leaves. Ask them, or forward by hand.</td></tr>
+    <tr><td>The test says <em>Forwarded by …, who isn't you</em></td>
+        <td>Forward from the address you signed up with.</td></tr>
+    <tr><td>The log says <em>Not from the utility's address</em> for a bill the rule sent</td>
+        <td>The rule's From must be the sender on the bill email exactly. Utilities use different addresses for bills, payments and offers.</td></tr>
+    <tr><td>I pressed Issue a new address</td>
+        <td>The old address stopped working. Change the rule's Forward to address to the new one.</td></tr>
+  </tbody>
+</table>
+<p>Anything else: the {{ doc("troubleshooting", "troubleshooting page", "email") }}.</p>
+{% endblock %}

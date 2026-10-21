@@ -1,0 +1,133 @@
+{% extends "docs/_layout.html" %}
+{% from "docs/_macros.html" import shot, doc, app %}
+{% block body %}
+<h1>Gmail, step by step</h1>
+<ul class="docs-where">
+  <li>Gmail, in a browser on a computer</li>
+  <li class="in-app">Meter Matters, the Add bills page</li>
+  <li>About ten minutes</li>
+</ul>
+<p class="lead">Gmail will not forward to an address it has not confirmed. So there are three
+  parts: add the address, confirm it, make the filter. Then a test.</p>
+
+<div class="callout">
+  <strong>The part people get stuck on.</strong> When you add the address, Gmail says it has sent
+  a confirmation email. It has, to your bills address. It is not in your inbox. Meter Matters
+  receives it and shows you Google's link on the Add bills page. Part 2 below.
+</div>
+
+<p>Keep two tabs open: Gmail in one, {{ app("web.connect", "Add bills") }} in the other.</p>
+
+<h2 id="part-1">Part 1. Add the forwarding address in Gmail</h2>
+<ol class="steps big">
+  <li>On Add bills, press <strong>Copy</strong> next to your bills address.</li>
+</ol>
+{{ shot("forwarding-address.png", "The address row on the card, with the Copy button",
+        "The address is on the first card of Add bills.") }}
+<ol class="steps big" start="2">
+  <li>In Gmail, press the <strong>gear</strong> at the top right, then <strong>See all settings</strong>.</li>
+</ol>
+{{ shot("gmail-settings-gear.png", "Gmail's Quick settings panel with the See all settings button at the top",
+        "The gear opens Quick settings. See all settings is at the top.") }}
+<ol class="steps big" start="3">
+  <li>Open the <strong>Forwarding and POP/IMAP</strong> tab.</li>
+</ol>
+{{ shot("gmail-forwarding-tab.png", "The Forwarding and POP/IMAP tab, with the Add a forwarding address button",
+        "The tab. Disable forwarding stays selected: the filter will forward only the bills.") }}
+<ol class="steps big" start="4">
+  <li>Press <strong>Add a forwarding address</strong>. Paste your bills address. Press <strong>Next</strong>.</li>
+</ol>
+{{ shot("gmail-add-address.png", "The Add a forwarding address dialog with a bills address pasted in",
+        "Paste the whole address, from bills- to the end.") }}
+<ol class="steps big" start="5">
+  <li>A window asks you to confirm. Press <strong>Proceed</strong>. Then <strong>OK</strong>.</li>
+</ol>
+{{ shot("gmail-confirmation-sent.png", "Gmail's notice that a confirmation code has been sent to the address",
+        "Gmail has sent the confirmation to your bills address. Do not look for it in your inbox.") }}
+<p>Leave <strong>Disable forwarding</strong> selected on that tab. You are not forwarding your whole
+  mailbox. The filter in Part 3 forwards only the bills.</p>
+
+<h2 id="part-2">Part 2. Confirm it, from Meter Matters</h2>
+<ol class="steps big">
+  <li>Go to the Add bills tab and <strong>reload the page</strong>. The card now says
+    <em>Gmail's confirmation has arrived</em>.</li>
+</ol>
+{{ shot("forwarding-confirm-box.png", "The box on the card with Gmail's confirmation waiting: a link to Google's page, the code, and a Done button",
+        "The only link ever shown here is one to Google's own site.") }}
+<ol class="steps big" start="2">
+  <li>Press <strong>Open Gmail's confirmation link</strong>. Google's page opens. Press <strong>Confirm</strong>.</li>
+</ol>
+{{ shot("google-confirm-page.png", "Google's Confirm forwarding page with a Confirm button",
+        "Google's page. Confirm is the only thing to press.") }}
+<ol class="steps big" start="3">
+  <li>Back on Add bills, press <strong>Done</strong>. Google does not tell the app when you have
+    confirmed, so this is how it knows.</li>
+</ol>
+{{ shot("forwarding-confirmed.png", "The What has arrived list with one line: Confirmed, forwarding confirmed in Gmail",
+        "After Done. The address is now one Gmail will forward to.") }}
+<p>If you would rather not follow the link, the card also shows the code. In Gmail, on the
+  Forwarding tab, there is a box for it next to the new address. Type the code and press
+  <strong>Verify</strong>.</p>
+<p><strong>Nothing on the card after a reload?</strong> Google usually sends within seconds, but
+  mail can take a few minutes. Reload again. If there is still nothing after ten minutes, go
+  back to Gmail's Forwarding tab, remove the address, and add it again.</p>
+
+<h2 id="part-3">Part 3. Make the filter</h2>
+<ol class="steps big">
+  <li>In Gmail's search box at the top, press the <strong>sliders icon</strong> at the right. The
+    search options open.</li>
+</ol>
+{{ shot("gmail-search-options.png", "Gmail's search box with the sliders icon at the right",
+        "The sliders icon. Settings → Filters and Blocked Addresses → Create a new filter opens the same panel.") }}
+<ol class="steps big" start="2">
+  <li>In <strong>From</strong>, paste your utility's sender address. For Eversource it is
+    <code>noreply@notifications.eversource.com</code>. Leave every other field empty.
+    Press <strong>Create filter</strong>, not Search.</li>
+</ol>
+{{ shot("gmail-filter-from.png", "Gmail's search options panel with From set to noreply@notifications.eversource.com and the Create filter button",
+        "Only From is filled in. This is a real Gmail screenshot; the sender shown is Eversource's.") }}
+<ol class="steps big" start="3">
+  <li>Tick <strong>Forward it to</strong>. Choose your bills address from the list beside it.</li>
+</ol>
+{{ shot("gmail-filter-actions.png", "Gmail's filter actions panel with Forward it to and an address dropdown",
+        "Forward it to is the only box to tick.") }}
+{{ shot("gmail-forward-to.png", "The Forward it to box ticked, with a bills address chosen in the dropdown",
+        "The address chosen. If it is not in the list, it has not been confirmed yet: Part 2.") }}
+<ol class="steps big" start="4">
+  <li>Leave the other boxes unticked. Press <strong>Create filter</strong>.</li>
+  <li>Gmail lists the filter under <strong>Settings → Filters and Blocked Addresses</strong>.</li>
+</ol>
+{{ shot("gmail-filter-list.png", "The Filters and Blocked Addresses tab listing the new filter: from the utility, forward to the bills address",
+        "The finished filter. Gmail adds a bar at the top of your inbox saying mail is being forwarded; that bar is about this filter.") }}
+<p>If gas and electric come from different senders, make a second filter the same way.</p>
+
+<h2 id="part-4">Part 4. Send a test</h2>
+<p>The filter applies only to mail that arrives from now on. To see it work today, open a
+  recent bill email, press <strong>Forward</strong>, put your bills address in <em>To</em>, and
+  send. Within a minute or two, a <strong>Filed</strong> line appears under <strong>What has arrived</strong>
+  on Add bills.</p>
+{{ shot("forwarding-filed.png", "The What has arrived list with a bill filed, marked as forwarded by you",
+        "The test bill, filed. The next real bill will arrive through the filter on its own.") }}
+<p>Send the test from the Gmail address you signed up with. A forward from any other address is
+  not filed.</p>
+
+<h2 id="snags">If something is off</h2>
+<table class="docs-table">
+  <thead><tr><th>What you see</th><th>What to do</th></tr></thead>
+  <tbody>
+    <tr><td>Gmail says it sent a confirmation email, but it is not in my inbox</td>
+        <td>It went to your bills address. Reload Add bills; the link is on the card.</td></tr>
+    <tr><td>My bills address is not in the <em>Forward it to</em> list</td>
+        <td>It has not been confirmed yet. Do Part 2. The <em>Add forwarding address</em> link beside the list does the same as Part 1.</td></tr>
+    <tr><td>Gmail will not let me add a forwarding address</td>
+        <td>A work or school Google account can be set by its administrator to block forwarding outside the organisation. Ask them, or forward bills by hand from any mailbox.</td></tr>
+    <tr><td>The filter exists but nothing has arrived</td>
+        <td>Filters apply to new mail only. Wait for the next bill, or send a test by hand.</td></tr>
+    <tr><td>The test says <em>Forwarded by …, who isn't you</em></td>
+        <td>Forward from the address you signed up with.</td></tr>
+    <tr><td>I pressed Issue a new address</td>
+        <td>The old address stopped working. Add and confirm the new one (Parts 1 and 2), then change the filter to it.</td></tr>
+  </tbody>
+</table>
+<p>Anything else: the {{ doc("troubleshooting", "troubleshooting page", "email") }}.</p>
+{% endblock %}
