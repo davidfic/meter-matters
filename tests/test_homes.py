@@ -239,7 +239,7 @@ class TestRouting(Tree):
                 "bill_date": None, "received": None}
         bad = [{**good, "id": None}, {k: v for k, v in good.items() if k != "id"},
                {**good, "id": "a", "amount": "12.50"}, {**good, "id": "b", "amount": None},
-               {**good, "id": "c", "fuel": "water"}, {**good, "id": "d", "fuel": None},
+               {**good, "id": "c", "fuel": "steam"}, {**good, "id": "d", "fuel": None},
                {**good, "id": "e", "due": "soon"}, {**good, "id": "f", "due": 5},
                {**good, "id": "g", "bill_date": "never"}, {**good, "id": "h", "account_suffix": 7777},
                "not a row", 7]

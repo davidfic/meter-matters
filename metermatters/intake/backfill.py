@@ -3,12 +3,12 @@
 
 `AccountHistory.csv` only goes back as far as the portal's payment history -
 13 statements. The usage export carries **cost as well as kWh** for every
-period Eversource has on file, which here is more than twice as far back. That
+period the utility has on file, which can be more than twice as far back. That
 extra history is what makes a year-over-year comparison possible, and
 year-over-year is the only seasonally fair scoreboard.
 
 Synthesised rows are marked ``BACKFILL`` in the Status column so they are never
-mistaken for statements scraped from the portal. The amounts are Eversource's
+mistaken for statements from the utility. The amounts are the utility's
 own; only the **due date is estimated**, from the median lag observed between a
 service period ending and its statement falling due.
 

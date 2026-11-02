@@ -41,7 +41,7 @@ _DATE_RUN = re.compile(r"(?:19|20)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])"
 _SUBJECT_NUMBER = re.compile(r"\d{5,}")
 _ADDRESS_TAIL = re.compile(r"\b([A-Za-z]{2})\s+(\d{5})(?:-\d{4})?\s*$")
 _ZIP_TAIL = re.compile(r"\b(\d{5})(?:-\d{4})?\s*$")
-# The first line of each Eversource layout; everything above it is preamble.
+# The header line of each stored usage layout; everything above it is preamble.
 _HEADERS = ("TYPE,", "Account,")
 _NUMBER_KEYS = ("account number", "account", "account no", "account #", "service",
                 "service point", "meter", "meter number", "esi id", "esiid")

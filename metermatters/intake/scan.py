@@ -101,7 +101,9 @@ DATE = (rf"(?:\d{{1,2}}[/\-.]\d{{1,2}}[/\-.]\d{{2,4}}"
         rf"|(?:{MONTHS})[a-z]*\.?\s+\d{{1,2}},?\s+\d{{4}}"
         rf"|\d{{1,2}}\s+(?:{MONTHS})[a-z]*\.?,?\s+\d{{4}})")
 RE_DATE = re.compile(DATE, re.I)
-RE_MONEY = re.compile(r"\$\s?(\d{1,3}(?:,\d{3})*(?:\.\d{2})|\d+\.\d{2})")
+# Exactly two decimals and nothing after them: "$1.234.56" is not a bill of $1.23.
+MONEY = r"(\d{1,3}(?:,\d{3})*(?:\.\d{2})|\d+\.\d{2})(?!\d|\.\d)"
+RE_MONEY = re.compile(rf"\$\s?{MONEY}")
 # "Amount due", "Total due", "Please pay", "Balance due", "Current charges" - and
 # whatever sits within a short reach after it.
 # Text read off a scan keeps the page's line breaks, and a table's label and
@@ -110,8 +112,12 @@ RE_MONEY = re.compile(r"\$\s?(\d{1,3}(?:,\d{3})*(?:\.\d{2})|\d+\.\d{2})")
 # amount or date.
 RE_DUE_AMOUNT = re.compile(
     r"(?:total\s+amount\s+due|amount\s+due|total\s+due|please\s+pay|pay\s+this\s+amount"
-    r"|balance\s+due|amount\s+payable|total\s+current\s+charges|current\s+charges)"
-    r"[^$]{0,40}?\$\s?(\d{1,3}(?:,\d{3})*(?:\.\d{2})|\d+\.\d{2})", re.I)
+    r"|balance\s+due|amount\s+payable|total\s+current\s+charges|current\s+charges"
+    r"|new\s+balance|current\s+balance|total\s+new\s+charges|total\s+charges"
+    r"|amount\s+(?:owed|owing|to\s+pay)|you\s+owe|bill\s+(?:amount|total))"
+    rf"[^$]{{0,40}}?\$\s?{MONEY}", re.I)
+# The other way round: "$85.00 is due on", "a payment of $85.00 due by".
+RE_AMOUNT_THEN_DUE = re.compile(rf"\$\s?{MONEY}\s+(?:is|will\s+be|was)?\s*due\b", re.I)
 RE_DUE_DATE = re.compile(
     rf"(?:due\s+date|due\s+by|due\s+on|pay\s+by|paid\s+by|payment\s+due|date\s+due|due)"
     rf"\s*:?\s*(?:[^\d]{{0,25}}?)({DATE})", re.I)
@@ -234,7 +240,7 @@ def guess(text: str) -> dict:
     if out["fuel"]:
         out["sure"].append("fuel")
 
-    m = RE_DUE_AMOUNT.search(flat)
+    m = RE_DUE_AMOUNT.search(flat) or RE_AMOUNT_THEN_DUE.search(flat)
     if m:
         out["amount"], _ = _money(m.group(1)), out["sure"].append("amount")
     else:

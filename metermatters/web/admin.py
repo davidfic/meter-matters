@@ -62,6 +62,8 @@ def features() -> list[dict]:
         {"name": "Google sign-in", "on": google_oauth.enabled(),
          "how": "ELEC_GOOGLE_CLIENT_ID and secret"},
         {"name": "Scans", "on": _set("ELEC_VISION_KEY"), "how": "ELEC_VISION_KEY"},
+        {"name": "Reading any utility's email", "on": _set("ELEC_ANTHROPIC_KEY"),
+         "how": "ELEC_ANTHROPIC_KEY"},
         {"name": "Email to users", "on": _set("ELEC_SMTP_USER", "ELEC_SMTP_PASS"),
          "how": "ELEC_SMTP_USER and ELEC_SMTP_PASS"},
         {"name": "Weather", "on": os.environ.get("ELEC_WEATHER", "").strip().lower() != "off",

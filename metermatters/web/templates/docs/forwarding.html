@@ -63,18 +63,12 @@
 <h2 id="sender">Who sends your bills</h2>
 <p>The filter matches on the sender's address, so that only bill emails are forwarded. Open a
   recent "your bill is ready" email. The address is next to the sender's name at the top. On a
-  phone, tap the name to see it.</p>
-
-<table class="docs-table">
-  <thead><tr><th>Utility</th><th>Bill emails come from</th><th>Read by the app</th></tr></thead>
-  <tbody>
-    <tr><td>Eversource (electric and gas)</td><td><code>noreply@notifications.eversource.com</code></td><td>Yes</td></tr>
-    <tr><td>Other utilities</td><td>On the bill email</td><td>Not yet. The log says <em>Not filed</em> for them.</td></tr>
-  </tbody>
-</table>
-<p>More utilities are being added. Until yours is, {{ doc("upload", "uploading") }} its export is
-  the way to bring its bills in. Utilities use different addresses for bills, payments and offers.
+  phone, tap the name to see it. Any utility's address will do: the app reads the bill out of
+  the email, whoever sent it. Utilities use different addresses for bills, payments and offers.
   Match the one on the bill email.</p>
+<p>The email has to say the amount due and the due date. Some utilities' notices carry only a
+  link to their website; those are logged as <em>Not filed</em>, and
+  {{ doc("upload", "uploading") }} the utility's export is the way to bring their bills in.</p>
 
 <h2 id="test">Check that it works</h2>
 <p>A filter applies only to mail that arrives after it was made, so the first real test would be
@@ -104,7 +98,7 @@
   <tbody>
     <tr><td><strong>Filed</strong></td><td>A new bill, now on your dashboard. The line says the fuel, the amount and the due date.</td></tr>
     <tr><td><strong>Already had it</strong></td><td>The same bill arrived again. Counted once.</td></tr>
-    <tr><td><strong>Not filed</strong></td><td>Not from the utility's address, a subject that names neither electric nor gas, or no bill could be read out of it. The line says which.</td></tr>
+    <tr><td><strong>Not filed</strong></td><td>No bill could be read out of it, nothing said whether it is electric, gas or water, or it was a forward from an address that is not yours. The line says which, and who sent it.</td></tr>
     <tr><td><strong>Needs a home</strong></td><td>You have more than one home and this bill's account matches none of them yet. A box at the top of the page lets you say where it belongs. {{ doc("homes", "More than one home") }}</td></tr>
     <tr><td><strong>Confirmation</strong></td><td>Gmail asking you to confirm the address.</td></tr>
     <tr><td><strong>Confirmed</strong></td><td>You pressed Done.</td></tr>

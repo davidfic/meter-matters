@@ -23,9 +23,9 @@
 {{ shot("outlook-rules.png", "Outlook's settings with Mail and Rules selected, and the Add new rule button",
         "The Rules page. Add new rule is at the top.") }}
 <ol class="steps big" start="3">
-  <li>Press <strong>Add new rule</strong>. Name it, say <em>Eversource bills</em>.</li>
+  <li>Press <strong>Add new rule</strong>. Name it, say <em>Utility bills</em>.</li>
   <li>Under <strong>Add a condition</strong>, choose <strong>From</strong> and paste your utility's sender
-    address. For Eversource it is <code>noreply@notifications.eversource.com</code>.</li>
+    address: the one next to the sender's name on a bill email.</li>
   <li>Under <strong>Add an action</strong>, choose <strong>Forward to</strong> and paste your bills address.
     Not <em>Forward as attachment</em>: the app reads the message itself.</li>
 </ol>
@@ -54,7 +54,7 @@
         <td>Rules apply to new mail only; send a test by hand. On a work or school Microsoft 365 account, the administrator may block forwarding outside the organisation. The rule saves but the mail never leaves. Ask them, or forward by hand.</td></tr>
     <tr><td>The test says <em>Forwarded by …, who isn't you</em></td>
         <td>Forward from the address you signed up with.</td></tr>
-    <tr><td>The log says <em>Not from the utility's address</em> for a bill the rule sent</td>
+    <tr><td>The log says <em>Couldn't read a bill out of it</em> for something the rule sent</td>
         <td>The rule's From must be the sender on the bill email exactly. Utilities use different addresses for bills, payments and offers.</td></tr>
     <tr><td>I pressed Issue a new address</td>
         <td>The old address stopped working. Change the rule's Forward to address to the new one.</td></tr>

@@ -146,24 +146,31 @@ def token_from(recipient: str, msg) -> str | None:
     return None
 
 
-def dkim_result(raw: bytes) -> str:
-    """"pass", "fail" or "unknown" - for a signature by the utility's own domain.
+def dkim_result(raw: bytes, sender: str) -> str:
+    """"pass", "fail" or "unknown" - for a signature by the sender's own domain.
 
     A forwarded message keeps the signature the utility put on it, so a pass
-    means the bill is genuine whoever relayed it. A signature from the
-    utility's mail vendor proves nothing: anyone can be that vendor's customer.
+    means the bill is genuine whoever relayed it. The app does not know every
+    utility's address, so the signature is held against the domain the
+    message says it is from: that domain, a parent of it (mail from
+    notifications.example.com signed by example.com) or a child. A signature
+    from the utility's mail vendor proves nothing: anyone can be that
+    vendor's customer.
     """
     try:
         import dkim
     except ImportError:
         return "unknown"
-    wanted = billmail.DEFAULT_SENDER.rsplit("@", 1)[1].split(".", 1)[1]   # eversource.com
+    wanted = sender.rpartition("@")[2].lower()
+    if not wanted:
+        return "unknown"
     msg = email.message_from_bytes(raw)
     found = False
     for index, header in enumerate(msg.get_all("DKIM-Signature") or []):
         match = re.search(r"\bd=([^;\s]+)", header)
         signer = match.group(1).lower() if match else ""
-        if signer != wanted and not signer.endswith("." + wanted):
+        if "." not in signer or not (signer == wanted or wanted.endswith("." + signer)
+                                     or signer.endswith("." + wanted)):
             continue
         found = True
         try:
@@ -236,7 +243,7 @@ def _body_text(msg) -> str:
 
 
 # The header block a mail client writes into a message forwarded by hand:
-# "---------- Forwarded message --------- From: Eversource <noreply@...> Date: ...
+# "---------- Forwarded message --------- From: Utility <noreply@...> Date: ...
 # Subject: ... To: ...". HTML comes to us flattened to one line, so nothing
 # here is anchored to a line start, and the subject ends at whichever header
 # comes next - Apple Mail and Outlook order them differently - or the line.
@@ -292,50 +299,47 @@ def receive(delivery: Delivery) -> tuple[str, str]:
              link, code)
         return "confirm", ""
 
-    # Straight from the utility, or forwarded by hand by the person - in which
-    # case the utility's From and Subject are in the body, and the signature
-    # on the message is the forwarder's, not the utility's. So a forward is
-    # taken only from the person themselves: anyone else who knows the
-    # address could otherwise plant a bill, signature checking or not.
+    # A bill arrives one of two ways. A filter in the person's mailbox passes
+    # the utility's own message through, From and signature intact; the app
+    # knows no list of utilities, so whoever it is from, the bill is read and
+    # the signature on it checked against the sender's domain. Or the person
+    # opens the bill and presses Forward: then the From is theirs, the
+    # utility's From and Subject are in the body, and the signature on the
+    # message is the forwarder's, not the utility's. So a forward is taken
+    # only from the person themselves: anyone else who knows the address
+    # could otherwise plant a bill, signature checking or not.
     forwarded_by = None
-    if sender != billmail.DEFAULT_SENDER:
-        original, original_subject = forwarded_original(msg)
-        if original != billmail.DEFAULT_SENDER:
-            # A body that can't be read may well have been a forward; say
-            # that, rather than call the person's own message a stranger's.
-            if not _body_text(msg).strip():
-                _log(user, "rejected", subject,
-                     "Couldn't read a bill out of it: the message had no readable body.")
-                return "rejected", "parse"
-            _log(user, "rejected", subject,
-                 f"Not from the utility's address, so not filed. It came from {sender or 'nobody'}.")
-            return "rejected", "sender"
-        if sender != (user.email or "").lower():
-            _log(user, "rejected", subject,
-                 f"Forwarded by {sender or 'nobody'}, who isn't you, so it wasn't filed. "
-                 "Only forwards from your own address count.")
-            return "rejected", "forwarder"
+    original, original_subject = forwarded_original(msg)
+    if sender == (user.email or "").lower():
         forwarded_by = sender
         if original_subject:
             subject = original_subject
+    elif original or original_subject:
+        _log(user, "rejected", subject,
+             f"Forwarded by {sender or 'nobody'}, who isn't you, so it wasn't filed. "
+             "Only forwards from your own address count.")
+        return "rejected", "forwarder"
+    came_from = "" if forwarded_by else f" It came from {sender or 'nobody'}."
 
-    verdict = "forwarded" if forwarded_by else dkim_result(delivery.raw)
+    verdict = "forwarded" if forwarded_by else dkim_result(delivery.raw, sender)
     mode = site.dkim_mode()        # ELEC_INBOUND_DKIM, unless the admin panel has said otherwise
     if verdict != "pass" and mode == "require" and not forwarded_by:
         _log(user, "rejected", subject,
-             "The utility's signature on this message didn't verify, so it wasn't filed.")
+             "The sender's signature on this message didn't verify, so it wasn't filed."
+             + came_from)
         return "rejected", "dkim"
 
     try:
-        notice = billmail.parse_message(msg, subject=subject)
+        notice = billmail.parse_message(msg, subject=subject, sender=original or sender)
         with workspace.open_(user, write=True) as paths:
             filed = homes.file_notices(paths, [notice])
     except ValueError as exc:
-        _log(user, "rejected", subject, f"Couldn't read a bill out of it: {exc}.")
+        _log(user, "rejected", subject, f"Couldn't read a bill out of it: {exc}." + came_from)
         return "rejected", "parse"
     if filed.skipped:
         _log(user, "rejected", subject,
-             "The subject names neither electric nor gas, so it wasn't filed.")
+             "Couldn't tell whether it is an electric, gas or water bill, so it wasn't filed."
+             + came_from)
         return "rejected", "fuel"
 
     note = (f" Forwarded by {forwarded_by}." if forwarded_by

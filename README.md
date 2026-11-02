@@ -23,7 +23,7 @@ The electric page answers to ⚡ *Watt's the Damage*, the gas page to
 - **Any utility, any US state.** Green Button XML, any CSV (columns are matched
   by name and you are asked when it cannot tell), bills typed in by hand, or
   a scan or photo of a bill, read by Cloud Vision into the by-hand form for
-  you to check. Eversource's own exports and bill emails are read directly.
+  you to check. Bill emails from any utility are read directly.
 - **Weather taken out.** Each home's own heating balance point and
   degrees-to-fuel slope are fitted from its history, so a cold winter is not
   mistaken for a wasteful one. Water follows the dry instead: gallons per inch
@@ -36,8 +36,8 @@ The electric page answers to ⚡ *Watt's the Damage*, the gas page to
 - **Next statement forecast**, with a range that is the method's own
   backtested error, not a guess.
 - **Compare any two statements**, or one calendar month across every year.
-- **Price per unit taken apart**, with a supplier comparison for Massachusetts
-  from Energy Switch MA.
+- **Price per unit taken apart** into supply and delivery, with a what-if for
+  another supply price over your own last year.
 - **Carbon**, on the grid factor for the home's state (EPA eGRID 2023).
 - **"What's this costing me?"** A space heater, EV charging, a dripping tap,
   priced at your own rate.
@@ -76,11 +76,11 @@ rate and on your own grid's carbon factor.
 
 ![The running-cost calculator](docs/screenshots/calc.png)
 
-**Rates.** Your all-in price taken apart into supply and delivery, its history,
-and every supplier offer for your ZIP priced against your own last twelve
-months.
+**Rates.** Your all-in price taken apart into supply and delivery, its history
+and its seasons, and what another supply price would have done over your own
+last twelve months.
 
-![The rates page with supplier offers priced against the home's own usage](docs/screenshots/rates.png)
+![The rates page with the price taken apart](docs/screenshots/rates.png)
 
 **Your energy year**, with a share link that carries the numbers and nothing
 that names you.
@@ -103,7 +103,7 @@ It follows the system light or dark setting, with a manual override.
 | `/` | Every utility side by side: forecast, weather / rate / you split, alerts, carbon, total spend |
 | `/electric`, `/gas`, `/water` | One fuel in full: vs last year, what changed, compare, calculator, history, the game |
 | `/year`, `/year/<y>` | Your energy year; `/s/<token>` is its public share page |
-| `/rates` | Price per unit over time, split into supply and delivery, and offers nearby |
+| `/rates` | Price per unit over time, split into supply and delivery |
 | `/homes` | Every home added up (appears once there are two) |
 | `/home/<name>/…` | Any page, for another home |
 | `/connect` | Add bills: upload, forward, by hand; about this home; manage homes |
@@ -165,12 +165,14 @@ metermatters/              the app, one package
     forecast.py            the next statement and its backtested range
     yearly.py              the year page, share tokens, the SVG card
     benchmarks.py          similar homes: per-state buckets, salted hashes, opt-out
-    rates.py               price per unit taken apart; Energy Switch MA offers
+    rates.py               price per unit taken apart
+    longview.py            year by year, usage against price
+    tariffs.py             EIA's average residential price by state, for estimating old usage
     weather.py             daily temperatures for a place, fetched once and kept
     gamify.py              levels, streaks and badges
   intake/                  getting bills and usage in
     importers.py           any CSV or Green Button XML; bills by hand
-    greenbutton.py         Eversource's usage export, with the degree-day fit
+    greenbutton.py         the stored usage layout, with the degree-day fit
     ingest.py              merge and de-duplicate, shared by upload and CLI
     billmail.py            the bill-ready email (.eml or IMAP)
     inbound.py             bills arriving by forwarded email
@@ -210,8 +212,8 @@ python -m metermatters.testreport     # the same, written to test-report.json
 ```
 
 Around 600 tests run on invented homes whose answers are known. Nothing
-leaves the machine: the weather service, Google and the comparison sites are
-all replaced. The database tests need a Postgres to point at:
+leaves the machine: the weather service, EIA, Claude and Google are all
+replaced. The database tests need a Postgres to point at:
 
 ```bash
 ELEC_TEST_DATABASE_URL=postgresql://postgres:pw@127.0.0.1:55432/postgres
@@ -253,6 +255,7 @@ comments. Anything unset switches its feature off.
 | `ELEC_ALLOW_SIGNUP` | `0` to close sign-ups |
 | `ELEC_GOOGLE_CLIENT_ID`, `ELEC_GOOGLE_CLIENT_SECRET` | Google sign-in |
 | `ELEC_VISION_KEY` | reading scans and photos of bills (a Cloud Vision API key) |
+| `ELEC_ANTHROPIC_KEY`, `ELEC_ANTHROPIC_MODEL` | reading a forwarded bill the patterns can't (a Claude API key) |
 | `ELEC_INBOUND_DOMAIN`, `ELEC_INBOUND_SECRET`, `ELEC_MAILGUN_SIGNING_KEY`, `ELEC_INBOUND_DKIM` | forwarding |
 | `ELEC_TASK_TOKEN` or `ELEC_SCHEDULER=1` | who runs the daily check |
 | `ELEC_WEATHER=off` | no weather lookups |
@@ -265,8 +268,8 @@ comments. Anything unset switches its feature off.
   nothing personal can reach an image by being forgotten, and
   `./deploy/privacy-check.sh` searches everything git would commit for your
   own name, address, account numbers and secret values before you push.
-- What leaves the server: a ZIP code to Open-Meteo, a ZIP code to Energy
-  Switch MA when you ask for offers, and your mail to Google only when you
+- What leaves the server: a ZIP code to Open-Meteo, a state's two-letter code
+  to EIA for its published prices, and your mail to Google only when you
   connect it. Never an address.
 - Passwords are argon2id hashes. Sessions are signed, `HttpOnly`, `SameSite`
   cookies.
@@ -275,10 +278,10 @@ comments. Anything unset switches its feature off.
 
 ## Status and limits
 
-- Supplier comparison covers Massachusetts only. Another state is one reader
-  against its public comparison site plus one line in `rates.COVERED`; Texas,
-  Pennsylvania, Ohio, Illinois, Connecticut, New York and Maryland all have one.
-- Bill emails are read for Eversource only. Everyone else uploads or types.
+- Usage on bills older than the usage export is estimated from EIA's average
+  residential price for the home's state: electric only, and only when the
+  server has an EIA key (`ELEC_EIA_KEY`, free).
+- Bill emails are read by pattern, and by Claude when the server has a key. One the patterns can't read and no key is set: upload or type it in.
 - Green Button XML is read one fuel per file.
 - No password reset or email confirmation yet: both need outgoing mail, and
   the app does not currently email users at all.

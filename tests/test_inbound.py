@@ -19,6 +19,8 @@ from tests.support import HostedCase
 # depends on what the bill says - see fixtures/synthetic/generate.py.
 SAMPLE = Path(__file__).resolve().parent / "fixtures" / "synthetic" / "bill_ready.eml"
 DOMAIN = "in.example.com"
+# An invented utility: the app has no list of real ones.
+UTILITY = "noreply@notices.example-utility.com"
 REAL_DKIM_RESULT = inbound.dkim_result
 
 
@@ -36,22 +38,24 @@ def confirmation(to: str) -> bytes:
     return msg.as_bytes()
 
 
-def from_someone_else(to: str) -> bytes:
+def from_someone_else(to: str, body="Total Amount Due: $9,999.00  Due date: 10/16/2026  "
+                                    "Account Number: ******0001") -> bytes:
+    """A bill-shaped message from an address the app has never heard of."""
     msg = EmailMessage()
-    msg["From"] = "Eversource <billing@eversource-payments.example>"
+    msg["From"] = "Billing <billing@other-sender.example>"
     msg["To"] = to
-    msg["Subject"] = "New Electric Bill from Eversource"
-    msg.set_content("Total Amount Due: $9,999.00  Due date: 10/16/2026  Account Number: ******0001")
+    msg["Subject"] = "New Electric Bill from Example Utility"
+    msg.set_content(body)
     return msg.as_bytes()
 
 
-def bill_from_utility(to: str, subject="New Electric Bill from Eversource",
+def bill_from_utility(to: str, subject="New Electric Bill from Example Utility",
                       body="<p>Total Amount Due: $45.67</p><p>Due date: 10/16/2026</p>"
                            "<p>Account Number: ******0001</p>",
                       sender=None, charset="utf-8") -> bytes:
     """A bill-ready notice built to order: the subject, body and charset vary."""
     msg = EmailMessage()
-    msg["From"] = f"Eversource Do Not Reply <{sender or inbound.billmail.DEFAULT_SENDER}>"
+    msg["From"] = f"Example Utility Do Not Reply <{sender or UTILITY}>"
     msg["To"] = to
     msg["Subject"] = subject
     msg["Date"] = "Mon, 12 Oct 2026 09:00:00 -0400"
@@ -66,19 +70,19 @@ def forwarded_by_hand(to: str, sender="ann@example.com") -> bytes:
     msg = EmailMessage()
     msg["From"] = f"Ann Example <{sender}>"
     msg["To"] = to
-    msg["Subject"] = "Fwd: New Electric Bill from Eversource"
+    msg["Subject"] = "Fwd: New Electric Bill from Example Utility"
     msg["Date"] = "Mon, 12 Oct 2026 22:43:10 -0400"
     msg.set_content("---------- Forwarded message ---------\n"
-                    "From: Eversource Do Not Reply <noreply@notifications.eversource.com>\n"
+                    "From: Example Utility Do Not Reply <noreply@notices.example-utility.com>\n"
                     "Date: Mon, 12 Oct 2026 09:00:00 -0400\n"
-                    "Subject: New Electric Bill from Eversource\n"
+                    "Subject: New Electric Bill from Example Utility\n"
                     "To: <ann@gmail.com>\n\n"
                     "Total Amount Due: $123.45  Due date: 10/16/2026  Account Number: ******0001")
     msg.add_alternative(
         '<div dir="ltr"><br><div class="gmail_quote"><div dir="ltr" class="gmail_attr">'
-        '---------- Forwarded message ---------<br>From: <strong>Eversource Do Not Reply</strong> '
-        '<span dir="auto">&lt;noreply@notifications.eversource.com&gt;</span><br>'
-        'Date: Mon, 12 Oct 2026 at 09:00<br>Subject: New Electric Bill from Eversource<br>'
+        '---------- Forwarded message ---------<br>From: <strong>Example Utility Do Not Reply</strong> '
+        '<span dir="auto">&lt;noreply@notices.example-utility.com&gt;</span><br>'
+        'Date: Mon, 12 Oct 2026 at 09:00<br>Subject: New Electric Bill from Example Utility<br>'
         'To: &lt;ann@gmail.com&gt;<br></div><br><br>'
         '<p>Total Amount Due: $123.45</p><p>Due date: 10/16/2026</p>'
         '<p>Account Number: ******0001</p></div></div>', subtype="html")
@@ -116,14 +120,21 @@ class TestDelivery(InboundCase):
         self.deliver(bill_from_utility(self.address, subject="Your Gas and Electric bills"))
         self.assertTrue(self.log()[0]["detail"].startswith("Electric $45.67"))
 
-    def test_a_water_bill_is_not_filed_and_the_log_says_why(self):
-        # Only electric and gas are read from email today. A water notice must
-        # not be guessed into either fuel, and the person must be told.
-        res = self.deliver(bill_from_utility(self.address, subject="New Water Bill from Eversource"))
+    def test_a_water_bill_is_filed_as_water(self):
+        res = self.deliver(bill_from_utility(self.address, subject="New Water Bill from Example Utility"))
+        self.assertEqual(res.get_json()["outcome"], "imported")
+        self.assertTrue(self.log()[0]["detail"].startswith("Water $45.67"))
+        self.assertEqual(len(self.client.get("/api/report?fuel=Water").get_json()["series"]), 1)
+
+    def test_a_bill_that_names_no_fuel_is_not_filed_and_the_log_says_why(self):
+        # A bill must never be guessed into a fuel: filed in the wrong history
+        # it would corrupt every trend. The person is told instead.
+        res = self.deliver(bill_from_utility(self.address, subject="Your statement is ready",
+                                             body="<p>Total Amount Due: $45.67</p>"
+                                                  "<p>Due date: 10/16/2026</p>"))
         self.assertEqual(res.get_json()["outcome"], "rejected")
         row = self.log()[0]
-        self.assertEqual(row["outcome"], "rejected")
-        self.assertIn("neither electric nor gas", row["detail"])
+        self.assertIn("electric, gas or water", row["detail"])
         self.assertFalse(self.ann.paths.csv.exists())
 
     def test_a_zero_bill_is_a_bill(self):
@@ -173,12 +184,18 @@ class TestHandForwards(InboundCase):
         self.assertIn("Electric $123.45, due 2026-10-16.", row["detail"])
         self.assertIn("Forwarded by ann@example.com.", row["detail"])
 
-    def test_a_hand_forward_of_something_else_is_still_refused(self):
-        raw = forwarded_by_hand(self.address).replace(b"noreply@notifications.eversource.com",
-                                                      b"billing@eversource-payments.example")
+    def test_a_hand_forward_from_any_utility_is_filed(self):
+        # The app keeps no list of utilities. A National Grid bill forwarded
+        # by the person is as good as any other. (Issue #1.)
+        raw = (forwarded_by_hand(self.address)
+               .replace(b"noreply@notices.example-utility.com", b"noreply@nationalgridus.com")
+               .replace(b"Example Utility Do Not Reply", b"National Grid")
+               .replace(b"New Electric Bill from Example Utility", b"Your National Grid electric bill"))
         res = self.deliver(raw)
-        self.assertEqual(res.get_json()["outcome"], "rejected")
-        self.assertIn("Not from the utility's address", self.log()[0]["detail"])
+        self.assertEqual(res.get_json(), {"ok": True, "outcome": "imported"})
+        row = self.log()[0]
+        self.assertIn("Electric $123.45, due 2026-10-16.", row["detail"])
+        self.assertIn("Forwarded by ann@example.com.", row["detail"])
 
     def test_a_hand_forward_by_anyone_else_is_refused(self):
         # A forward carries no signature of the utility's, so the only thing
@@ -205,18 +222,18 @@ class TestHandForwards(InboundCase):
         from email import policy as email_policy
         msg = EmailMessage()
         msg["From"] = "Ann Example <ann@example.com>"
-        msg["Subject"] = "Fwd: New Gas Bill from Eversource"
+        msg["Subject"] = "Fwd: New Gas Bill from Example Utility"
         msg.set_content(
             "<div>Begin forwarded message:<br>---------- Forwarded message ---------<br>"
-            "From: Eversource Do Not Reply &lt;noreply@notifications.eversource.com&gt;<br>"
-            "Subject: New Gas Bill from Eversource<br>"
+            "From: Example Utility Do Not Reply &lt;noreply@notices.example-utility.com&gt;<br>"
+            "Subject: New Gas Bill from Example Utility<br>"
             "Date: Mon, 12 Oct 2026 at 09:00<br>"
             "To: ann@example.com<br></div>"
             "<p>Your electric account is separate. Total Amount Due: $45.67</p>", subtype="html")
         msg = email_mod.message_from_bytes(msg.as_bytes(), policy=email_policy.default)
         sender, subject = inbound.forwarded_original(msg)
-        self.assertEqual(sender, inbound.billmail.DEFAULT_SENDER)
-        self.assertEqual(subject, "New Gas Bill from Eversource")
+        self.assertEqual(sender, UTILITY)
+        self.assertEqual(subject, "New Gas Bill from Example Utility")
         self.assertEqual(inbound.billmail.fuel_of(subject), "gas")
 
     def test_the_log_says_how_long_the_message_took_to_arrive(self):
@@ -278,7 +295,7 @@ class TestHandForwards(InboundCase):
         # The mail service treats a 500 as a bounce and nothing would be logged.
         from_stranger = bill_from_utility(
             self.address, sender="ann@example.com", charset="x-bogus",
-            body="---------- Forwarded message --------- From: noreply@notifications.eversource.com")
+            body="---------- Forwarded message --------- From: noreply@notices.example-utility.com")
         for name, raw in (("utility", bill_from_utility(self.address, charset="x-bogus")),
                           ("forwarded", from_stranger)):
             with self.subTest(name):
@@ -327,15 +344,31 @@ class TestWhoMaySend(InboundCase):
                                headers={"X-Envelope-To": self.address})
         self.assertEqual(res.status_code, 401)
 
-    def test_mail_from_anyone_but_the_utility_is_not_filed(self):
-        res = self.deliver(from_someone_else(self.address))
+    def test_a_bill_from_an_unknown_sender_is_filed_on_the_strength_of_its_signature(self):
+        # Nothing but the signature tells a utility the app has never heard
+        # of from a stranger. So it is filed and flagged, or refused when
+        # signatures are required - the same as any other bill.
+        with mock.patch.object(inbound, "dkim_result", return_value="fail"):
+            res = self.deliver(from_someone_else(self.address))
+            self.assertEqual(res.get_json()["outcome"], "imported")
+            self.assertIn("not verified", self.log()[0]["detail"])
+            os.environ["ELEC_INBOUND_DKIM"] = "require"
+            res = self.deliver(from_someone_else(self.address).replace(b"9,999.00", b"9,998.00"))
+            self.assertEqual(res.get_json()["outcome"], "rejected")
+            self.assertIn("other-sender.example", self.log()[0]["detail"])
+
+    def test_what_could_not_be_read_is_logged_with_its_sender(self):
+        # The filter forwarded the wrong thing - a payment receipt, an offer.
+        # Naming the sender is what lets the person fix the filter.
+        res = self.deliver(from_someone_else(self.address, body="Thanks for your payment."))
         self.assertEqual(res.get_json()["outcome"], "rejected")
+        self.assertIn("Couldn't read a bill", self.log()[0]["detail"])
+        self.assertIn("other-sender.example", self.log()[0]["detail"])
         self.assertFalse(self.ann.paths.csv.exists())
-        self.assertIn("eversource-payments.example", self.log()[0]["detail"])
 
     def test_a_hostile_sender_address_is_escaped_on_the_page(self):
-        raw = from_someone_else(self.address).replace(
-            b"Eversource <billing@eversource-payments.example>",
+        raw = from_someone_else(self.address, body="Thanks for your payment.").replace(
+            b"Billing <billing@other-sender.example>",
             b'"<img src=x onerror=alert(1)>"@evil.example')
         self.assertEqual(self.deliver(raw).get_json()["outcome"], "rejected")
         self.assertIn("<img src=x", self.log()[0]["detail"])
@@ -365,19 +398,24 @@ class TestSignature(InboundCase):
         self.assertEqual(self.deliver().get_json()["outcome"], "rejected")
         self.assertFalse(self.ann.paths.csv.exists())
 
-    def test_only_the_utilitys_own_signature_counts(self):
+    def test_only_the_senders_own_signature_counts(self):
         import dkim
         real = REAL_DKIM_RESULT
-        vendor_only = b"DKIM-Signature: v=1; d=sendgrid.info; s=x; b=abc\r\nFrom: a@b.c\r\n\r\nhi"
-        ours = vendor_only.replace(b"sendgrid.info", b"eversource.com")
+        sender = "noreply@notices.example-utility.com"
+        signed_by = lambda d: b"DKIM-Signature: v=1; d=" + d + b"; s=x; b=abc\r\nFrom: a@b.c\r\n\r\nhi"
         with mock.patch.object(dkim, "DKIM") as checker:
             checker.return_value.verify.return_value = True
-            self.assertEqual(real(vendor_only), "unknown")
-            self.assertEqual(real(ours), "pass")
+            self.assertEqual(real(signed_by(b"sendgrid.info"), sender), "unknown")
+            self.assertEqual(real(signed_by(b"example-utility.com"), sender), "pass")     # a parent
+            self.assertEqual(real(signed_by(b"notices.example-utility.com"), sender), "pass")
+            self.assertEqual(real(signed_by(b"mail.notices.example-utility.com"), sender), "pass")
+            self.assertEqual(real(signed_by(b"nationalgridus.com"), "a@nationalgridus.com"), "pass")
+            self.assertEqual(real(signed_by(b"com"), sender), "unknown")             # not a domain
+            self.assertEqual(real(signed_by(b"example-utility.com"), ""), "unknown")
             checker.return_value.verify.return_value = False
-            self.assertEqual(real(ours), "fail")
+            self.assertEqual(real(signed_by(b"example-utility.com"), sender), "fail")
             checker.return_value.verify.side_effect = OSError("dns down")
-            self.assertEqual(real(ours), "unknown")
+            self.assertEqual(real(signed_by(b"example-utility.com"), sender), "unknown")
 
 
 class TestGmailConfirmation(InboundCase):

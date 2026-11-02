@@ -12,19 +12,16 @@
 <table class="docs-table">
   <thead><tr><th>The log says</th><th>What happened</th><th>What to do</th></tr></thead>
   <tbody>
-    <tr><td><em>Not from the utility's address, so not filed. It came from …</em></td>
-        <td>The sender was not the utility's own notification address, and the message was not a hand-forward with the utility's address quoted inside.</td>
-        <td>Check the filter matches the sender exactly as it appears on a real bill email. If you forwarded by hand, make sure your mail app included the original headers ("Forwarded message", From, Subject) rather than only the body.</td></tr>
     <tr><td><em>Forwarded by …, who isn't you, so it wasn't filed</em></td>
         <td>A hand-forward is accepted only from the address you signed up with; this one came from somewhere else.</td>
         <td>Forward it from your sign-up address, or set a filter up in the mailbox the bills arrive in, which passes the utility's own message through.</td></tr>
-    <tr><td><em>The subject names neither electric nor gas</em></td>
-        <td>The app tells the fuel from the subject line. Water bills by email are not read yet.</td>
-        <td>Upload a water export or type the bill in. Electric and gas bills with an unusual subject: forward one by hand and, if it still says this, send the subject line to whoever runs the server.</td></tr>
+    <tr><td><em>Couldn't tell whether it is an electric, gas or water bill</em></td>
+        <td>The amount and date were read, but nothing in the subject or the text said which utility it is for. A bill is never guessed into a fuel.</td>
+        <td>Type the bill in, and send the subject line to whoever runs the server.</td></tr>
     <tr><td><em>Couldn't read a bill out of it</em></td>
-        <td>The sender was right but the message's layout was not one the app knows. Today only Eversource's bill-ready email is read.</td>
-        <td>Upload or type the bill in. Other utilities are being added; say which one you have.</td></tr>
-    <tr><td><em>The utility's signature on this message didn't verify</em></td>
+        <td>The message did not say an amount due and a due date. The line names the sender. Some utilities' emails carry only a link to their website, and a filter can forward a receipt or an offer by mistake.</td>
+        <td>Check the filter matches the bill-ready sender exactly. If the email never carries the amount, upload the utility's export or type the bill in, and say which utility you have.</td></tr>
+    <tr><td><em>The sender's signature on this message didn't verify</em></td>
         <td>The server is set to require a verified DKIM signature and this message's did not pass. Some forwarding paths rewrite the message on the way.</td>
         <td>Forward one by hand (hand-forwards are checked by the quoted sender instead). If the filter path always fails, tell the operator; the default setting files the bill and notes it instead of refusing.</td></tr>
     <tr><td><em>Already on file</em></td>

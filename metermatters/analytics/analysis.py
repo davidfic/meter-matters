@@ -278,15 +278,15 @@ def build_bills(entries: list[Entry]) -> list[Bill]:
 def attach_usage(bills: list[Bill], periods: list) -> int:
     """Link each bill to the service period it charges for.
 
-    Eversource bills roughly a month in arrears: the statement due 2026-10-16
-    covers usage metered 2026-08-21..2026-09-17. Matching on the amount is
+    Utilities bill in arrears, often by about a month: a statement due
+    2026-10-16 covers usage metered 2026-08-21..2026-09-17. Matching on the amount is
     exact and unambiguous, so we use that and require the lag to be sane rather
     than guessing from dates alone.
 
     Returns how many bills were matched. Duck-typed so this module stays
     independent of the export parser.
     """
-    # Grouped by fuel, not by account. Eversource renumbers an account when
+    # Grouped by fuel, not by account. A utility may renumber an account when
     # service is re-opened, and its export carries the pre-renumber history -
     # so the gas export for 55500030003 contains periods whose bills arrived
     # under the old masked number. Matching on the amount to the cent, inside a

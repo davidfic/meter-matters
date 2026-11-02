@@ -76,7 +76,7 @@
 
   <p class="note">
     Bills are grouped by the year of their due date; a year marked “so far” is still filling in.
-    {% if v.estimated %}Years marked “published rates” have no usage export on file, so usage is estimated from the bill and the published residential rate for your area ({{ v.source.text }}); the metered years were checked against the same rates first. The published rate is the utility's own Basic Service; if your supply came from a town aggregation or another supplier in an estimated year, that year's usage is off by the difference in price.{% endif %}
+    {% if v.estimated %}Years marked “published rates” have no usage export on file, so usage is estimated from the bill and the published residential rate for your area ({{ v.source.text }}); the metered years were checked against the same rates first. The published rate is the state's average residential price, not your utility's own, so an estimated year's usage is off by however far your price sat from that average.{% endif %}
     {% if v.dollars_only %}For {{ v.dollars_only|join(", ") }} there is no usage and no published rate to estimate it from, so only the dollars show.{% endif %}
   </p>
   <script id="long-view" type="application/json">{{ v|tojson }}</script>

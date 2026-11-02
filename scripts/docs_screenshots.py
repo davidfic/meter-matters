@@ -143,7 +143,7 @@ def forwarded_by_hand(bill: bytes, to: str) -> bytes:
     html = body is not None and body.get_content_subtype() == "html"
     sender = parseaddr(str(original["From"]))[1]
     lines = ["---------- Forwarded message ---------",
-             f"From: Eversource Do Not Reply {'&lt;' if html else '<'}{sender}{'&gt;' if html else '>'}",
+             f"From: Example Utility {'&lt;' if html else '<'}{sender}{'&gt;' if html else '>'}",
              "Date: Tue, 20 Oct 2026 09:00:00 -0400",
              f"Subject: {original['Subject']}",
              f"To: {'&lt;' if html else '<'}pat.sample@gmail.com{'&gt;' if html else '>'}"]
@@ -161,9 +161,9 @@ def forwarded_by_hand(bill: bytes, to: str) -> bytes:
 def from_someone_else(to: str) -> bytes:
     from email.message import EmailMessage
     msg = EmailMessage()
-    msg["From"] = "Eversource Rewards <offers@eversource-rewards.example>"
+    msg["From"] = "Utility Rewards <offers@utility-rewards.example>"
     msg["To"] = to
-    msg["Subject"] = "Your Eversource statement is ready"
+    msg["Subject"] = "Your statement is ready"
     msg.set_content("Total Amount Due: $9,999.00  Due date: 10/16/2026  Account Number: ******0001")
     return msg.as_bytes()
 
@@ -246,7 +246,7 @@ def main() -> None:
         shot(page, "#byhand .card", "byhand.png")
         page.fill("#pl-zip", "01000")
         page.select_option("#pl-state", "MA")
-        page.fill("#pl-provider", "Eversource")
+        page.fill("#pl-provider", "Example Utility")
         shot(page, "#place .card", "home-card.png")
 
         # -- an upload: both exports at once --------------------------------

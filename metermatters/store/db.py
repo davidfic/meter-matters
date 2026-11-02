@@ -96,10 +96,10 @@ TABLES = {
         first_day  TEXT NOT NULL,
         last_day   TEXT NOT NULL
     """,
-    # What each ZIP code's supply offers were when last asked. Nothing here
-    # belongs to a user: the offers are the same for everyone in a ZIP code.
-    "supply_offers": """
-        zip        TEXT PRIMARY KEY,
+    # Each state's average residential electricity price, month by month, as
+    # last read from EIA. Nothing here belongs to a user. See tariffs.py.
+    "state_prices": """
+        state      TEXT PRIMARY KEY,
         payload    TEXT NOT NULL,
         fetched_at TEXT NOT NULL,
         failed_at  TEXT
@@ -277,6 +277,8 @@ def _create(conn: Conn) -> None:
             conn.raw.execute(f"ALTER TABLE {name} ENABLE ROW LEVEL SECURITY")
     # Gmail connections were removed on 2026-10-13; a database from before has the table.
     conn.raw.execute("DROP TABLE IF EXISTS gmail_links")
+    # The Massachusetts supplier comparison was removed on 2026-11-02, and its offers with it.
+    conn.raw.execute("DROP TABLE IF EXISTS supply_offers")
     for index in INDEXES:
         conn.raw.execute(index)
     _migrate(conn)

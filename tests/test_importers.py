@@ -11,7 +11,6 @@ from datetime import date, datetime, timedelta, timezone
 from metermatters.intake import greenbutton
 from metermatters.intake import importers
 from metermatters.analytics import insights
-from metermatters.analytics import rates
 from metermatters import region
 from metermatters.analytics import weather
 from tests.support import HostedCase
@@ -324,11 +323,6 @@ class TestRegion(unittest.TestCase):
             self.assertEqual(insights.kg_per_unit("therms"), 5.3)     # gas doesn't depend on the grid
         self.assertEqual(insights.kg_per_unit("kWh"), before)
 
-    def test_supplier_comparison_exists_only_where_a_reader_does(self):
-        self.assertTrue(rates.covers("MA"))
-        self.assertFalse(rates.covers(None))         # not known where: nothing is sent anywhere
-        self.assertFalse(rates.covers("TX"))
-
 
 class WebCase(HostedCase):
     def setUp(self):
@@ -478,35 +472,16 @@ class TestWhereAHomeIs(WebCase):
             steps = page[page.index('<ol class="steps">'):page.index("</ol>")]
             self.assertNotIn("Eversource", steps, provider)
             self.assertIn("whoever bills you", steps, provider)
-            self.assertIn("Eversource's\n          bill emails are read today", page, provider)
+            start = page.index('<div class="card way featured">')
+            card = page[start:page.index("upload -->", start)]
+            self.assertNotIn("Eversource", card, provider)
+            self.assertIn("whichever", card, provider)
 
     def test_the_pages_say_nothing_about_a_utility_they_were_not_told_of(self):
         for page in ("/", "/electric", "/rates", "/raw"):
             html = self.client.get(page).get_data(as_text=True)
             self.assertNotIn("Eversource", html, page)
             self.assertNotIn("Massachusetts", html, page)
-
-
-class TestSupplierComparisonByPlace(WebCase):
-    def setUp(self):
-        super().setUp()
-        self.upload("export.csv", daily())
-        self.calls = []
-        patch = unittest.mock.patch.object(rates, "offers_for",
-                                           side_effect=lambda z: self.calls.append(z) or {"offers": [], "fetched_at": ""})
-        patch.start()
-        self.addCleanup(patch.stop)
-
-    def test_a_state_with_no_comparison_is_told_so_and_nothing_is_sent_anywhere(self):
-        out = self.client.get("/api/rates").get_json()
-        self.assertEqual((out["status"], out["state"], out["state_name"]), ("not-covered", "CA", "California"))
-        self.assertEqual(self.calls, [])
-
-    def test_a_zip_the_massachusetts_site_does_not_know_is_not_covered_not_down(self):
-        self.client.post("/place", data={"state": "MA", "zip": "93701"})
-        with unittest.mock.patch.object(rates, "offers_for", side_effect=rates.NotCovered("no")):
-            out = self.client.get("/api/rates").get_json()
-        self.assertEqual(out["status"], "not-covered")
 
 
 class TestManualBill(WebCase):

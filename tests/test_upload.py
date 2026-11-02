@@ -115,7 +115,7 @@ class TestUsageUpload(UploadCase):
     def test_a_zip_bomb_is_refused(self):
         # Both ways in: the layout the loader knows by heart, and the general
         # importer the app falls back to when that one says no.
-        for layout, text in (("eversource", BILLING), ("generic", GENERIC)):
+        for layout, text in (("stored", BILLING), ("generic", GENERIC)):
             with self.subTest(layout), mock.patch.object(ingest, "MAX_UNPACKED_BYTES", 10):
                 res = self.post(("big.zip", zipped(text)))
                 self.assertEqual(res.status_code, 400)

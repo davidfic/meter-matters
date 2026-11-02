@@ -654,7 +654,7 @@ def _result_usage(rows: list[Row], unit: str, notes: list[str],
 
 def read(data: bytes, filename: str = "", mapping: dict | None = None,
          default_account: str | None = None) -> Result:
-    """Turn an uploaded file the Eversource-shaped readers don't know into a Result.
+    """Turn an uploaded file the stored-layout reader doesn't know into a Result.
 
     Raises ``Unsure`` when a person has to say what it is, ``ImportFailed`` when
     it can't be used at all.

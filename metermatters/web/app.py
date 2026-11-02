@@ -954,46 +954,17 @@ def build_insights(state: dict) -> dict:
 
 
 def build_rates(state: dict) -> dict:
-    """Your price per kWh, taken apart, and what the supply half could be.
-
-    Like the insights this reaches out, so the page draws first and asks
-    afterwards: a slow comparison site never holds up your own numbers.
-    """
+    """Your price per kWh, taken apart, with the past year's usage to try
+    another supply price against. Nothing here reaches outside the app."""
     report = build_report(state, fuel="Electric")
     series = [r for r in report.get("series", []) if r.get("unit", "kWh") == "kWh"]
-    settings = {"zip": state.get("zip"), "supply_cents": state.get("supply_cents")}
+    settings = {"supply_cents": state.get("supply_cents")}
     out = {"error": report.get("error"), "series": [], "settings": settings}
     if not series:
         return out
-    export = _usage_export()
-    zipcode = state.get("zip") or (weather.zip_in(export.address) if export else None)
     rate_now = (report.get("rates") or {}).get("current")
-
-    where = region.resolve(state.get("state"), export.address if export else None)
-    status, offers, fetched = "ok", [], None
-    if not rates.enabled():
-        status = "off"
-    elif not zipcode:
-        status = "no-location"
-    elif where is None:
-        status = "no-state"
-    elif not rates.covers(where):
-        status = "not-covered"
-    else:
-        try:
-            found = rates.offers_for(zipcode)
-            offers, fetched = found["offers"], found["fetched_at"]
-        except rates.NotCovered:
-            status = "not-covered"
-        except (rates.Unavailable, sqlite3.Error, OSError) as exc:
-            app.logger.warning("supply offers unavailable: %s", exc)
-            status = "unavailable"
-
-    comparison = rates.compare(series, offers, state.get("supply_cents")) if offers else None
-    supply = comparison and comparison["supply"]
+    kwh, months = rates.last_year(series)
     out.update({
-        "zip": zipcode, "status": status, "fetched_at": fetched, "source": rates.SOURCE,
-        "state": where, "state_name": region.name(where),
         "unit": "kWh",
         "now": rate_now,
         "latest": series[-1]["label"],
@@ -1004,8 +975,8 @@ def build_rates(state: dict) -> dict:
         "tariff": report.get("tariff"),
         "seasons": rates.seasons(series),
         "standing": rates.standing(series, rate_now),
-        "breakdown": rates.breakdown(rate_now, supply and supply["cents"], report.get("tariff")),
-        "comparison": comparison,
+        "breakdown": rates.breakdown(rate_now, state.get("supply_cents"), report.get("tariff")),
+        "last_year": {"kwh": round(kwh, 1), "months": months},
     })
     return out
 
@@ -1211,7 +1182,8 @@ def api_rates_supply():
     """Say what supply you're on, or - with nothing - go back to the default."""
     payload = request.get_json(silent=True) or {}
     state = load_state()
-    state = coerce_settings({k: payload.get(k) for k in ("supply_cents", "zip") if k in payload}, state)
+    state = coerce_settings({"supply_cents": payload.get("supply_cents")} if "supply_cents" in payload else {},
+                            state)
     save_state(state)
     return jsonify(build_rates(state))
 

@@ -1,15 +1,29 @@
 #!/usr/bin/env python
-"""Read the amount and due date out of Eversource's "bill ready" email.
+"""Read the amount and due date out of a utility's "bill ready" email.
 
-This is the monthly automation. Eversource has no usable API for an individual
-- Green Button Connect requires registering as a third-party company - but the
-notification email carries everything the dashboard needs, and reading your own
-mailbox needs no utility credentials at all.
+Any utility's. The app keeps no list of them and no template per provider:
+there are thousands of utilities in the country, and a reader written by hand
+for each would never be finished. One set of rules reads every notice, and
+nothing in it names a provider. The email is read two ways, the second only
+when the first could not decide:
 
-The useful fields live only in the HTML part; the plain-text alternative omits
-the due date. Both are checked, HTML first.
+    by looking   the general reader in scan.py, built for bills photographed
+                 off paper: it knows the many ways an amount due, a due date
+                 and a fuel are written, whoever wrote them.
+    by asking    Claude, when the server has a key (ELEC_ANTHROPIC_KEY). The
+                 message's text, with account numbers, links and addresses
+                 cut out, goes to the model with a fixed question: is this a
+                 bill, for which fuel, how much, due when. Without a key this
+                 step is skipped, and a notice the patterns could not read is
+                 logged as not filed.
 
-    ./billmail.py "New Electric Bill from Eversource.eml"   # parse one file
+A figure is never guessed at. No amount or no due date means no bill, since a
+bill filed in the wrong month corrupts every trend on the dashboard.
+
+The useful fields often live only in the HTML part; a plain-text alternative
+can omit the due date. Both are read.
+
+    ./billmail.py bill-ready.eml                            # parse one file
     ./billmail.py --imap                                    # poll the mailbox
     ./billmail.py --imap --import                           # ...and file them
 
@@ -39,18 +53,19 @@ from datetime import date, datetime, timedelta
 from email import policy
 from pathlib import Path
 
-DEFAULT_SENDER = "noreply@notifications.eversource.com"
 DEFAULT_HOST = "imap.gmail.com"
+# The model that reads what the patterns could not. Overridable for cost.
+DEFAULT_MODEL = "claude-opus-5-5"
+MODEL_TIMEOUT = 45.0
+# What is sent to the model is capped: a bill notice is a page, not a book.
+MODEL_MAX_CHARS = 12000
 
-# Labelled fields in the HTML body. Matching the labels rather than the markup
-# keeps this working when the template's styling changes.
-RE_DUE = re.compile(r"Due date:?\s*(\d{1,2}/\d{1,2}/\d{2,4})", re.I)
-RE_BILL_DATE = re.compile(r"Bill date:?\s*(\d{1,2}/\d{1,2}/\d{2,4})", re.I)
-# 2018-era mail says "Amount Due:"; later mail says "Total Amount Due:".
-# Exactly two decimals: "$1.234.56" is not a bill of $1.23.
-RE_TOTAL = re.compile(r"(?:Total\s+)?Amount Due:?\s*\$\s*([\d,]+\.\d{2})(?!\d|\.\d)", re.I)
-RE_ACCOUNT = re.compile(r"Account Number:?\s*\*+\s*(\d{3,4})", re.I)
-RE_ANY_AMOUNT = re.compile(r"total amount due of \$\s*([\d,]+\.\d{2})(?!\d|\.\d)", re.I)
+# The ways an account is named: "Account #: 1234567890", "Account number
+# ending in 4321", "Acct No. ****4321". The last four digits are all that is
+# kept, whichever way it was written.
+RE_ACCOUNT = re.compile(
+    r"\bacc(?:oun)?t\.?\s*(?:number|no\.?|num\.?|#|id)?\s*:?\s*"
+    r"(?:ending\s+(?:in|with)\s*|[*xX•#]+\s*|-\s*)?(\d[\d -]{2,}\d)\b", re.I)
 # A due date further than this from the message itself is a typo or a
 # forgery, and filing it would put the bill outside every trend.
 MAX_DUE_DISTANCE = timedelta(days=2 * 365)
@@ -77,17 +92,29 @@ class BillNotice:
 
 
 def fuel_of(subject: str) -> str:
-    """Eversource sends electric and gas from the same address.
+    """The fuel a subject line names: electric, gas, water or unknown.
 
-    Filing a gas bill in the electric history would corrupt every trend, so an
-    unrecognised subject is "unknown" and gets skipped rather than guessed at.
+    Many utilities send every fuel from one address, and filing a gas bill in
+    the electric history would corrupt every trend. So the subject is read
+    first - it is the one line the utility wrote to say what the mail is -
+    and "electric" wins a subject naming both, pinned by test.
     """
     lowered = (subject or "").lower()
     if "electric" in lowered:
         return "electric"
     if "gas" in lowered:
         return "gas"
+    if "water" in lowered or "sewer" in lowered:
+        return "water"
     return "unknown"
+
+
+def fuel_in(text: str) -> str:
+    """The fuel the text as a whole is about, by which words appear most -
+    the scan reader's judgement, in this module's spelling."""
+    from metermatters.intake import scan
+    found = scan._fuel(text or "")
+    return found.lower() if found else "unknown"
 
 
 def visible_text(markup: str) -> str:
@@ -97,21 +124,8 @@ def visible_text(markup: str) -> str:
     return re.sub(r"\s+", " ", html_mod.unescape(text)).strip()
 
 
-def _date(value: str) -> date | None:
-    for fmt in ("%m/%d/%Y", "%m/%d/%y", "%Y-%m-%d"):
-        try:
-            return datetime.strptime(value.strip(), fmt).date()
-        except ValueError:
-            continue
-    return None
-
-
-def parse_message(msg, subject: str | None = None) -> BillNotice:
-    """Pull the bill details out of a parsed email message.
-
-    `subject` replaces the message's own when the bill was forwarded by hand
-    and the real subject - the one that says which fuel - is in the body.
-    """
+def _text_of(msg) -> str:
+    """Everything a reader would see, HTML part first. Raises ParseError."""
     chunks = []
     for part in ("html", "plain"):
         try:
@@ -128,11 +142,157 @@ def parse_message(msg, subject: str | None = None) -> BillNotice:
     blob = "\n".join(chunks)
     if not blob.strip():
         raise ParseError("the message had no readable body")
+    return blob
 
-    total = RE_TOTAL.search(blob) or RE_ANY_AMOUNT.search(blob)
-    if not total:
-        raise ParseError("no 'Total Amount Due' found")
-    amount = float(total.group(1).replace(",", ""))
+
+def _account_suffix(blob: str) -> str | None:
+    for m in RE_ACCOUNT.finditer(blob):
+        digits = re.sub(r"\D", "", m.group(1))
+        if len(digits) >= 4:
+            return digits[-4:]
+    return None
+
+
+def _bill_date(blob: str):
+    """The statement's own date, when the notice gives one under any of its names."""
+    from metermatters.intake import scan
+    m = re.search(rf"(?:bill|billing|statement|invoice)\s+date\s*:?\s*({scan.DATE})", blob, re.I)
+    return scan._date(m.group(1)) if m else None
+
+
+def _by_looking(blob: str, subject: str) -> dict | None:
+    """The scan reader's patterns: the many ways any utility writes an amount
+    due and a due date. Taken only when both were found by a label - a
+    figure it had to look around for is a guess, and a guess is never filed."""
+    from metermatters.intake import scan
+    found = scan.guess(f"{subject}\n{blob}")
+    if "amount" not in found["sure"] or "due" not in found["sure"]:
+        return None
+    return {"amount": found["amount"], "due": date.fromisoformat(found["due"]),
+            "bill_date": _bill_date(blob)}
+
+
+def model_enabled() -> bool:
+    return bool(os.environ.get("ELEC_ANTHROPIC_KEY", "").strip())
+
+
+RE_LINK = re.compile(r"https?://\S+|www\.\S+", re.I)
+RE_EMAIL = re.compile(r"[\w.+-]+@[\w.-]+\.\w+")
+RE_LONG_NUMBER = re.compile(r"\d[\d -]{4,}\d")
+
+
+def for_model(text: str) -> str:
+    """The text as it is sent to the model: links, addresses and long numbers
+    cut, since none of them is needed to read a bill and all of them say
+    who the customer is. Dates and amounts survive. Capped in length."""
+    text = RE_LINK.sub("[link]", text)
+    text = RE_EMAIL.sub("[email]", text)
+
+    def cut(m):
+        digits = re.sub(r"\D", "", m.group())
+        if len(digits) <= 4 or re.fullmatch(r"\d{1,2}[ -]\d{1,2}[ -]\d{2,4}", m.group()):
+            return m.group()                    # a date written with dashes
+        return "..." + digits[-4:]
+    text = RE_LONG_NUMBER.sub(cut, text)
+    text = re.sub(r"[ \t]+", " ", text)
+    return text[:MODEL_MAX_CHARS]
+
+
+MODEL_QUESTION = """You read emails that utilities send to their customers, for an app that keeps a household's bill history.
+
+Decide whether this email is a new bill, or a notice that a new bill is ready, for electricity, natural gas, or water (sewer counts as water). Then pull out the figures.
+
+Not a bill: a payment receipt or confirmation, an autopay or "payment scheduled" notice, a reminder with no amount, an outage or service notice, a marketing message, or an email that only links to a website and states no amount owed.
+
+amount_due is the total the customer must now pay. due_date is the day it must be paid by. bill_date is the statement date if the email gives one. account_last4 is the last four digits of the account number if one appears. provider is the utility's name as the email gives it.
+
+Use only what the text says. A figure that is not in the text is null. If you cannot tell which fuel the bill is for, say unknown."""
+
+MODEL_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "is_bill": {"type": "boolean"},
+        "fuel": {"type": "string", "enum": ["electric", "gas", "water", "unknown"]},
+        "amount_due": {"type": ["number", "null"]},
+        "due_date": {"type": ["string", "null"], "description": "YYYY-MM-DD"},
+        "bill_date": {"type": ["string", "null"], "description": "YYYY-MM-DD"},
+        "account_last4": {"type": ["string", "null"]},
+        "provider": {"type": ["string", "null"]},
+    },
+    "required": ["is_bill", "fuel", "amount_due", "due_date", "bill_date",
+                 "account_last4", "provider"],
+    "additionalProperties": False,
+}
+
+
+def ask_model(text: str) -> dict | None:
+    """Claude's reading of the text, as a dict in MODEL_SCHEMA's shape, or
+    None when it couldn't be had. Nothing here raises: a model that is down
+    or declines leaves the bill unread, never the intake broken."""
+    import json
+    import logging
+    try:
+        import anthropic
+    except ImportError:
+        return None
+    client = anthropic.Anthropic(api_key=os.environ["ELEC_ANTHROPIC_KEY"].strip(),
+                                 timeout=MODEL_TIMEOUT, max_retries=1)
+    try:
+        response = client.messages.create(
+            model=os.environ.get("ELEC_ANTHROPIC_MODEL", "").strip() or DEFAULT_MODEL,
+            max_tokens=1024,
+            system=MODEL_QUESTION,
+            messages=[{"role": "user", "content": text}],
+            output_config={"effort": "low",
+                           "format": {"type": "json_schema", "schema": MODEL_SCHEMA}},
+        )
+    except anthropic.APIError as exc:
+        logging.getLogger(__name__).warning("bill reader: %s", type(exc).__name__)
+        return None
+    if response.stop_reason != "end_turn":
+        return None
+    try:
+        answer = next(b.text for b in response.content if b.type == "text")
+        return json.loads(answer)
+    except (StopIteration, ValueError):
+        return None
+
+
+def _by_asking(blob: str, subject: str, sender: str | None) -> dict | None:
+    """The model's reading, held to the same bar as the patterns: a bill,
+    with an amount and a due date, or nothing."""
+    text = f"Subject: {subject}\n"
+    if sender:
+        text += f"From: {sender.rpartition('@')[2] or sender}\n"
+    answer = ask_model(for_model(text + "\n" + blob))
+    if not answer or not answer.get("is_bill"):
+        return None
+    amount, due = answer.get("amount_due"), answer.get("due_date")
+    if not isinstance(amount, (int, float)) or isinstance(amount, bool) or amount < 0:
+        return None
+    try:
+        due = date.fromisoformat(due) if due else None
+        bill_date = date.fromisoformat(answer["bill_date"]) if answer.get("bill_date") else None
+    except (TypeError, ValueError):
+        return None
+    if due is None:
+        return None
+    last4 = answer.get("account_last4")
+    return {"amount": float(amount), "due": due, "bill_date": bill_date,
+            "fuel": answer.get("fuel") if answer.get("fuel") in ("electric", "gas", "water") else None,
+            "account_suffix": last4 if isinstance(last4, str) and re.fullmatch(r"\d{4}", last4) else None}
+
+
+def parse_message(msg, subject: str | None = None, sender: str | None = None) -> BillNotice:
+    """Pull the bill details out of a parsed email message.
+
+    `subject` replaces the message's own when the bill was forwarded by hand
+    and the real subject - the one that says which fuel - is in the body.
+    `sender` is the utility's address, a hint to the fuel (a water district
+    says so in its name) and to the model.
+    """
+    blob = _text_of(msg)
+    subject = subject or str(msg.get("Subject") or "")
 
     received = None
     if msg.get("Date"):
@@ -141,27 +301,31 @@ def parse_message(msg, subject: str | None = None) -> BillNotice:
         except (TypeError, ValueError):
             pass
 
-    due_match = RE_DUE.search(blob)
-    due = _date(due_match.group(1)) if due_match else None
-    if due is None:
-        # Refuse to guess. A wrong due date files the bill in the wrong month,
-        # which silently corrupts every trend on the dashboard.
-        raise ParseError("no 'Due date' found - the HTML part is required")
+    found = _by_looking(blob, subject)
+    fuel = fuel_of(subject)
+    if fuel == "unknown":
+        fuel = fuel_in(f"{subject}\n{sender or ''}\n{blob}")
+    if (found is None or fuel == "unknown") and model_enabled():
+        asked = _by_asking(blob, subject, sender)
+        if asked:
+            found = found or asked
+            if fuel == "unknown" and asked["fuel"]:
+                fuel = asked["fuel"]
+            found.setdefault("account_suffix", asked["account_suffix"])
+    if found is None:
+        raise ParseError("no amount due and due date found")
+    due = found["due"]
     if abs(due - (received or date.today())) > MAX_DUE_DISTANCE:
         raise ParseError(f"the due date {due} is years away from when the message was sent")
 
-    bill_match = RE_BILL_DATE.search(blob)
-    acct = RE_ACCOUNT.search(blob)
-
-    subject = subject or str(msg.get("Subject") or "")
     return BillNotice(
-        amount=amount,
+        amount=found["amount"],
         due=due,
-        bill_date=_date(bill_match.group(1)) if bill_match else None,
-        account_suffix=acct.group(1) if acct else None,
+        bill_date=found.get("bill_date"),
+        account_suffix=found.get("account_suffix") or _account_suffix(blob),
         subject=subject,
         received=received,
-        fuel=fuel_of(subject),
+        fuel=fuel,
         message_id=str(msg.get("Message-ID") or ""),
     )
 
@@ -187,7 +351,7 @@ def keyring_password(user: str) -> str | None:
 
 
 def fetch_imap(*, host: str, user: str, password: str, folder: str = "INBOX",
-               sender: str = DEFAULT_SENDER, days: int | None = 45,
+               sender: str | None = None, days: int | None = 45,
                fuel: str = "electric", account: str | None = None) -> list[BillNotice]:
     """Return matching bill notices, oldest first.
 
@@ -196,7 +360,7 @@ def fetch_imap(*, host: str, user: str, password: str, folder: str = "INBOX",
     excludes Spam and Trash). Messages are de-duplicated on Message-ID,
     because Gmail's All Mail overlaps every other label.
     """
-    criteria: list[str] = ["FROM", f'"{sender}"']
+    criteria: list[str] = ["FROM", f'"{sender}"'] if sender else ["ALL"]
     if days is not None:
         criteria += ["SINCE", (date.today() - timedelta(days=days)).strftime("%d-%b-%Y")]
 
@@ -315,7 +479,7 @@ def file_notices(notices: list[BillNotice], csv_path, usage_dir) -> Filed:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Read Eversource bill-ready emails.",
+        description="Read utilities' bill-ready emails.",
         formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
     parser.add_argument("files", nargs="*", help=".eml files to parse")
     parser.add_argument("--imap", action="store_true", help="poll the mailbox instead")
@@ -326,10 +490,11 @@ def main(argv: list[str] | None = None) -> int:
                         help="search the whole mailbox, not just --days")
     parser.add_argument("--folder", default=None,
                         help="mailbox (default: INBOX, or All Mail with --all)")
-    parser.add_argument("--fuel", default="electric", choices=["electric", "gas", "any"],
+    parser.add_argument("--fuel", default="electric", choices=["electric", "gas", "water", "any"],
                         help="which utility (default: electric - gas must never mix in)")
     parser.add_argument("--account", help="only bills whose masked account matches this")
-    parser.add_argument("--sender", default=DEFAULT_SENDER)
+    parser.add_argument("--sender", default=None,
+                        help="only mail from this address (default: every message in the folder)")
     args = parser.parse_args(argv)
 
     notices: list[BillNotice] = []

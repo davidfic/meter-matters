@@ -21,8 +21,8 @@ g() { gcloud --project "$PROJECT" "$@"; }
 
 # name -> what it is. Optional ones can be skipped by pressing Enter.
 REQUIRED=(elec-database-url elec-secret-key elec-task-token)
-OPTIONAL=(elec-google-client-secret elec-inbound-secret
-          elec-mailgun-signing-key elec-smtp-pass elec-vision-key)
+OPTIONAL=(elec-google-client-secret elec-inbound-secret elec-eia-key
+          elec-mailgun-signing-key elec-smtp-pass elec-vision-key elec-anthropic-key)
 
 has_secret() { g secrets describe "$1" >/dev/null 2>&1; }
 

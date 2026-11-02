@@ -1,8 +1,10 @@
 #!/usr/bin/env python
-"""Parse Eversource MA usage exports.
+"""Read usage files in the app's own stored layout.
 
-Eversource hands out two different CSVs, and neither is ESPI XML. Both are
-supported here and normalised into the same :class:`Period`.
+Two CSV layouts are read here and normalised into the same :class:`Period`.
+Every other way in - Green Button XML, any utility's CSV - is rewritten by
+``importers.py`` into the first of them, so a stored usage file always looks
+like this whoever it came from.
 
 **Billing data** (from the zip download) - start and end dates, no temperature::
 
@@ -219,7 +221,7 @@ def _parse_usage_history(lines: list[str], head: int, source: str) -> Export:
 
 
 def parse(text: str, source: str = "") -> Export:
-    """Detect which of the two Eversource layouts this is, and read it."""
+    """Detect which of the two stored layouts this is, and read it."""
     lines = text.splitlines()
     billing = _header_index(lines, BILLING_HEADER)
     usage = _header_index(lines, USAGE_HEADER)
@@ -229,7 +231,7 @@ def parse(text: str, source: str = "") -> Export:
     elif usage is not None:
         export = _parse_usage_history(lines, usage, source)
     else:
-        raise ValueError("no Eversource header row found - not a usage export?")
+        raise ValueError("no usage header row found - not a stored usage file")
 
     if not export.periods:
         raise ValueError("header found but no usable usage rows followed it")
@@ -289,7 +291,7 @@ def load_all(paths) -> Export:
             for p in export.periods:
                 # Keyed on the START only: one account cannot begin two billing
                 # periods on the same day, so a second row with that start is a
-                # duplicate. Eversource's own export contains one - the same
+                # duplicate. A utility's own export can contain one - the same
                 # 25 therms and $52.74 filed with both a 05-19 and a 05-20 end.
                 key = (p.account, p.unit.lower(), p.start)
                 existing = merged.get(key)

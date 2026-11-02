@@ -32,6 +32,7 @@ from dataclasses import asdict, dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
+from metermatters import fuels
 from metermatters.store import accounts
 from metermatters.intake import billmail
 from metermatters.store import storage
@@ -350,7 +351,7 @@ def _sound(row) -> bool:
         return False
     if isinstance(row.get("amount"), bool) or not isinstance(row.get("amount"), (int, float)):
         return False
-    if row.get("fuel") not in ("electric", "gas"):
+    if row.get("fuel") not in fuels.BY_SLUG:
         return False
     if row.get("account_suffix") is not None and not isinstance(row["account_suffix"], str):
         return False

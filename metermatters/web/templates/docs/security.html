@@ -45,14 +45,15 @@
     twenty-four random characters, one of roughly 10<sup>36</sup> possibilities, so it cannot be guessed.
     A message to an address that belongs to nobody is dropped, and the service is told it was accepted,
     so nobody can probe for real addresses by watching what bounces.</li>
-  <li><strong>The app checks who sent it.</strong> Only the utility's own sender address is accepted.
-    A message you forwarded by hand counts too, but only from the address you signed up with, and only
-    when the utility's address is quoted inside it. A message from anyone else is logged as
-    <em>Not filed</em> and nothing is read out of it. So a stranger who somehow learns your address
-    cannot plant a bill, whether or not they know what a forwarded bill looks like.</li>
-  <li><strong>The utility's signature is checked.</strong> Utilities sign their mail (DKIM). The app
-    verifies the signature and, depending on how the server is set, either files an unverified bill
-    with a note in your log or refuses it.</li>
+  <li><strong>The app checks who sent it.</strong> A message you forwarded by hand counts only from
+    the address you signed up with. A forward from anyone else is logged as <em>Not filed</em> and
+    nothing is read out of it. A message that is not a forward is taken to be from a utility,
+    whichever utility it is: the app keeps no list of them.</li>
+  <li><strong>The sender's signature is checked.</strong> Utilities sign their mail (DKIM). The app
+    verifies the signature against the sender's own domain and, depending on how the server is set,
+    either files an unverified bill with a note in your log or refuses it. On the default setting a
+    stranger who learned your address could send a bill-shaped message and see it filed with that
+    note; your log would show it, and the address can be reissued at any time.</li>
   <li><strong>The amount and dates are read, and the message is discarded.</strong> What remains is a
     row in your bill history and a line in the log: date, outcome, subject, and a sentence saying
     what was done. The log keeps your last fifty lines.</li>
@@ -95,8 +96,9 @@
   <tbody>
     <tr><td><strong>Open-Meteo</strong> (weather)</td><td>Your ZIP code, and the rounded position of the town it names. Never an address.</td><td>When a home has a ZIP and the weather comparison needs the temperatures. Off entirely if the operator sets it so.</td></tr>
     <tr><td><strong>Google Cloud Vision</strong> (scans)</td><td>The one image you dropped, shrunk.</td><td>Only when you drop a scan. Only if the operator has switched scans on.</td></tr>
+    <tr><td><strong>Anthropic</strong> (Claude, reading bill emails)</td><td>The text of one forwarded bill email, with the account number, links and email addresses cut out first.</td><td>Only when the app's own patterns could not read the amount, the due date or the fuel out of it. Only if the operator has set a key.</td></tr>
     <tr><td><strong>Google</strong> (sign-in)</td><td>Nothing about your bills. Google tells the app your name and email.</td><td>Only when you press Continue with Google.</td></tr>
-    <tr><td><strong>Energy Switch MA</strong> (supplier offers)</td><td>Your ZIP code.</td><td>On the Rates page, for Massachusetts homes.</td></tr>
+    <tr><td><strong>EIA</strong> (the U.S. Energy Information Administration, published prices)</td><td>The home's state, two letters.</td><td>When the long view estimates usage for bills older than the usage export. Only if the operator has set a key.</td></tr>
   </tbody>
 </table>
 <p>Nothing is sent to the utility. The app never signs in to a utility's website.</p>

@@ -43,7 +43,7 @@ see [Hosting it](#hosting-it).
 | `/electric` | Everything about electricity: against last year, what changed, history, the game |
 | `/gas` | The same for gas |
 | `/raw` | Every record, filterable and exportable |
-| `/rates` | Your price per kWh taken apart, and the supply offers around you |
+| `/rates` | Your price per kWh taken apart |
 | `/homes` | Every home added up - only once there is more than one |
 | `/home/<name>/...` | Any of the above, for a second home |
 
@@ -83,7 +83,7 @@ in is general, and the few things that depend on place are asked about it.
 | Any other spreadsheet | Columns are found by name. If it can't tell which is which, or what unit it is in, it shows a sample and asks - it never guesses a unit |
 | Nothing to upload | Type a bill in, with the usage if you have it |
 
-Eversource's own layouts are still read first, exactly as before.
+The app's own stored layout is read first; every other file is rewritten into it.
 
 **Where a home is** (State, ZIP and utility on the Add bills page, all optional;
 the state is otherwise read off the address in a usage file):
@@ -93,12 +93,11 @@ the state is otherwise read off the address in a usage file):
   England states use the New England grid figure instead, because one grid
   serves all of them. A state's figure describes the plants *in* that state,
   so a state that imports much of its power is only roughly described by it.
-- *Supplier comparison* exists only for Massachusetts so far. Elsewhere the
-  Rates page says it isn't available and still shows your price, its split
-  (once you enter your supply price) and its history. Another state is one
-  reader and one line in `rates.COVERED`.
-- *Bill emails* (forwarded) read Eversource's notices only, and say
-  so. Other utilities: upload a file or type bills in.
+- *Published prices*, for the long view's estimate of usage on bills older
+  than the usage export, come from EIA: the same state average for every
+  state, fetched once a month per state when the server has a key.
+- *Bill emails* (forwarded) are read by general patterns, and by Claude when
+  the server has a key, whichever utility sent them.
 
 ## More than one home
 
@@ -526,9 +525,9 @@ daily kWh estimates what runs regardless of season - an upper bound, since even
 the quietest month contains deliberate use. Only interval data pins it exactly.
 
 **The price half.** Cost per metered unit over time, plus every move above 3%
-and what that move alone did to the bill holding usage fixed. Set
-`compare_rate` to price the last twelve months against a competitive supplier's
-offer.
+and what that move alone did to the bill holding usage fixed. The Rates page
+splits the price into supply and delivery once you enter your supply price,
+and tries another supply price over the last twelve months.
 
 A bill is a **standing charge plus usage x rate**, so the two are fitted apart
 rather than divided. Dividing barely matters for electricity, where usage is

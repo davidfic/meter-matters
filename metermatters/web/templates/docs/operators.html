@@ -81,13 +81,14 @@
   <code>X-Envelope-To</code>. The app answers 200 for anything it accepted, including addresses it does
   not know, so a retrying service never loops and nobody can tell which addresses exist.</p>
 
-<h3 id="dkim">Checking the utility's signature</h3>
-<p><code>ELEC_INBOUND_DKIM</code> decides what happens when the utility's DKIM signature on a forwarded
-  message does not verify. <code>warn</code> (the default) files the bill and says so on the user's log
+<h3 id="dkim">Checking the sender's signature</h3>
+<p>The app keeps no list of utilities: a bill is read whoever sent it, and the DKIM signature on the
+  message is checked against the sender's own domain. <code>ELEC_INBOUND_DKIM</code> decides what
+  happens when that signature does not verify. <code>warn</code> (the default) files the bill and says so on the user's log
   line; <code>require</code> refuses it; <code>off</code> skips the check. Start on <code>warn</code>, look at
   what real forwarded mail reports in a few users' logs, and move to <code>require</code> once it is
   passing. A bill forwarded by hand is not checked this way, because the signature on it is the
-  forwarder's; it is accepted on the strength of the utility's address quoted inside it.</p>
+  forwarder's; it is accepted because it came from the address the account is under.</p>
 
 <h3 id="try">Try it before anyone relies on it</h3>
 <p>Sign up, copy your own bills address, and forward one real bill email to it by hand. It should
@@ -109,6 +110,17 @@
 <p>Set <code>ELEC_VISION_KEY</code> to a Google Cloud API key with the Cloud Vision API enabled, restricted
   to that API. Each scan is one request; the image is sent and the text comes back, and the app
   stores neither. Without the key the upload box simply does not offer scans.</p>
+
+<h2 id="reader">Reading bills from any utility</h2>
+<p>A forwarded bill email is read by pattern first: the amount due, the due date and the fuel, in
+  the many ways utilities write them. One the patterns cannot read is sent to Claude, if
+  <code>ELEC_ANTHROPIC_KEY</code> is set to a Claude API key, with the account number, links and
+  email addresses cut out first. The model answers a fixed question: is this a bill, for which
+  fuel, how much, due when. Its answer is held to the same bar as the patterns: no amount or no due
+  date, and nothing is filed. A refusal or an outage leaves the bill unread, never the intake
+  broken. <code>ELEC_ANTHROPIC_MODEL</code> picks the model; the default is
+  <code>claude-opus-5-5</code>. Without the key, a notice the patterns cannot read is logged as
+  <em>Not filed</em>, with the reason.</p>
 
 <h2 id="weather">Weather</h2>
 <p>On by default, through Open-Meteo, which is free for non-commercial use and needs no key. What
@@ -174,6 +186,8 @@
     <tr><td><code>ELEC_INBOUND_DOMAIN</code>, <code>ELEC_INBOUND_SECRET</code>, <code>ELEC_MAILGUN_SIGNING_KEY</code>, <code>ELEC_INBOUND_DKIM</code></td><td>Forwarding</td></tr>
     <tr><td><code>ELEC_GOOGLE_CLIENT_ID</code>, <code>ELEC_GOOGLE_CLIENT_SECRET</code></td><td>Google sign-in</td></tr>
     <tr><td><code>ELEC_VISION_KEY</code></td><td>Reading scans</td></tr>
+    <tr><td><code>ELEC_ANTHROPIC_KEY</code>, <code>ELEC_ANTHROPIC_MODEL</code></td><td>Reading a bill email the patterns can't</td></tr>
+    <tr><td><code>ELEC_EIA_KEY</code></td><td>Published state prices, for estimating usage on old bills</td></tr>
     <tr><td><code>ELEC_WEATHER</code></td><td><code>off</code> to make no weather lookups</td></tr>
     <tr><td><code>ELEC_SCHEDULER</code>, <code>ELEC_TASK_TOKEN</code></td><td>The daily check</td></tr>
     <tr><td><code>ELEC_SMTP_HOST</code>, <code>ELEC_SMTP_USER</code>, <code>ELEC_SMTP_PASS</code>, <code>ELEC_SMTP_FROM</code></td><td>Email to users</td></tr>
