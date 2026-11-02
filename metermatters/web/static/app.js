@@ -50,6 +50,10 @@ function renderHero(r) {
     ? `Latest statement · ${latest.label}`
     : `Current statement · ${latest.label} · due ${latest.due}`;
   $("hero-figure").textContent = money(latest.amount);
+  if (latest.is_combined) {
+    const fromStr = latest.carried_from && latest.carried_from.length ? latest.carried_from.join(", ") : "earlier";
+    $("hero-figure").innerHTML += ` <span class="tag warn" title="Single-month cost is ${money(latest.amount)}. Statement billed ${money(latest.billed_amount)} including ${money(latest.carried_balance)} past due from ${fromStr}">Combined bill: ${money(latest.billed_amount)} total (${money(latest.carried_balance)} from ${fromStr})</span>`;
+  }
 
   const d = latest.delta;
   const pill = $("hero-delta");
@@ -226,6 +230,7 @@ function renderCharts(r) {
     refLabel: "12-mo avg",
     tooltip: (d) => `<div class="t-title">${d.row.label}</div>
       <div class="t-row"><span>Bill</span><b>${money(d.value)}</b></div>
+      ${d.row.is_combined ? `<div class="t-row"><span>Statement total</span><b>${money(d.row.billed_amount)} (${money(d.row.carried_balance)} carried)</b></div>` : ""}
       ${d.row.delta === null ? "" :
         `<div class="t-row"><span>vs prior</span><b>${signedMoney(d.row.delta)}</b></div>`}
       ${d.row.kwh == null ? "" :
@@ -245,7 +250,9 @@ function renderCharts(r) {
     [
       { head: "Statement", cell: (x) => x.label },
       { head: "Due", cell: (x) => x.due },
-      { head: "Amount", cell: (x) => money(x.amount) },
+      { head: "Amount", cell: (x) => x.is_combined
+          ? raw(`${money(x.amount)} <span class="tag warn" title="Statement total: ${money(x.billed_amount)} (includes ${money(x.carried_balance)} from ${(x.carried_from || []).join(', ')})">combined</span>`)
+          : money(x.amount) },
       { head: "vs prior", cell: (x) => x.delta === null ? "—" :
           `<span class="${x.delta < 0 ? "down" : "up"}">${signedMoney(x.delta)}</span>` },
     ],
@@ -263,7 +270,9 @@ function renderCharts(r) {
   $("delta-table").innerHTML = table(
     [
       { head: "Statement", cell: (x) => x.label },
-      { head: "Amount", cell: (x) => money(x.amount) },
+      { head: "Amount", cell: (x) => x.is_combined
+          ? raw(`${money(x.amount)} <span class="tag warn" title="Single-month cost. Statement total was ${money(x.billed_amount)}">combined</span>`)
+          : money(x.amount) },
       { head: "Change", cell: (x) => raw(`<span class="${x.delta < 0 ? "down" : "up"}">${signedMoney(x.delta)}</span>`) },
       { head: "%", cell: (x) => raw(`<span class="${x.delta < 0 ? "down" : "up"}">${pctText(x.pct)}</span>`) },
     ],
@@ -581,7 +590,9 @@ function renderFullTable(r) {
     [
       { head: "Statement", cell: (x) => x.label },
       { head: "Due date", cell: (x) => x.due },
-      { head: "Amount", cell: (x) => money(x.amount) },
+      { head: "Amount", cell: (x) => x.is_combined
+          ? raw(`${money(x.amount)} <span class="tag warn" title="Statement billed ${money(x.billed_amount)} (includes ${money(x.carried_balance)} from ${(x.carried_from || []).join(', ')})">combined</span>`)
+          : money(x.amount) },
       { head: "vs prior", cell: (x) => x.delta === null ? "—" :
           raw(`<span class="${x.delta < 0 ? "down" : "up"}">${signedMoney(x.delta)}</span>`) },
       { head: "%", cell: (x) => x.pct === null ? "—" :
@@ -590,7 +601,9 @@ function renderFullTable(r) {
       { head: `$/${unitOf(r)}`, cell: (x) => x.rate == null ? "—" : x.rate.toFixed(4) },
       { head: "Metered", cell: (x) => x.service_label || "—" },
       { head: "Verified", cell: (x) => x.verified ? "✓ charge" : x.kwh != null ? "paired by date" : "bill only" },
-      { head: "Payment", cell: (x) => x.paid ? `${x.status} ${x.paid_on}` : "not yet due" },
+      { head: "Payment", cell: (x) => x.carried_into
+          ? `Settled via ${x.carried_into}`
+          : (x.paid ? `${x.status} ${x.paid_on || ''}` : "not yet due") },
     ],
     [...r.series].reverse(),
   );

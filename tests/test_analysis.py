@@ -350,3 +350,113 @@ class TestPinnedArithmetic(unittest.TestCase):
         want = sum(r["kwh"] * (0.20 - r["rate"]) for r in rows[-12:])
         self.assertAlmostEqual(out["delta"], want, places=2)
         self.assertEqual(out["months"], 12)
+
+
+class TestCombinedBillDetection(unittest.TestCase):
+    """Missed payments carry balances into subsequent bills.
+    
+    Ensure combined bills are detected, single-month costs are used for trends
+    and streaks, and statement amounts and carried balances are accurately recorded.
+    """
+
+    def test_usage_backed_combined_bill_detected(self):
+        from datetime import date
+        from metermatters.intake.greenbutton import Period
+
+        bills = [
+            analysis.Bill(period="2026-01", due=date(2026, 1, 16), amount=100.0,
+                          account="A", nickname="n", fuel="Electric"),
+            analysis.Bill(period="2026-02", due=date(2026, 2, 16), amount=210.0,
+                          account="A", nickname="n", fuel="Electric", paid=210.0,
+                          paid_on=date(2026, 2, 12), status="PAID"),
+        ]
+        periods = [
+            Period(account="A", start=date(2025, 12, 18), end=date(2026, 1, 16),
+                   kwh=400.0, cost=100.0, priced=True),
+            Period(account="A", start=date(2026, 1, 17), end=date(2026, 2, 15),
+                   kwh=440.0, cost=110.0, priced=True),
+        ]
+        report = analysis.analyse(bills, {"baseline_months": 6}, periods=periods)
+        feb = report["series"][1]
+
+        self.assertTrue(feb["is_combined"])
+        self.assertEqual(feb["amount"], 110.0)
+        self.assertEqual(feb["billed_amount"], 210.0)
+        self.assertEqual(feb["carried_balance"], 100.0)
+        self.assertEqual(feb["carried_from"], ["2026-01"])
+        self.assertEqual(feb["delta"], 10.0)  # 110 vs 100, not 210 vs 100
+        self.assertEqual(feb["pct"], 10.0)
+        self.assertEqual(report["series"][0]["status"], "SETTLED")
+
+    def test_payment_backed_combined_bill_settles_prior_bill(self):
+        text = (
+            "Account# or Nickname,Account Type,Pay/Due Date,Type,Amount,Status,\n"
+            "A&lt;br&gt;(n),Electric,2026/01/16,Current Bill,$100.00,-\n"
+            "A&lt;br&gt;(n),Electric,2026/02/16,Current Bill,$210.00,-\n"
+            "A&lt;br&gt;(n),Electric,2026/02/16,Payment,$210.00,APPROVED\n"
+            "A&lt;br&gt;(n),Electric,2026/03/16,Current Bill,$115.00,-\n"
+            "A&lt;br&gt;(n),Electric,2026/03/16,Payment,$115.00,APPROVED\n"
+        )
+        bills = analysis.build_bills(analysis.read_entries(text))
+        report = analysis.analyse(bills, {"baseline_months": 6})
+        s = report["series"]
+
+        self.assertEqual(s[0]["status"], "SETTLED")
+        self.assertEqual(s[0]["amount"], 100.0)
+        self.assertTrue(s[1]["is_combined"])
+        self.assertEqual(s[1]["amount"], 110.0)
+        self.assertEqual(s[1]["billed_amount"], 210.0)
+        self.assertEqual(s[1]["carried_balance"], 100.0)
+        self.assertEqual(s[1]["delta"], 10.0)
+        self.assertEqual(s[2]["delta"], 5.0)  # 115 vs 110
+
+    def test_bills_only_spike_and_collapse_detected(self):
+        from datetime import date
+        bills = [
+            analysis.Bill(period="2026-01", due=date(2026, 1, 16), amount=100.0, account="A", nickname="n"),
+            analysis.Bill(period="2026-02", due=date(2026, 2, 16), amount=210.0, account="A", nickname="n"),
+            analysis.Bill(period="2026-03", due=date(2026, 3, 16), amount=115.0, account="A", nickname="n"),
+        ]
+        report = analysis.analyse(bills, {"baseline_months": 6})
+        s = report["series"]
+
+        self.assertTrue(s[1]["is_combined"])
+        self.assertEqual(s[1]["amount"], 110.0)
+        self.assertEqual(s[1]["billed_amount"], 210.0)
+        self.assertEqual(s[1]["carried_balance"], 100.0)
+        self.assertEqual(s[1]["delta"], 10.0)
+
+    def test_multi_month_unpaid_rollover(self):
+        text = (
+            "Account# or Nickname,Account Type,Pay/Due Date,Type,Amount,Status,\n"
+            "A&lt;br&gt;(n),Electric,2026/01/16,Current Bill,$90.00,-\n"
+            "A&lt;br&gt;(n),Electric,2026/02/16,Current Bill,$95.00,-\n"
+            "A&lt;br&gt;(n),Electric,2026/03/16,Current Bill,$280.00,-\n"
+            "A&lt;br&gt;(n),Electric,2026/03/16,Payment,$280.00,APPROVED\n"
+            "A&lt;br&gt;(n),Electric,2026/04/16,Current Bill,$100.00,-\n"
+            "A&lt;br&gt;(n),Electric,2026/04/16,Payment,$100.00,APPROVED\n"
+        )
+        bills = analysis.build_bills(analysis.read_entries(text))
+        report = analysis.analyse(bills, {"baseline_months": 6})
+        s = report["series"]
+
+        self.assertEqual(s[0]["status"], "SETTLED")
+        self.assertEqual(s[1]["status"], "SETTLED")
+        self.assertTrue(s[2]["is_combined"])
+        self.assertEqual(s[2]["amount"], 95.0)
+        self.assertEqual(s[2]["billed_amount"], 280.0)
+        self.assertEqual(s[2]["carried_balance"], 185.0)
+        self.assertEqual(s[2]["carried_from"], ["2026-01", "2026-02"])
+
+    def test_ordinary_winter_heating_is_not_flagged(self):
+        from datetime import date
+        amounts = [40.0, 120.0, 250.0, 280.0, 260.0, 180.0]
+        bills = [
+            analysis.Bill(period=f"2026-0{i+1}", due=date(2026, i+1, 16), amount=a,
+                          account="A", nickname="n", fuel="Gas")
+            for i, a in enumerate(amounts)
+        ]
+        report = analysis.analyse(bills, {"baseline_months": 6})
+        for row in report["series"]:
+            self.assertFalse(row.get("is_combined", False))
+

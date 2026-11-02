@@ -135,6 +135,12 @@ class Bill:
     # two were paired by their dates alone - the export left out a tax, the
     # account is budget-billed - and the figures should be read as approximate.
     usage_exact: bool = True
+    # Combined bill detection fields:
+    single_charge: float | None = None
+    carried_balance: float = 0.0
+    carried_from: list[str] = field(default_factory=list)
+    carried_into: str | None = None
+    is_combined: bool = False
 
     @property
     def label(self) -> str:
@@ -329,6 +335,156 @@ def attach_usage(bills: list[Bill], periods: list) -> int:
     return matched
 
 
+def detect_combined_bills(bills: list[Bill], periods: list | None = None) -> list[Bill]:
+    """Identify statements that carry an unpaid balance from prior statements.
+
+    A missed payment causes the utility's next statement to bill:
+        Total Due = Current Charges + Past Due Balance [+ Late Fee]
+    Left unadjusted, this registers as an artificial spike on the combined bill
+    and a collapse on the next, while leaving the prior statement marked OPEN.
+
+    Three signals establish that a bill is a combined statement:
+    1. Usage-backed: bill.amount - period.cost matches prior unpaid bill(s).
+    2. Payment-backed: prior bill is OPEN, and current bill's payment (or amount)
+       covers both prior and current charge.
+    3. Shape-backed (bills only): an isolated spike where subtracting the prior
+       bill's amount brings the current month in line with surrounding bills.
+    """
+    groups: dict[tuple[str, str], list[Bill]] = {}
+    for bill in bills:
+        groups.setdefault((bill.account, bill.fuel), []).append(bill)
+
+    # Has this account ever recorded payments?
+    has_any_payments = any(b.paid is not None or b.status not in ("OPEN", "-") for b in bills)
+
+    combined_found: list[Bill] = []
+
+    for (account, fuel), ordered in groups.items():
+        ordered.sort(key=lambda b: b.due)
+        for i, cur in enumerate(ordered):
+            if i == 0:
+                continue
+
+            if cur.is_combined:
+                continue
+
+            prior_candidates = [b for b in ordered[:i] if not getattr(b, "carried_into", None)]
+            if not prior_candidates:
+                continue
+
+            # ----------------------------------------------------------
+            # Signal 1: Usage-backed (The strongest, exact match)
+            # ----------------------------------------------------------
+            if cur.usage and getattr(cur.usage, "priced", True) and cur.usage.cost is not None:
+                cost = cur.usage.cost
+                diff = cur.amount - cost
+                if diff > 5.0:
+                    matched_priors = None
+                    best_err = None
+                    for k in range(1, min(4, len(prior_candidates) + 1)):
+                        run = prior_candidates[-k:]
+                        run_total = sum(b.single_charge if b.single_charge is not None else b.amount for b in run)
+                        tolerance = max(1.0, run_total * 0.05)
+                        err = abs(diff - run_total)
+                        if err <= tolerance:
+                            if best_err is None or err < best_err:
+                                best_err = err
+                                matched_priors = run
+
+                    if matched_priors:
+                        cur.is_combined = True
+                        cur.single_charge = cost
+                        cur.carried_balance = diff
+                        cur.carried_from = [b.period for b in matched_priors]
+                        cur.usage_exact = True
+                        for b in matched_priors:
+                            b.carried_into = cur.period
+                            if cur.paid is not None:
+                                b.status = "SETTLED"
+                                b.paid_on = cur.paid_on
+                                b.paid = b.amount
+                        combined_found.append(cur)
+                        continue
+
+            # ----------------------------------------------------------
+            # Signal 2: Payment-backed (Prior bill OPEN & payment covers both)
+            # ----------------------------------------------------------
+            if has_any_payments and cur.paid is not None:
+                open_priors = [b for b in prior_candidates if b.status == "OPEN"]
+                if open_priors:
+                    surrounding = []
+                    if i + 1 < len(ordered):
+                        surrounding.append(ordered[i + 1].single_charge or ordered[i + 1].amount)
+                    idx_before = ordered.index(open_priors[0])
+                    if idx_before > 0:
+                        surrounding.append(ordered[idx_before - 1].single_charge or ordered[idx_before - 1].amount)
+                    avg_surround = mean(surrounding) if surrounding else None
+
+                    best_match = None
+                    best_diff = None
+                    for k in range(1, min(4, len(open_priors) + 1)):
+                        run = open_priors[-k:]
+                        run_total = sum(b.single_charge if b.single_charge is not None else b.amount for b in run)
+                        implied_charge = cur.amount - run_total
+                        if implied_charge <= 0:
+                            continue
+
+                        has_payment = abs(cur.paid - cur.amount) <= max(1.0, cur.amount * 0.05)
+                        if not has_payment:
+                            continue
+
+                        if avg_surround:
+                            ratio = implied_charge / avg_surround
+                            if 0.35 <= ratio <= 2.2:
+                                diff_from_normal = abs(implied_charge - avg_surround)
+                                if best_diff is None or diff_from_normal < best_diff:
+                                    best_diff = diff_from_normal
+                                    best_match = (run, run_total, implied_charge)
+                        elif cur.amount >= run_total * 1.3:
+                            best_match = (run, run_total, implied_charge)
+
+                    if best_match:
+                        run, run_total, implied_charge = best_match
+                        cur.is_combined = True
+                        cur.single_charge = implied_charge
+                        cur.carried_balance = run_total
+                        cur.carried_from = [b.period for b in run]
+                        for b in run:
+                            b.carried_into = cur.period
+                            b.status = "SETTLED"
+                            b.paid_on = cur.paid_on
+                            b.paid = b.amount
+                        combined_found.append(cur)
+                        continue
+
+            # ----------------------------------------------------------
+            # Signal 3: Shape-backed (Bills only: spike and collapse)
+            # ----------------------------------------------------------
+            if i + 1 < len(ordered):
+                prev_b = prior_candidates[-1]
+                next_b = ordered[i + 1]
+                prev_amt = prev_b.single_charge if prev_b.single_charge is not None else prev_b.amount
+                next_amt = next_b.single_charge if next_b.single_charge is not None else next_b.amount
+
+                if cur.amount > 1.4 * prev_amt and next_amt < 0.75 * cur.amount and prev_amt > 10:
+                    test_charge = cur.amount - prev_amt
+                    tolerance = max(2.0, next_amt * 0.40)
+                    if test_charge > 0 and abs(test_charge - next_amt) <= tolerance:
+                        cur.is_combined = True
+                        cur.single_charge = test_charge
+                        cur.carried_balance = prev_amt
+                        cur.carried_from = [prev_b.period]
+                        prev_b.carried_into = cur.period
+                        if cur.paid is not None:
+                            prev_b.status = "SETTLED"
+                            prev_b.paid_on = cur.paid_on
+                            prev_b.paid = prev_b.amount
+                        combined_found.append(cur)
+                        continue
+
+    return combined_found
+
+
 # --------------------------------------------------------------------------
 # Analytics
 # --------------------------------------------------------------------------
@@ -342,8 +498,10 @@ def monthly_series(bills: list[Bill]) -> list[dict]:
     rows = []
     for index, bill in enumerate(bills):
         prev = bills[index - 1] if index else None
-        delta = bill.amount - prev.amount if prev else None
-        pct = (delta / prev.amount * 100) if prev and prev.amount else None
+        eff = bill.single_charge if bill.single_charge is not None else bill.amount
+        prev_eff = (prev.single_charge if prev.single_charge is not None else prev.amount) if prev else None
+        delta = eff - prev_eff if prev_eff is not None else None
+        pct = (delta / prev_eff * 100) if prev_eff and prev_eff != 0 else None
         use, prev_use = bill.usage, prev.usage if prev else None
         # A change in the bill splits exactly into a usage part and a rate part:
         #   d(cost) = rate_prev * d(kWh)  +  kWh_now * d(rate)
@@ -360,7 +518,12 @@ def monthly_series(bills: list[Bill]) -> list[dict]:
                 "due": bill.due.isoformat(),
                 "month": bill.month,
                 "year": bill.year,
-                "amount": _round(bill.amount),
+                "amount": _round(eff),
+                "billed_amount": _round(bill.amount),
+                "is_combined": bill.is_combined,
+                "carried_balance": _round(bill.carried_balance),
+                "carried_from": list(bill.carried_from),
+                "carried_into": bill.carried_into,
                 "delta": _round(delta),
                 "pct": _round(pct, 1),
                 "improved": bool(delta is not None and delta < 0),
@@ -545,8 +708,9 @@ def combined_energy(bills: list[Bill]) -> list[dict]:
     for bill in bills:
         row = months.setdefault(bill.period, {"period": bill.period, "total": 0.0})
         key = bill.fuel.lower()
-        row[key] = row.get(key, 0.0) + bill.amount
-        row["total"] += bill.amount
+        amt = bill.single_charge if bill.single_charge is not None else bill.amount
+        row[key] = row.get(key, 0.0) + amt
+        row["total"] += amt
     out = []
     for period in sorted(months):
         row = months[period]
@@ -936,7 +1100,12 @@ def raw_rows(entries: list[Entry], bills: list[Bill]) -> list[dict]:
             "nickname": entry.nickname,
             "type": entry.kind,
             "amount": _round(entry.amount),
-            "status": entry.status,
+            "single_charge": _round(bill.single_charge) if bill and bill.is_combined else None,
+            "is_combined": bill.is_combined if bill else False,
+            "carried_balance": _round(bill.carried_balance) if bill and bill.is_combined else None,
+            "carried_from": list(bill.carried_from) if bill and bill.is_combined else [],
+            "carried_into": getattr(bill, "carried_into", None) if bill else None,
+            "status": bill.status if bill else entry.status,
             "source": entry.source or "",
             "kwh": _round(use.kwh, 1) if use else None,
             "unit": getattr(use, "unit", "kWh") if use else None,
@@ -1106,6 +1275,7 @@ def analyse(bills: list[Bill], settings: dict, periods: list | None = None) -> d
     # whichever account number happens to sort first.
     bills = sorted(bills, key=lambda b: (b.due, b.account))
     matched = attach_usage(bills, periods or [])
+    detect_combined_bills(bills, periods or [])
     series = monthly_series(bills)
 
     game_window = int(settings.get("game_window_months", 24) or 24)
@@ -1135,4 +1305,5 @@ def analyse(bills: list[Bill], settings: dict, periods: list | None = None) -> d
         "rates": rate_history(series, settings),
         "tariff": tariff(series),
         "anomalies": anomalies(series, settings, game_series),
+        "combined_bills": [r for r in series if r.get("is_combined")],
     }

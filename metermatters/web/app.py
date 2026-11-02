@@ -531,7 +531,9 @@ def build_report(state: dict, fuel: str | None = None) -> dict:
     # Pair the other fuel's bills with their usage too, or its discrepancies
     # would be judged against periods that were never matched.
     analysis.attach_usage([b for b in all_bills if b not in bills], usage)
+    analysis.detect_combined_bills([b for b in all_bills if b not in bills], usage)
     report["discrepancies"] = analysis.charge_discrepancies(all_bills, usage)
+    report["combined_bills"] = [r for r in report["series"] if r.get("is_combined")]
     report["settings"] = state
     report["source"] = paths().csv.name
     if not report["series"]:
@@ -683,6 +685,17 @@ def build_overview(state: dict) -> dict:
     alerts[:0] = [row for r in reports.values() for row in r.get("missing", [])]
 
     # These two are computed over every account, so read them once.
+    for r in reports.values():
+        fuel = r.get("fuel", "Electric")
+        for row in r.get("combined_bills", []):
+            carried_str = ", ".join(row.get("carried_from", []))
+            alerts.append({
+                "fuel": fuel, "kind": "balance",
+                "href": url_for("fuel_page", fuel=fuel.lower()),
+                "title": f"{row['label']}: combined bill (carried past due)",
+                "detail": f"Billed ${row['billed_amount']:,.2f}, which includes ${row['carried_balance']:,.2f} "
+                          f"carried from {carried_str}. Single-month cost was ${row['amount']:,.2f}.",
+            })
     for run in any_report.get("suspect_balances", []):
         alerts.append({
             "fuel": run["fuel"], "kind": "balance",
