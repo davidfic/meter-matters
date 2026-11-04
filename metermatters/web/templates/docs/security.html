@@ -14,11 +14,12 @@
         <td>The files you drop in</td>
         <td>The rows read from them, and the files with three things taken out before they are written:
             your name, your street (the state and ZIP code stay, for the weather) and all but the
-            last four digits of each account number</td>
+            last four digits of each account number. A file that couldn't be read is
+            <a href="#failed">kept 30 days</a> as it is.</td>
         <td>Your utility login. Nothing is fetched on your behalf, ever.</td></tr>
     <tr><td><strong>Forwarding</strong></td>
         <td>Only the messages your own filter forwards</td>
-        <td>The amount, the dates, the fuel, the last digits of the account, and the subject line on a log entry, with any long number in it cut to its last four digits. Not the message.</td>
+        <td>The amount, the dates, the fuel, the last digits of the account, and the subject line on a log entry, with any long number in it cut to its last four digits. Not the message, unless it couldn't be read: then it is <a href="#failed">kept 30 days</a>.</td>
         <td>A password or any kind of access to your mailbox. Any mail your filter did not send.</td></tr>
     <tr><td><strong>By hand</strong></td>
         <td>What you type</td>
@@ -26,7 +27,7 @@
         <td>Anything else</td></tr>
     <tr><td><strong>Scan</strong></td>
         <td>That one image, which is sent to Google Cloud Vision to be read</td>
-        <td>The bill you confirm. Not the image, and not the text read from it.</td>
+        <td>The bill you confirm. Not the image, and not the text read from it, unless nothing could be read from it: then the image is <a href="#failed">kept 30 days</a>.</td>
         <td>The image, after the reading. Nothing is filed without you pressing Add bill.</td></tr>
   </tbody>
 </table>
@@ -56,7 +57,8 @@
     note; your log would show it, and the address can be reissued at any time.</li>
   <li><strong>The amount and dates are read, and the message is discarded.</strong> What remains is a
     row in your bill history and a line in the log: date, outcome, subject, and a sentence saying
-    what was done. The log keeps your last fifty lines.</li>
+    what was done. The log keeps your last fifty lines. If the bill couldn't be read, the message
+    is <a href="#failed">kept for 30 days</a> instead, and the log says until when.</li>
 </ol>
 <p>Two consequences worth spelling out. If you ever stop wanting this, delete the filter in your
   mailbox and nothing more will arrive; there is nothing to revoke on the app's side because nothing
@@ -80,6 +82,15 @@
     sign up again; your bills go with it, so keep an export. If someone signs up with your address
     before you do, their password is discarded the moment you sign in through Google.</li>
 </ul>
+
+<h2 id="failed">Bills that couldn't be read</h2>
+<p>When a forwarded email, an uploaded file or a scan can't be read, it is kept for 30 days as it
+  arrived. That is only so we can see why it failed and fix the reader; nothing else is done with it.
+  It shows on your Add bills page with the day it will be deleted, and you can type the bill in from
+  it or delete it at once. Deleting your account deletes it too.</p>
+<p>The server's operator can download it from the admin panel to fix the reader, and every download
+  is recorded. If you type the bill in, what you typed is kept beside it until it is deleted, to check
+  the fix against.</p>
 
 <h2 id="stored">Where your data lives</h2>
 <p>Each account's bills, exports and settings are kept apart from every other account's, in the

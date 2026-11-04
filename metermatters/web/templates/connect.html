@@ -7,6 +7,32 @@
   <div class="flash {{ 'err' if category == 'err' }}" role="status">{{ message }}</div>
 {% endfor %}
 
+  {% if failed_bills %}
+  <section id="failed">
+    <div class="card failed-card">
+      <h2>{{ failed_bills|length }} bill{{ "s" if failed_bills|length != 1 }} we couldn't read</h2>
+      <p class="note">We keep a bill we couldn't read for 30 days, only so we can fix the reader.
+        Nothing else is done with it. Type it in yourself, or delete it now
+        (<a href="{{ url_for('docs.page', slug='security') }}#failed">more</a>).</p>
+      {% for bill in failed_bills %}
+      <div class="held-bill">
+        <span><strong>{{ bill.guess.fuel or "Bill" }}</strong>
+          · {{ {"email": "email", "upload": "upload", "scan": "scan"}[bill.kind] }}
+          · {{ bill.received_on }}
+          {% if bill.label %}· “{{ bill.label }}”{% endif %}
+          <br><span class="note fine">{{ bill.reason|capitalize }}. Deleted {{ bill.expires_on }}.</span></span>
+        <button type="button" class="failed-typein" data-id="{{ bill.id }}"
+                data-fuel="{{ bill.guess.fuel or '' }}" data-due="{{ bill.guess.due or '' }}"
+                data-amount="{{ bill.guess.amount if bill.guess.amount is not none else '' }}">Type it in</button>
+        <form method="post" action="{{ url_for('web.failed_delete', failed_id=bill.id) }}" class="inline">
+          <button type="submit" class="link">Delete</button>
+        </form>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
   {% if homes_view.pending %}
   <section id="held">
     <div class="card">
@@ -110,7 +136,7 @@
             <li class="{{ row.outcome }}">
               <span class="when">{{ row.received_at[:10] }}</span>
               <span class="what">{{ {"imported": "Filed", "duplicate": "Already had it",
-                                     "confirm": "Confirmation", "confirmed": "Confirmed", "rejected": "Not filed", "held": "Needs a home"}[row.outcome] }}</span>
+                                     "confirm": "Confirmation", "confirmed": "Confirmed", "rejected": "Not filed", "held": "Needs a home"}.get(row.outcome, row.outcome) }}</span>
               <span class="why">{{ row.detail }}</span>
             </li>
             {% endfor %}
@@ -203,6 +229,7 @@
         <a href="{{ url_for('docs.page', slug='by-hand') }}">More</a>.</p>
       <div class="callout" id="scan-result" hidden></div>
       <form method="post" action="{{ url_for('web.bill_add') }}" class="controls">
+        <input type="hidden" id="bh-failed" name="failed_id" value="">
         <div class="field"><label for="bh-fuel">Fuel</label>
           <select id="bh-fuel" name="fuel"><option>Electric</option><option>Gas</option><option>Water</option></select></div>
         <div class="field"><label for="bh-due">Due date</label>

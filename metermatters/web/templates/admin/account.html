@@ -29,6 +29,7 @@
       <tr><th>{{ outcome|capitalize }}</th><td>{{ n }}</td></tr>
       {% endfor %}
       <tr><th>Last arrival</th><td>{{ when(person.arrivals.last) }}</td></tr>
+      {% if person.failed %}<tr><th>Couldn't be read</th><td><a href="{{ url_for('admin.failed_list') }}">{{ person.failed }} held</a></td></tr>{% endif %}
     </table>
     {% else %}
     <p class="note" style="margin-bottom:0">Nothing has arrived.</p>

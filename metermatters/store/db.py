@@ -140,12 +140,31 @@ TABLES = {
         updated_at TEXT NOT NULL,
         PRIMARY KEY (user_id, name)
     """,
+    # A bill that couldn't be read - an email, an upload or a scan - kept for
+    # a month so the reader can be fixed against it, and nothing else. The user
+    # is shown it and can delete it sooner. See intake/failed.py.
+    "failed_bills": """
+        id            {id},
+        user_id       BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        kind          TEXT NOT NULL,            -- email | upload | scan
+        received_at   TEXT NOT NULL,
+        expires_at    TEXT NOT NULL,
+        reason        TEXT NOT NULL DEFAULT '',
+        label         TEXT NOT NULL DEFAULT '',
+        sender_domain TEXT NOT NULL DEFAULT '',
+        content_type  TEXT NOT NULL DEFAULT '',
+        content       {blob} NOT NULL,
+        guess         TEXT NOT NULL DEFAULT '{{}}',
+        answer        TEXT,
+        status        TEXT NOT NULL DEFAULT 'open'   -- open | typed_in
+    """,
 }
 INDEXES = (
     "CREATE INDEX IF NOT EXISTS benchmarks_bucket ON benchmarks(state, fuel)",
     "CREATE INDEX IF NOT EXISTS shares_owner ON shares(user_id, home_id, year)",
     "CREATE INDEX IF NOT EXISTS inbound_log_user ON inbound_log(user_id, id DESC)",
     "CREATE INDEX IF NOT EXISTS login_attempts_key ON login_attempts(key, at)",
+    "CREATE INDEX IF NOT EXISTS failed_bills_user ON failed_bills(user_id, id DESC)",
 )
 
 _ready: set[str] = set()

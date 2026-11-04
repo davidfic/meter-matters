@@ -289,6 +289,12 @@ def run_check() -> dict:
         people.append({"who": target.label, "steps": steps})
     if reducing and reduced:
         _mark_reduced(started)
+    if config.multi_user():
+        try:
+            from metermatters.intake import failed
+            failed.purge()          # bills that couldn't be read, past their month
+        except Exception:           # noqa: BLE001 - tomorrow's run will try again
+            pass
 
     tally: dict[str, dict[str, int]] = {name: {} for name in list(STEPS) + ["benchmark"]}
     for person in people:

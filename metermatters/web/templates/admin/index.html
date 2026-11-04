@@ -81,6 +81,7 @@
 <section>
   <div class="card">
     <h2>Accounts</h2>
+    <p class="note"><a href="{{ url_for('admin.failed_list') }}">Bills that couldn't be read</a>, kept 30 days to fix the reader.</p>
     <p class="note">{{ people|length }} account{{ "s" if people|length != 1 }}. Storage is files counted, not read, so bills are not counted; arrivals are forwarded messages, filed or not.</p>
     <table class="accounts">
       <thead><tr><th>Email</th><th>Signs in with</th><th>Joined</th><th>Files</th><th>Forwarded mail</th><th>Last change</th></tr></thead>
@@ -91,7 +92,7 @@
         <td>{{ p.signin }}</td>
         <td>{{ when(p.joined) }}</td>
         <td>{{ p.storage.files }} file{{ "s" if p.storage.files != 1 }}, {{ size(p.storage.bytes) }}</td>
-        <td>{{ p.arrivals.counts.get("imported", 0) }} filed{% if p.arrivals.counts.get("rejected") %}, {{ p.arrivals.counts.rejected }} not{% endif %}</td>
+        <td>{{ p.arrivals.counts.get("imported", 0) }} filed{% if p.arrivals.counts.get("rejected") %}, {{ p.arrivals.counts.rejected }} not{% endif %}{% if p.failed %} · <a href="{{ url_for('admin.failed_list') }}">{{ p.failed }} couldn't be read</a>{% endif %}</td>
         <td>{{ when(p.storage.last) }}</td>
       </tr>
       {% else %}

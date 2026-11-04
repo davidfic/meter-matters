@@ -22,6 +22,7 @@ from metermatters import fuels
 from metermatters.web import google_oauth
 from metermatters.store import homes
 from metermatters.store import site
+from metermatters.intake import failed
 from metermatters.intake import importers
 from metermatters.intake import inbound
 from metermatters.intake import ingest
@@ -215,14 +216,29 @@ def scan_bill():
     mime = scan.mime_of(upload.filename)
     if mime is None:
         return jsonify({"error": "That isn't an image or a PDF."}), 400
+    body = upload.read()
     try:
-        text = scan.read_text(upload.read(), mime)
+        text = scan.read_text(body, mime)
     except scan.Unreadable as exc:
-        return jsonify({"error": f"Couldn't read it: {exc}."}), 400
+        kept = _hold_failed_scan(upload.filename, body, mime, str(exc), None)
+        return jsonify({"error": f"Couldn't read it: {exc}." + failed.kept_until(kept)}), 400
     found = scan.guess(text)
     if found["used"] is not None:
         found["used"] = round(found["used"])
+    if "amount" not in found["sure"] and "due" not in found["sure"]:
+        kept = _hold_failed_scan(upload.filename, body, mime,
+                                 "no amount or due date found on it", found)
+        if kept:
+            found["failed_id"] = kept["id"]
+            found["kept_until"] = failed.kept_until(kept).strip()
     return jsonify({"file": upload.filename, **found})
+
+
+def _hold_failed_scan(name, body, mime, reason, found):
+    if g.user is None or g.user is accounts.LOCAL:
+        return None
+    return failed.hold(g.user, "scan", body, reason=reason, label=name or "",
+                       content_type=mime, guess=found)
 
 
 @bp.post("/connect/forwarding/confirmed")
@@ -317,6 +333,16 @@ def home_dismiss_bill(pending_id):
     return _homes_page()
 
 
+@bp.post("/failed/<int:failed_id>/delete")
+def failed_delete(failed_id):
+    """The user's own delete of a bill that couldn't be read."""
+    if g.user is None or g.user is accounts.LOCAL:
+        return redirect(url_for("web.connect"))
+    if failed.delete(g.user, failed_id):
+        flash("Deleted.")
+    return redirect(url_for("web.connect") + "#failed")
+
+
 # --------------------------------------------------------------------------
 # About a home, and a bill typed in
 # --------------------------------------------------------------------------
@@ -349,6 +375,10 @@ def bill_add():
         added = ingest.merge(g.paths.csv, [row], list(row)).added
         if usage:
             _store_manual_usage(*usage)
+        if form.get("failed_id") and g.user is not None and g.user is not accounts.LOCAL:
+            failed.typed_in(g.user, form["failed_id"],
+                            {"fuel": form.get("fuel", ""), "due": form.get("due", ""),
+                             "amount": form.get("amount", "")})
     except (importers.ImportFailed, ValueError) as exc:
         from metermatters.web import app as site
         flash(site._sentence(str(exc)), "err")
@@ -399,7 +429,12 @@ def connect():
                       "log": inbound.log_for(g.user)}
     has_usage = paths().usage.exists() and any(
         p.suffix.lower() in (".zip", ".csv") for p in paths().usage.iterdir())
+    failed_rows = [] if g.user is None else failed.open_for(g.user)
+    for row in failed_rows:
+        row["expires_on"] = failed.expires_on(row)
+        row["received_on"] = failed.received_on(row)
     return render_template("connect.html", forwarding=forwarding, scans=scan.enabled(),
+                           failed_bills=failed_rows,
                            has_bills=paths().csv.exists(), has_usage=has_usage,
                            homes_view=_homes_view(), place=_place_view())
 

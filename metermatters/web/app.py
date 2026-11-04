@@ -27,6 +27,7 @@ from flask import (Flask, abort, g, has_request_context, jsonify, make_response,
 from metermatters.store import accounts
 from metermatters.analytics import analysis
 from metermatters.intake import backfill
+from metermatters.intake import failed
 from metermatters import config
 from metermatters.store import db
 from metermatters.analytics import forecast
@@ -280,6 +281,18 @@ def word_from_the_operator():
         return {"site_notice": site.notice() or None}
     except Exception:                       # noqa: BLE001 - a page must render even if this can't be read
         return {"site_notice": None}
+
+
+@app.context_processor
+def bills_not_read():
+    """How many of this user's bills couldn't be read and still want a look."""
+    user = getattr(g, "user", None)
+    if not config.multi_user() or user is None or user is accounts.LOCAL:
+        return {"failed_count": 0}
+    try:
+        return {"failed_count": failed.count_open(user)}
+    except Exception:                       # noqa: BLE001 - a page must render even if this can't be read
+        return {"failed_count": 0}
 
 
 @app.context_processor
@@ -1319,6 +1332,20 @@ def _ingest_known(filename: str, data: bytes) -> dict:
     return stored
 
 
+def _hold_failed_upload(name: str, body: bytes, reason: str) -> dict | None:
+    """Keep a file that couldn't be read, so the reader can be fixed. Signed-in users only."""
+    user = getattr(g, "user", None)
+    if not config.multi_user() or user is None or user is accounts.LOCAL:
+        return None
+    import mimetypes
+    guess = None
+    if (name or "").lower().endswith((".csv", ".txt", ".xml")):
+        guess = failed.guess_from_text(body[:200_000].decode("utf-8", "replace"))
+    return failed.hold(user, "upload", body, reason=reason, label=name or "",
+                       content_type=mimetypes.guess_type(name or "")[0] or "application/octet-stream",
+                       guess=guess)
+
+
 @app.post("/api/upload")
 def api_upload():
     """Take any export the utility hands out and put it where it belongs.
@@ -1342,10 +1369,16 @@ def api_upload():
 
     results = []
     for upload in uploads:
+        body = upload.read()
         try:
-            outcome = ingest_upload(upload.filename, upload.read(), mapping)
+            outcome = ingest_upload(upload.filename, body, mapping)
         except ValueError as exc:
             outcome = {"kind": "error", "error": _sentence(str(exc))}
+        if outcome.get("kind") == "error":
+            kept = _hold_failed_upload(upload.filename, body, outcome["error"])
+            if kept:
+                outcome["kept_until"] = kept["expires_at"][:10]
+                outcome["error"] += failed.kept_until(kept)
         results.append({"file": upload.filename, **outcome})
 
     if all(r["kind"] == "error" for r in results):

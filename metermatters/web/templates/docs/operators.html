@@ -165,10 +165,14 @@
     files it holds and how large, and how many forwarded messages were filed or not. And deleting
     one, by typing its email: the thing the {{ doc("security", "security page") }} promises you can
     do for someone who has lost their password.</li>
+  <li><strong>Bills that couldn't be read.</strong> At <code>/admin/failed</code>: each forwarded email,
+    upload or scan the reader failed on, kept 30 days so the reader can be fixed against it. You can
+    download the original, re-read it with today's reader, file an email for its user once it reads,
+    or delete it. The user sees the same bill on their Add bills page and can delete it themselves.</li>
   <li><strong>This server.</strong> Whether the database answers, which optional parts are
     configured, and the test report that shipped with the build.</li>
 </ul>
-<p>What the panel never shows is anyone's data. It opens nobody's files: an account appears as
+<p>Apart from bills that couldn't be read, the panel never shows anyone's data. It opens nobody's files: an account appears as
   counts and sizes, and a bill, a home's name or ZIP, a utility account number, a message subject
   or a forwarding address never does. What is done from it is written to a log the panel shows,
   with who did it and when. There is no way to set a password, sign in as someone, or read

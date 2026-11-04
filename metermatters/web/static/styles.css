@@ -965,4 +965,6 @@ figure.shot figcaption { margin-top: 6px; font-size: 12.5px; color: var(--text-m
 .admin select { max-width: 100%; }
 .admin form.inline { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
 .site-notice { margin: 0 0 16px; }
+.failed-notice { margin: 0 0 16px; box-shadow: inset 3px 0 0 var(--warning); }
+.failed-card { box-shadow: inset 3px 0 0 var(--warning); }
 @media (max-width: 720px) { .admin-grid.cols-2 { grid-template-columns: 1fr; } }

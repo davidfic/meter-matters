@@ -118,6 +118,7 @@ function showScan(r) {
   const box = $("scan-result");
   const set = (id, value) => { const el = $(id); if (el && value != null && value !== "") el.value = value; };
   set("bh-fuel", r.fuel); set("bh-due", r.due); set("bh-amount", r.amount);
+  set("bh-failed", r.failed_id);
   set("bh-used", r.used); set("bh-unit", r.unit); set("bh-start", r.start); set("bh-end", r.end);
   if (r.used != null || r.start || r.end) {
     const details = document.querySelector("#byhand details");
@@ -132,7 +133,8 @@ function showScan(r) {
   box.hidden = false;
   box.innerHTML = `<strong>Read from ${esc(r.file)}:</strong> ${esc(got.join(", ") || "nothing it recognised")}. `
     + (missing.length ? `Couldn't find the ${esc(missing.join(", the "))}: fill ${missing.length === 1 ? "it" : "them"} in. ` : "")
-    + "Check each number against the bill, then press <strong>Add bill</strong>.";
+    + "Check each number against the bill, then press <strong>Add bill</strong>."
+    + (r.kept_until ? ` ${esc(r.kept_until)}` : "");
   document.getElementById("byhand").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
@@ -284,3 +286,23 @@ function watchArrivals() {
 }
 
 watchArrivals();
+
+/* A bill we couldn't read: put whatever was half-read into the by-hand form,
+   and remember which one it was, so what's typed is kept as the right answer. */
+document.querySelectorAll(".failed-typein").forEach((button) => {
+  button.addEventListener("click", () => {
+    const set = (id, value) => { const el = $(id); if (el) el.value = value || ""; };
+    if (button.dataset.fuel) set("bh-fuel", button.dataset.fuel);
+    set("bh-due", button.dataset.due);
+    set("bh-amount", button.dataset.amount);
+    set("bh-failed", button.dataset.id);
+    const box = $("scan-result");
+    if (box) {
+      box.hidden = false;
+      box.textContent = "Fill in what's missing from the bill, check the rest, then press Add bill.";
+    }
+    document.getElementById("byhand").scrollIntoView({ behavior: "smooth", block: "start" });
+    const empty = ["bh-due", "bh-amount"].map($).find((el) => el && !el.value);
+    if (empty) empty.focus();
+  });
+});

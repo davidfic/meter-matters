@@ -1,0 +1,48 @@
+{% extends "admin/_layout.html" %}
+{% from "admin/_macros.html" import when, size %}
+{% block title %}Couldn't be read · Admin{% endblock %}
+{% block crumb_tail %} <small>Couldn't be read</small>{% endblock %}
+{% block body %}
+<section>
+  <div class="card">
+    <h2>Bills that couldn't be read</h2>
+    <p class="note">Each is kept {{ keep_days }} days, only so the reader can be fixed against it. The user
+      sees it on their Add bills page and can delete it. Downloading, re-reading, filing and deleting
+      are all recorded. Once the reader is fixed, add the file as a test before deleting it.</p>
+    {% if rows %}
+    <table class="accounts">
+      <thead><tr><th>#</th><th>Arrived</th><th>User</th><th>Kind</th><th>From / file</th>
+        <th>Why</th><th>User typed</th><th>Size</th><th>Deleted</th><th></th></tr></thead>
+      <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ r.id }}</td>
+        <td>{{ when(r.received) }}</td>
+        <td><a href="{{ url_for('admin.account', user_id=r.user_id) }}">{{ r.user_id }}</a></td>
+        <td>{{ r.kind }}</td>
+        <td>{{ r.sender_domain or r.content_type }}</td>
+        <td>{{ r.reason }}</td>
+        <td>{% if r.answer %}{{ r.answer.fuel }} ${{ r.answer.amount }} due {{ r.answer.due }}{% else %}<span class="hint">—</span>{% endif %}</td>
+        <td>{{ size(r.size or 0) }}</td>
+        <td>{{ when(r.expires) }}</td>
+        <td>
+          <a href="{{ url_for('admin.failed_raw', failed_id=r.id) }}">Download</a>
+          <form method="post" action="{{ url_for('admin.failed_reread', failed_id=r.id) }}" style="display:inline">
+            <button type="submit" class="link">Re-read</button></form>
+          {% if r.kind == "email" %}
+          <form method="post" action="{{ url_for('admin.failed_file', failed_id=r.id) }}" style="display:inline">
+            <button type="submit" class="link">File it for them</button></form>
+          {% endif %}
+          <form method="post" action="{{ url_for('admin.failed_delete', failed_id=r.id) }}" style="display:inline">
+            <button type="submit" class="link">Delete</button></form>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="note" style="margin-bottom:0">Nothing held. Every bill sent in lately was read.</p>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

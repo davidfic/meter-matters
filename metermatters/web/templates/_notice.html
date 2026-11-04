@@ -2,3 +2,8 @@
 {% if site_notice %}
 <div class="callout site-notice" role="status">{{ site_notice }}</div>
 {% endif %}
+{#- Bills that couldn't be read, until the user types them in or deletes them. -#}
+{% if failed_count and request.endpoint != "web.connect" %}
+<div class="callout failed-notice" role="status">{{ failed_count }} bill{{ "s" if failed_count != 1 }}
+  couldn't be read. <a href="{{ url_for('web.connect') }}#failed">See Add bills</a>.</div>
+{% endif %}

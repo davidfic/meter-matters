@@ -34,6 +34,7 @@ from email.utils import getaddresses, parseaddr
 
 from metermatters.store import accounts
 from metermatters.intake import billmail
+from metermatters.intake import failed
 from metermatters.intake import redact
 from metermatters.store import db
 from metermatters.store import homes
@@ -334,12 +335,20 @@ def receive(delivery: Delivery) -> tuple[str, str]:
         with workspace.open_(user, write=True) as paths:
             filed = homes.file_notices(paths, [notice])
     except ValueError as exc:
-        _log(user, "rejected", subject, f"Couldn't read a bill out of it: {exc}." + came_from)
+        kept = failed.hold(user, "email", delivery.raw, reason=str(exc), label=subject,
+                           content_type="message/rfc822", sender=original or sender,
+                           guess=failed.guess_from_email(msg, subject))
+        _log(user, "rejected", subject, f"Couldn't read a bill out of it: {exc}." + came_from
+             + failed.kept_until(kept))
         return "rejected", "parse"
     if filed.skipped:
+        kept = failed.hold(user, "email", delivery.raw,
+                           reason="couldn't tell whether it is electric, gas or water",
+                           label=subject, content_type="message/rfc822", sender=original or sender,
+                           guess={"amount": notice.amount, "due": notice.due.isoformat()})
         _log(user, "rejected", subject,
              "Couldn't tell whether it is an electric, gas or water bill, so it wasn't filed."
-             + came_from)
+             + came_from + failed.kept_until(kept))
         return "rejected", "fuel"
 
     note = (f" Forwarded by {forwarded_by}." if forwarded_by
@@ -358,6 +367,44 @@ def receive(delivery: Delivery) -> tuple[str, str]:
             else " It is still waiting for a home - say which one it belongs to on the Add bills page."
             if filed.waiting else "" if filed.added else " Already on file.") + note)
     return outcome, str(notice)
+
+
+def _subject_and_sender(user, msg) -> tuple[str, str | None]:
+    """The subject and sender the reader is given, as ``receive`` works them out."""
+    subject = str(msg.get("Subject") or "")
+    sender = parseaddr(str(msg.get("From") or ""))[1].lower()
+    original, original_subject = forwarded_original(msg)
+    if sender == (user.email or "").lower() and original_subject:
+        subject = original_subject
+    return subject, original or sender
+
+
+def reread(user, raw: bytes):
+    """Read a held message again with today's reader. Files nothing.
+    Returns the BillNotice; raises ValueError as ``receive`` would have seen it."""
+    msg = email.message_from_bytes(raw, policy=policy.default)
+    subject, sender = _subject_and_sender(user, msg)
+    notice = billmail.parse_message(msg, subject=subject, sender=sender)
+    if notice.fuel not in ("electric", "gas", "water"):
+        raise ValueError("still can't tell whether it is electric, gas or water")
+    return notice
+
+
+def refile(user, raw: bytes) -> str:
+    """File a held message now that the reader can read it, and say so in the
+    user's log. Returns the outcome. Raises ValueError if it still can't."""
+    notice = reread(user, raw)
+    with workspace.open_(user, write=True) as paths:
+        filed = homes.file_notices(paths, [notice])
+    if filed.skipped:
+        raise ValueError("still can't tell whether it is electric, gas or water")
+    outcome = ("held" if filed.held or filed.waiting else "imported" if filed.added
+               else "duplicate")
+    said = f"{notice.fuel.capitalize()} ${notice.amount:,.2f}, due {notice.due}."
+    _log(user, outcome, notice.subject, "Filed after a fix to the reader: " + said
+         + ("" if filed.added else " Already on file." if outcome == "duplicate"
+            else " Say which home it belongs to on the Add bills page."))
+    return outcome
 
 
 def transit_note(msg, now: float | None = None) -> str:
