@@ -1329,7 +1329,9 @@ def _ingest_known(filename: str, data: bytes) -> dict:
 
     stored = ingest.store_usage(paths().usage, filename, data)
     _forget_usage()
-    return stored
+    # A fuel with usage but no statements would otherwise never reach the
+    # dashboard, which is drawn from statements.
+    return {**stored, "bills_made": backfill.fill_missing(paths().csv, paths().usage)}
 
 
 def _hold_failed_upload(name: str, body: bytes, reason: str) -> dict | None:

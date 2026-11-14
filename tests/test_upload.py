@@ -80,6 +80,22 @@ class TestUsageUpload(UploadCase):
         report = self.post(("export.zip", zipped(BILLING))).get_json()
         self.assertTrue(report["has_usage"])
 
+    def test_a_known_export_for_a_fuel_with_no_bills_makes_its_bills(self):
+        # Gas statements on file, electric only as usage: the electric bills
+        # must still be made, or the electric dashboard never appears.
+        for name, body in (("export.zip", zipped(BILLING)), ("BillingData.csv", BILLING.encode())):
+            with self.subTest(name):
+                self.setUp()
+                self.csv.write_text(HISTORY.replace("Electric,", "Gas,").replace("electric10", "gas10"),
+                                    encoding="utf-8")
+                report = self.post((name, body)).get_json()
+                self.assertEqual(report["uploads"][0]["bills_made"], 2)
+                self.assertIn("Electric", report["fuels"])
+
+    def test_a_known_export_leaves_a_fuel_with_bills_alone(self):
+        upload, = self.post(("export.zip", zipped(BILLING))).get_json()["uploads"]
+        self.assertEqual(upload["bills_made"], 0)
+
     def test_a_loose_csv_works_too(self):
         res = self.post(("BillingData.csv", BILLING.encode()))
         self.assertEqual(res.get_json()["uploads"][0]["kind"], "usage")
