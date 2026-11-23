@@ -254,7 +254,7 @@ function renderCharts(r) {
           ? raw(`${money(x.amount)} <span class="tag warn" title="Statement total: ${money(x.billed_amount)} (includes ${money(x.carried_balance)} from ${(x.carried_from || []).join(', ')})">combined</span>`)
           : money(x.amount) },
       { head: "vs prior", cell: (x) => x.delta === null ? "—" :
-          `<span class="${x.delta < 0 ? "down" : "up"}">${signedMoney(x.delta)}</span>` },
+          raw(`<span class="${x.delta < 0 ? "down" : "up"}">${signedMoney(x.delta)}</span>`) },
     ],
     r.series,
   );
@@ -394,11 +394,11 @@ function renderUsage(r) {
       [
         { head: "Statement", cell: (x) => x.label },
         { head: "Bill change", cell: (x) =>
-            `<span class="${x.delta < 0 ? "down" : "up"}">${signedMoney(x.delta)}</span>` },
+            raw(`<span class="${x.delta < 0 ? "down" : "up"}">${signedMoney(x.delta)}</span>`) },
         { head: "…from usage", cell: (x) =>
-            `<span class="${x.usage_effect < 0 ? "down" : "up"}">${signedMoney(x.usage_effect)}</span>` },
+            raw(`<span class="${x.usage_effect < 0 ? "down" : "up"}">${signedMoney(x.usage_effect)}</span>`) },
         { head: "…from rate", cell: (x) =>
-            `<span class="${x.rate_effect < 0 ? "down" : "up"}">${signedMoney(x.rate_effect)}</span>` },
+            raw(`<span class="${x.rate_effect < 0 ? "down" : "up"}">${signedMoney(x.rate_effect)}</span>`) },
       ],
       split,
     );
