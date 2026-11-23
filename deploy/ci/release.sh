@@ -37,30 +37,25 @@ revision="$(g run services describe "$SERVICE" --region "$REGION" \
 # /health, which asks the app whether it can reach its database. Not
 # /healthz: Cloud Run keeps that path for itself and answers 404 before the
 # app is asked.
-python3 - "$url/health" <<'EOF'
-import sys
-import time
-import urllib.error
-import urllib.request
-
-url, last = sys.argv[1], "no answer"
-for attempt in range(6):
-    try:
-        with urllib.request.urlopen(url, timeout=30) as response:
-            if response.status == 200:
-                print(f"{url} answered 200")
-                sys.exit(0)
-            last = f"HTTP {response.status}"
-    except urllib.error.HTTPError as exc:
-        last = f"HTTP {exc.code}"
-    except OSError as exc:
-        last = str(exc)
-    time.sleep(5)
-print(f"{url} is not answering: {last}", file=sys.stderr)
-print("The new revision is serving. To go back, see 'Rolling back' in deploy/README.md.",
-      file=sys.stderr)
-sys.exit(1)
-EOF
+# curl, not python3: the cloud-sdk:slim image this step runs in has no Python.
+health="$url/health"
+last="no answer"
+for _ in 1 2 3 4 5 6; do
+    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$health")" || code=""
+    if [ "$code" = 200 ]; then
+        echo "$health answered 200"
+        last=""
+        break
+    fi
+    last="${code:+HTTP $code}"
+    last="${last:-no answer}"
+    sleep 5
+done
+if [ -n "$last" ]; then
+    echo "$health is not answering: $last" >&2
+    echo "The new revision is serving. To go back, see 'Rolling back' in deploy/README.md." >&2
+    exit 1
+fi
 
 echo "deployed $IMAGE:$tag as $revision"
 echo "$url"
